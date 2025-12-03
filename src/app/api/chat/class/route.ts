@@ -20,6 +20,7 @@ import {
   generateMemoryContext,
   generatePracticeExamInstructions
 } from '@/lib/ai-intelligence-utils';
+import { extractSourcesFromCourseData, parseCitationsFromResponse } from '@/lib/syllabus-source-extractor';
 
 export const runtime = 'nodejs';
 
@@ -404,6 +405,17 @@ CRITICAL - FILE ATTACHMENT MEMORY:
 - If they ask follow-up questions about attached content, acknowledge the specific file they shared
 - NEVER say "you didn't attach anything" if the conversation history shows file attachments
 
+CRITICAL - CITATION REQUIREMENTS:
+- When you reference ANY information from the syllabus, you MUST cite the source
+- Use this exact citation format: [Source: filename, Page X, Line Y]
+- Include citations inline with your answer, not at the end
+- If you reference multiple pieces of information, cite each one separately
+- Be specific about page and line numbers when available
+- The syllabus filename is: ${courseData?.fileName || 'Syllabus'}
+
+Example citation format:
+"The course meets on Mondays and Wednesdays [Source: ${courseData?.fileName || 'Syllabus'}, Page 1, Line 15] and the final exam is on December 15th [Source: ${courseData?.fileName || 'Syllabus'}, Page 3, Line 42]."
+
 ${convoContext}Student: ${cleanedQuestion}
 
 CourseConnect AI:`;
@@ -596,12 +608,42 @@ What would you like to dive into? What's challenging you right now?`;
       ? extractTopics(cleanedQuestion, courseData.topics)
       : [];
 
+    // Extract sources from syllabus text based on the question
+    let syllabusSources: Array<{ fileName: string; page?: number; line?: number; excerpt: string }> = [];
+    if (courseData) {
+      try {
+        const extractedSources = extractSourcesFromCourseData(cleanedQuestion, courseData);
+        syllabusSources = extractedSources.map(s => ({
+          fileName: s.fileName,
+          page: s.page,
+          line: s.line,
+          excerpt: s.excerpt,
+        }));
+        
+        // Also parse citations from the AI response
+        const parsedCitations = parseCitationsFromResponse(aiResponse, courseData);
+        // Merge and deduplicate
+        const allSources = [...syllabusSources, ...parsedCitations];
+        const uniqueSources = allSources.filter((source, index, self) =>
+          index === self.findIndex(s => 
+            s.fileName === source.fileName && 
+            s.page === source.page && 
+            s.line === source.line
+          )
+        );
+        syllabusSources = uniqueSources.slice(0, 5); // Limit to top 5
+      } catch (error) {
+        console.warn('Failed to extract sources:', error);
+      }
+    }
+
     console.log('Class Chat API result:', { 
       model: selectedModel || 'fallback', 
       answerLength: aiResponse?.length || 0,
       chatId,
       mentionedTopics,
       questionComplexity,
+      sourcesCount: syllabusSources.length,
       timestamp: new Date().toISOString()
     });
 
@@ -633,12 +675,15 @@ What would you like to dive into? What's challenging you right now?`;
       }
     }
 
-    // Generate sources for the UI (Memory pulled from)
-    const sources = courseData ? [{
-      title: courseData.courseName ? `${courseData.courseName} Syllabus` : 'Course Syllabus',
-      url: '#',
-      snippet: 'Syllabus Context'
-    }] : [];
+    // Format sources for the UI
+    const sources = syllabusSources.map(s => ({
+      title: s.fileName,
+      url: '#', // Will be handled by frontend to open file
+      snippet: s.excerpt,
+      page: s.page,
+      line: s.line,
+      fileName: s.fileName,
+    }));
 
     return NextResponse.json({
       success: true,

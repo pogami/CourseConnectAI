@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
                 </p>
                 
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="http://localhost:9002/dashboard" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; font-size: 16px;">
+                  <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.courseconnectai.com'}/dashboard" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; font-size: 16px;">
                     Get Started Free →
                   </a>
                 </div>
@@ -115,8 +115,8 @@ export async function POST(request: NextRequest) {
                 
                 <p style="font-size: 14px; color: #666; text-align: center;">
                   You're receiving this email because you subscribed to CourseConnect AI newsletter.<br>
-                  <a href="http://localhost:9002/unsubscribe?email=${encodeURIComponent(normalizedEmail)}" style="color: #667eea; text-decoration: none;">Unsubscribe</a> | 
-                  <a href="http://localhost:9002" style="color: #667eea; text-decoration: none;">Visit Website</a>
+                  <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.courseconnectai.com'}/unsubscribe?email=${encodeURIComponent(normalizedEmail)}" style="color: #667eea; text-decoration: none;">Unsubscribe</a> | 
+                  <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.courseconnectai.com'}" style="color: #667eea; text-decoration: none;">Visit Website</a>
                 </p>
                 
                 <p style="font-size: 12px; color: #999; text-align: center; margin-top: 20px;">

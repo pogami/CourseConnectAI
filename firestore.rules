@@ -12,6 +12,14 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
     
+    // Shared chats - public read, public create (for guests)
+    match /shared_chats/{shareId} {
+      allow read: if true;
+      allow create: if true; // Publicly writable for sharing
+      allow update: if false; // Immutable once shared
+      allow delete: if false;
+    }
+
     // Users collection - users can read/write only their own data
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -22,10 +30,10 @@ service cloud.firestore {
     
     // Chats collection - users can read/write their own chats
     match /chats/{chatId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || !resource.data.userId);
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || !resource.data.userId);
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || !resource.data.userId);
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
       
       // Messages subcollection within chats
       match /messages/{messageId} {
@@ -134,14 +142,5 @@ service cloud.firestore {
       allow read: if false; // Never allow read
       allow write: if isSignedIn();
     }
-
-    // Analytics collection - users can only write their own analytics
-    match /analytics/{analyticsId} {
-      allow read: if false; // Never allow read (privacy)
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if false; // No updates allowed
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
   }
 }
-

@@ -3,7 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useChatStore } from '@/hooks/use-chat-store';
-import { Sun, Moon, Coffee, Calendar, TrendingUp, Award } from 'lucide-react';
+import {
+  Sun01Icon,
+  Moon01Icon,
+  Coffee01Icon,
+  Calendar01Icon,
+  AnalyticsUpIcon,
+  Award01Icon
+} from 'hugeicons-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface DailyBriefingProps {
@@ -54,7 +61,30 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
     setFocusItem(nextItem || { type: 'free', name: 'No upcoming deadlines', date: new Date(), course: '' });
   }, [chats]);
 
-  const userName = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Student';
+  // Get user name, checking localStorage for guest users
+  const getUserName = (): string => {
+    // Check if it's a guest user
+    if (user?.isGuest || user?.isAnonymous) {
+      if (typeof window !== 'undefined') {
+        try {
+          const guestUser = localStorage.getItem('guestUser');
+          if (guestUser) {
+            const parsed = JSON.parse(guestUser);
+            if (parsed.displayName) {
+              return parsed.displayName.split(' ')[0];
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to parse guest user from localStorage:', error);
+        }
+      }
+    }
+    
+    // Fallback to regular user displayName or email
+    return user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Student';
+  };
+
+  const userName = getUserName();
 
   return (
     <div className="w-full mb-8">
@@ -73,9 +103,9 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
               transition={{ duration: 0.5 }}
               className="flex items-center gap-3 text-gray-500 dark:text-gray-400 font-medium text-sm uppercase tracking-wider"
             >
-              {greeting.includes('morning') ? <Sun className="w-4 h-4 text-orange-500" /> : 
-               greeting.includes('afternoon') ? <Coffee className="w-4 h-4 text-brown-500" /> : 
-               <Moon className="w-4 h-4 text-indigo-500" />}
+              {greeting.includes('morning') ? <Sun01Icon className="w-4 h-4 text-orange-500" /> : 
+               greeting.includes('afternoon') ? <Coffee01Icon className="w-4 h-4 text-brown-500" /> : 
+               <Moon01Icon className="w-4 h-4 text-indigo-500" />}
               <span>Daily Briefing</span>
             </motion.div>
 
@@ -119,7 +149,7 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
           >
             <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-gray-200/50 dark:border-gray-700/50 p-4 rounded-2xl shadow-sm flex items-center gap-3 min-w-[140px]">
               <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
-                <Award className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                <Award01Icon className="w-5 h-5 text-orange-600 dark:text-orange-400" />
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.studyStreak || 0}</div>
@@ -129,7 +159,7 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
             
             <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-gray-200/50 dark:border-gray-700/50 p-4 rounded-2xl shadow-sm flex items-center gap-3 min-w-[140px]">
               <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <AnalyticsUpIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.assignmentsCompleted || 0}</div>

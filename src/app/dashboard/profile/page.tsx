@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { auth, db } from "@/lib/firebase/client-simple";
 import { updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { safeFirebaseOperation, safeDocumentExists, safeDocumentData } from "@/lib/firebase-error-handler";
+// Removed firebase-error-handler import - using local implementations
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Camera, Loader2, User, Mail, GraduationCap, Calendar, Bell, MessageSquare, Settings, CreditCard, AlertTriangle, MapPin, Users, Check } from "lucide-react";
@@ -221,8 +221,8 @@ export default function ProfilePage() {
                 const userDocRef = doc(db, "users", user.uid);
                 const userDocSnap = await localSafeFirebaseOperation(() => getDoc(userDocRef), "get user profile");
 
-                if (safeDocumentExists(userDocSnap)) {
-                    const userData = safeDocumentData(userDocSnap);
+                if (userDocSnap && userDocSnap.exists()) {
+                    const userData = userDocSnap.data();
                     if (userData) {
                         setSchool(userData.school || "");
                         setMajor(userData.major || "");

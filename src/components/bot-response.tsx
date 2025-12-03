@@ -5,22 +5,59 @@ import { BlockMath, InlineMath } from "react-katex";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  ScatterChart,
+  Scatter,
+  AreaChart,
+  Area,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
+  ResponsiveContainer,
 } from "recharts";
 import "katex/dist/katex.min.css";
 import { TruncatedText } from './truncated-text';
 import { AIResponse } from './ai-response';
-import { Copy, Check } from 'lucide-react';
+import {
+  Copy01Icon,
+  CheckmarkCircle01Icon,
+  Book01Icon,
+  QuoteUpIcon,
+  Search01Icon,
+  Cancel01Icon,
+  SparklesIcon,
+  ArrowRight01Icon,
+  Download01Icon,
+  ZoomInIcon,
+  ZoomOutIcon,
+  RotateLeft01Icon,
+  ViewIcon,
+  ViewOffIcon
+} from 'hugeicons-react';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { SourceIcon } from './source-icon';
 import { InteractiveQuiz } from './interactive-quiz';
 import { FullExamModal } from './full-exam-modal';
 import { AIFeedback } from './ai-feedback';
 import { useFeatureFlags } from '@/hooks/use-feature-flags';
 import { FeatureDisabled } from './feature-disabled';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+import { InteractiveGraph } from '@/components/interactive-graph';
 
 // Detect if content looks like data points (array of {x, y})
 function looksLikeGraph(content: string): boolean {
@@ -66,6 +103,64 @@ function extractQuizData(content: string): { type: 'quiz' | 'exam' | null, data:
   }
 }
 
+// Detect and extract graph data
+function extractGraphData(content: string): { type: 'function' | 'data' | null, data: any } {
+  try {
+    // Look for GRAPH_DATA: marker
+    const graphMatch = content.match(/GRAPH_DATA:\s*(\{[^\n]*\})/);
+    
+    if (graphMatch) {
+      console.log('Found GRAPH_DATA marker');
+      const jsonStr = graphMatch[1].trim();
+      try {
+        const data = JSON.parse(jsonStr);
+        console.log('Successfully parsed graph data:', data.type);
+        return { type: data.type || 'function', data };
+      } catch (parseError) {
+        console.error('Failed to parse graph JSON:', parseError);
+        return { type: null, data: null };
+      }
+    }
+    
+    return { type: null, data: null };
+  } catch (error) {
+    console.error('Failed to extract graph data. Error:', error);
+    return { type: null, data: null };
+  }
+}
+
+// Helper to extract follow-up questions
+function extractFollowUps(content: string): { text: string, followUps: string[] } {
+  // Try to find the block
+  const match = content.match(/\/\/\/FOLLOWUP_START\/\/\/(.*?)\/\/\/FOLLOWUP_END\/\/\//s);
+  if (match) {
+    try {
+      const jsonStr = match[1].trim();
+      const followUps = JSON.parse(jsonStr);
+      
+      if (Array.isArray(followUps) && followUps.length > 0) {
+        // Filter out any invalid entries and limit to 3
+        const validFollowUps = followUps
+          .filter((f: any) => typeof f === 'string' && f.trim().length > 0)
+          .slice(0, 3)
+          .map((f: string) => f.trim());
+        
+        if (validFollowUps.length > 0) {
+          return {
+            text: content.replace(match[0], '').trim(),
+            followUps: validFollowUps
+          };
+        }
+      }
+    } catch (e) {
+      // Silently fail - if JSON is malformed, just don't show follow-ups
+      // This prevents the app from crashing
+      console.warn('Failed to parse follow-ups JSON (this is okay, follow-ups will be skipped):', match[1]?.substring(0, 100));
+    }
+  }
+  return { text: content, followUps: [] };
+}
+
 // Helper function to highlight @ai mentions
 const highlightAIMentions = (text: string) => {
   return text.replace(/(?<!\w)@ai(?!\w)/gi, (match) => 
@@ -81,12 +176,75 @@ const convertMarkdownLinks = (text: string) => {
   });
 };
 
+// Parse citations from content: [Source: filename, Page X, Line Y] or 📎 filename (PX, LY)
+const parseCitations = (text: string): React.ReactNode => {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  
+  // Pattern 1: [Source: filename, Page X, Line Y]
+  const citationPattern1 = /\[Source:\s*([^,]+)(?:,\s*Page\s*(\d+))?(?:,\s*Line\s*(\d+))?\]/gi;
+  // Pattern 2: 📎 filename (PX, LY)
+  const citationPattern2 = /📎\s*([^(]+)\s*\(P(\d+),?\s*L(\d+)?\)/gi;
+  
+  const combinedPattern = new RegExp(
+    `(${citationPattern1.source}|${citationPattern2.source})`,
+    'gi'
+  );
+  
+  let match;
+  while ((match = combinedPattern.exec(text)) !== null) {
+    // Add text before citation
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    
+    // Extract citation details
+    let fileName = '';
+    let page: number | undefined;
+    let line: number | undefined;
+    
+    if (match[0].startsWith('[')) {
+      // Pattern 1 format
+      fileName = match[1]?.trim() || '';
+      page = match[2] ? parseInt(match[2]) : undefined;
+      line = match[3] ? parseInt(match[3]) : undefined;
+    } else {
+      // Pattern 2 format
+      fileName = match[1]?.trim() || '';
+      page = match[2] ? parseInt(match[2]) : undefined;
+      line = match[3] ? parseInt(match[3]) : undefined;
+    }
+    
+    // Add highlighted citation badge
+    parts.push(
+      <span
+        key={`citation-${match.index}`}
+        className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded text-xs font-medium"
+      >
+        📎 {fileName}
+        {page !== undefined && ` (P${page}`}
+        {line !== undefined && `, L${line}`}
+        {page !== undefined && ')'}
+      </span>
+    );
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? <>{parts}</> : <>{text}</>;
+};
+
 // Convert [[Term]] into highlighted spans
 const convertHighlightedTerms = (text: string) => {
   return text.replace(/\[\[([^\]]+)\]\]/g, (_, term) => {
     const cleaned = term.trim();
     if (!cleaned) return term;
-    return `<span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-100/80 text-amber-900 dark:bg-amber-400/20 dark:text-amber-100 font-medium transition-colors">${cleaned}</span>`;
+    return `<span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50/80 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300 font-medium transition-colors border border-blue-100 dark:border-blue-500/20">${cleaned}</span>`;
   });
 };
 
@@ -154,8 +312,7 @@ function renderMathLine(line: string, i: number) {
           if (boxedMatch) {
             const boxedContent = boxedMatch[1];
             return (
-              <span key={`${i}-${partIndex}`} className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-md font-medium">
-                <span className="text-green-600 dark:text-green-400">Answer:</span>
+              <span key={`${i}-${partIndex}`} className="inline-block border border-foreground px-3 py-2 bg-transparent">
                 <InlineMath math={boxedContent} />
               </span>
             );
@@ -175,6 +332,32 @@ function renderMathLine(line: string, i: number) {
         return null;
       })}
     </ContainerTag>
+  );
+}
+
+// Helper to render inline math and text for buttons
+function renderInlineContent(text: string) {
+  // 1. Remove highlighted term brackets [[Term]] -> Term
+  const cleanText = text.replace(/\[\[(.*?)\]\]/g, '$1');
+  
+  // 2. Split by math delimiters
+  // Matches $...$ (inline math) or \(...\) (inline math)
+  const parts = cleanText.split(/(\$[^$]+?\$|\\\([^)]+?\\\))/);
+  
+  return (
+    <>
+      {parts.map((part, index) => {
+         if (part.startsWith('$') && part.endsWith('$')) {
+           const mathContent = part.slice(1, -1).trim();
+           return <InlineMath key={index} math={mathContent} />;
+         } else if (part.startsWith('\\(') && part.endsWith('\\)')) {
+           const mathContent = part.slice(2, -2).trim();
+           return <InlineMath key={index} math={mathContent} />;
+         } else {
+           return <span key={index}>{part}</span>;
+         }
+      })}
+    </>
   );
 }
 
@@ -233,26 +416,33 @@ interface BotResponseProps {
   content: string;
   className?: string;
   sources?: {
-    title: string;
-    url: string;
+    title?: string;
+    url?: string;
     snippet: string;
+    page?: number;
+    line?: number;
+    fileName?: string;
   }[];
   isSearchRequest?: boolean; // Flag to indicate web search was requested
   onSendMessage?: (message: string) => void;
   messageId?: string;
   onFeedback?: (feedback: { rating: 'positive' | 'negative'; comment?: string; messageId: string }) => void;
+  courseData?: any; // Course data for file access
 }
 
-export default function BotResponse({ content, className = "", sources, isSearchRequest = false, onSendMessage, messageId, onFeedback }: BotResponseProps) {
-  const isGraph = useMemo(() => looksLikeGraph(content), [content]);
-  const quizData = useMemo(() => extractQuizData(content), [content]);
+export default function BotResponse({ content, className = "", sources, isSearchRequest = false, onSendMessage, messageId, onFeedback, courseData }: BotResponseProps) {
+  const { text: cleanContent, followUps } = useMemo(() => extractFollowUps(content), [content]);
+  const isGraph = useMemo(() => looksLikeGraph(cleanContent), [cleanContent]);
+  const quizData = useMemo(() => extractQuizData(cleanContent), [cleanContent]);
+  const graphData = useMemo(() => extractGraphData(cleanContent), [cleanContent]);
   const { isFeatureEnabled } = useFeatureFlags();
   const [isCopied, setIsCopied] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
+  const [expandedSourceIndex, setExpandedSourceIndex] = useState<number | null>(null);
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(cleanContent);
       setIsCopied(true);
       setTimeout(() => {
         setIsCopied(false);
@@ -265,12 +455,12 @@ export default function BotResponse({ content, className = "", sources, isSearch
   // Render interactive quiz
   if (quizData.type === 'quiz' && quizData.data) {
     // Remove the QUIZ_DATA line from content
-    const cleanContent = content.replace(/QUIZ_DATA:[^\n]+/, '').trim();
+    const textOnly = cleanContent.replace(/QUIZ_DATA:[^\n]+/, '').trim();
     return (
       <div className={`relative ${className}`}>
-        {cleanContent && (
+        {textOnly && (
           <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
-            {breakIntoParagraphs(cleanContent).map((paragraph, i) => (
+            {breakIntoParagraphs(textOnly).map((paragraph, i) => (
               <div key={i} className="mb-3 last:mb-0">
                 {paragraph.split("\n").map((line, j) => renderMathLine(line, j))}
               </div>
@@ -279,7 +469,7 @@ export default function BotResponse({ content, className = "", sources, isSearch
             {/* AI Feedback for text portion - Inline */}
             {messageId && onFeedback && (
               <div className="inline-block ml-2 mt-2">
-                <AIFeedback messageId={messageId} aiContent={content} onFeedback={onFeedback} />
+                <AIFeedback messageId={messageId} aiContent={cleanContent} onFeedback={onFeedback} />
               </div>
             )}
           </div>
@@ -315,12 +505,12 @@ export default function BotResponse({ content, className = "", sources, isSearch
   // Render full exam modal
   if (quizData.type === 'exam' && quizData.data) {
     // Remove the EXAM_DATA line from content
-    const cleanContent = content.replace(/EXAM_DATA:[^\n]+/, '').trim();
+    const textOnly = cleanContent.replace(/EXAM_DATA:[^\n]+/, '').trim();
     return (
       <div className={`relative ${className}`}>
-        {cleanContent && (
+        {textOnly && (
           <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
-            {breakIntoParagraphs(cleanContent).map((paragraph, i) => (
+            {breakIntoParagraphs(textOnly).map((paragraph, i) => (
               <div key={i} className="mb-3 last:mb-0">
                 {paragraph.split("\n").map((line, j) => renderMathLine(line, j))}
               </div>
@@ -329,7 +519,7 @@ export default function BotResponse({ content, className = "", sources, isSearch
             {/* AI Feedback for text portion - Inline */}
             {messageId && onFeedback && (
               <div className="inline-block ml-2 mt-2">
-                <AIFeedback messageId={messageId} aiContent={content} onFeedback={onFeedback} />
+                <AIFeedback messageId={messageId} aiContent={cleanContent} onFeedback={onFeedback} />
               </div>
             )}
           </div>
@@ -370,8 +560,13 @@ export default function BotResponse({ content, className = "", sources, isSearch
     );
   }
 
+  // Render graph if graph data is detected
+  if (graphData.type && graphData.data) {
+    return <InteractiveGraph graphData={graphData} cleanContent={cleanContent} className={className} />;
+  }
+
   if (isGraph) {
-    const data = JSON.parse(content);
+    const data = JSON.parse(cleanContent);
     return (
       <div className={`p-5 ${className}`}>
         <h3 className="text-lg font-semibold mb-2">Graph Output:</h3>
@@ -387,11 +582,11 @@ export default function BotResponse({ content, className = "", sources, isSearch
   }
 
   // Check if content contains code blocks (triple backticks)
-  const hasCodeBlocks = content.includes('```');
+  const hasCodeBlocks = cleanContent.includes('```');
   
   if (hasCodeBlocks) {
     // Use AIResponse for code highlighting
-    return <AIResponse content={content} className={className} alwaysHighlight={false} />;
+    return <AIResponse content={cleanContent} className={className} alwaysHighlight={false} />;
   }
 
   // Check if this is a web search response (but hide UI for now)
@@ -413,11 +608,175 @@ export default function BotResponse({ content, className = "", sources, isSearch
         </div>
       </div> */}
       
-      {breakIntoParagraphs(content).map((paragraph, i) => (
+      {breakIntoParagraphs(cleanContent).map((paragraph, i) => (
         <div key={i} className="mb-3 last:mb-0">
-          {paragraph.split("\n").map((line, j) => renderMathLine(line, j))}
+          {paragraph.split("\n").map((line, j) => {
+            // Clean the line of citation text for display
+            // Remove [Source: ...] but keep the rest of the text
+            const cleanLine = line.replace(/\[Source:[^\]]+\]/g, '').trim();
+            
+            if (!cleanLine) return null; // Skip empty lines left after removing citations
+            
+            // If the line was JUST a citation, we skip rendering it inline (since it's in the card)
+            // If it had other text, we render the text without the citation
+            return renderMathLine(cleanLine, j);
+          })}
         </div>
       ))}
+      
+      {/* Smart Follow-up Chips */}
+      {followUps.length > 0 && onSendMessage && (
+        <div className="mt-4 flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300 fill-mode-forwards print:hidden">
+          {followUps.map((question, idx) => (
+            <button
+              key={idx}
+              onClick={() => onSendMessage(question)}
+              className="group flex items-center gap-2 px-4 py-2 bg-background/50 hover:bg-background border border-border/40 hover:border-primary/30 text-muted-foreground hover:text-primary text-xs font-medium rounded-xl transition-all duration-200 shadow-sm hover:shadow-md text-left backdrop-blur-sm"
+            >
+              <span>{renderInlineContent(question)}</span>
+              <ArrowRight01Icon className="w-3.5 h-3.5 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200 text-primary/70 flex-shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Detected Sources Section */}
+      {(() => {
+        const hasSyllabusSources = sources && sources.length > 0 && sources.some(s => s.fileName || (s.page !== undefined) || (s.line !== undefined));
+        if (hasSyllabusSources) {
+          console.log('📚 BotResponse: Displaying sources:', sources);
+        } else if (sources && sources.length > 0) {
+          console.log('📚 BotResponse: Sources present but missing fileName/page/line:', sources);
+        }
+        return hasSyllabusSources;
+      })() && (
+        <div className="mt-6">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent opacity-50"></div>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded-full border border-border/30">
+              <Search01Icon className="w-3 h-3" />
+              Used Sources
+            </span>
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent opacity-50"></div>
+          </div>
+
+          {/* Compact summary line for quick scanning */}
+          <div className="mb-2 text-[11px] text-muted-foreground/90">
+            {(() => {
+              const uniqueNames = Array.from(
+                new Set(
+                  (sources || [])
+                    .map((s) => (s.fileName || s.title || '').trim())
+                    .filter(Boolean)
+                )
+              );
+              if (uniqueNames.length === 0) return null;
+              const summary =
+                uniqueNames.length <= 3
+                  ? uniqueNames.join(' • ')
+                  : `${uniqueNames.slice(0, 3).join(' • ')} + ${uniqueNames.length - 3} more`;
+              return (
+                <span>
+                  <span className="font-semibold">Used sources:</span>{' '}
+                  <span className="opacity-90">{summary}</span>
+                </span>
+              );
+            })()}
+          </div>
+          
+          <div className="grid gap-2">
+            {sources.map((source, idx) => {
+              const fileName = source.fileName || source.title || 'Syllabus';
+
+              // Clean snippet to avoid leaking internal markers like FOLLOWUP blocks
+              const rawSnippet = source.snippet || source.excerpt || '';
+              const cleanedSnippet = rawSnippet
+                // Strip FOLLOWUP markers and any JSON that follows them
+                .replace(/\/\/\/FOLLOWUP_START\/\/\/[\s\S]*$/g, '')
+                // Remove any leftover FOLLOWUP markers inline, just in case
+                .replace(/\/\/\/FOLLOWUP_START\/\/\/[\s\S]*?\/\/\/FOLLOWUP_END\/\/\//g, '')
+                // Collapse whitespace
+                .replace(/\s+/g, ' ')
+                .trim();
+              const isExpanded = expandedSourceIndex === idx;
+              
+              const handleFileClick = () => {
+                // Toggle expansion
+                setExpandedSourceIndex(isExpanded ? null : idx);
+              };
+              
+              return (
+                <div
+                  key={idx}
+                  className={`group relative bg-gradient-to-br from-card to-muted/30 border rounded-xl overflow-hidden transition-all duration-300 ${
+                    isExpanded 
+                      ? 'border-blue-500/30 shadow-md ring-1 ring-blue-500/10' 
+                      : 'border-border/60 hover:shadow-md hover:border-primary/20'
+                  }`}
+                >
+                  {/* Left Accent Bar */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-500 to-blue-500 transition-opacity ${
+                    isExpanded ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
+                  }`} />
+                  
+                  <div className="p-3 pl-4">
+                    {/* Header: File Info */}
+                    <div className="flex items-start justify-between gap-3 mb-2 cursor-pointer" onClick={handleFileClick}>
+                      <div className="flex items-center gap-2.5 min-w-0 w-full">
+                         <div className={`p-1.5 rounded-lg shadow-sm border transition-colors ${
+                           isExpanded 
+                             ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' 
+                             : 'bg-background border-border/50 text-blue-600 dark:text-blue-400 group-hover:scale-105'
+                         }`}>
+                            <Book01Icon className="w-3.5 h-3.5" />
+                         </div>
+                         <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-foreground/90 truncate" title={fileName}>
+                                {fileName}
+                              </p>
+                              {(source.page !== undefined || source.line !== undefined) && (
+                                 <span className="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background border border-border/50 text-muted-foreground shadow-sm">
+                                   {source.page !== undefined && `Page ${source.page}`}
+                                   {source.page !== undefined && source.line !== undefined && <span className="text-border">|</span>}
+                                   {source.line !== undefined && `Line ${source.line}`}
+                                 </span>
+                              )}
+                            </div>
+                         </div>
+                      </div>
+                    </div>
+                    
+                    {/* Snippet Content */}
+                    <div
+                       onClick={handleFileClick}
+                       className="w-full text-left group/snippet relative mt-1 cursor-pointer"
+                    >
+                       <div className="relative pl-3">
+                          <p className={`text-xs text-muted-foreground/80 transition-all duration-300 leading-relaxed font-serif italic ${
+                            isExpanded ? 'text-foreground/90 text-sm' : 'line-clamp-2 group-hover/snippet:text-foreground/90'
+                          }`}>
+                            "{cleanedSnippet || rawSnippet}"
+                          </p>
+                       </div>
+                       
+                       {/* Verification Note (Only when expanded) */}
+                       {isExpanded && (
+                         <div className="mt-3 pt-3 border-t border-border/40 animate-in fade-in slide-in-from-top-1 duration-200">
+                           <div className="flex gap-2 items-start text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/10 p-2 rounded-lg border border-amber-200/50 dark:border-amber-800/30">
+                             <Search className="w-3 h-3 mt-0.5 shrink-0" />
+                             <p>This is a direct quote from your uploaded file. Always double-check dates and policies in the original document.</p>
+                           </div>
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       
       {/* Footer Indicators - Temporarily hidden */}
       {/* <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
@@ -428,10 +787,12 @@ export default function BotResponse({ content, className = "", sources, isSearch
         )}
       </div> */}
       
-      {/* Source Icon - Inline */}
-      <div className="inline-block ml-2">
-        <SourceIcon sources={sources || []} />
-      </div>
+      {/* Source Icon - Inline (for web sources only) */}
+      {sources && sources.length > 0 && sources.some(s => s.url && s.url !== '#') && (
+        <div className="inline-block ml-2">
+          <SourceIcon sources={sources.filter(s => s.url && s.url !== '#')} />
+        </div>
+      )}
       
       {/* Copy Button - Inline */}
       <button
@@ -440,12 +801,12 @@ export default function BotResponse({ content, className = "", sources, isSearch
         title="Copy message"
       >
         <div className="relative">
-          <Copy 
+          <Copy01Icon 
             className={`h-3.5 w-3.5 text-muted-foreground transition-all duration-300 ease-in-out ${
               isCopied ? 'opacity-0 scale-0 rotate-180' : 'opacity-100 scale-100 rotate-0'
             }`} 
           />
-          <Check 
+          <CheckmarkCircle01Icon 
             className={`absolute inset-0 h-3.5 w-3.5 text-green-600 transition-all duration-300 ease-in-out ${
               isCopied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-0 -rotate-180'
             }`} 

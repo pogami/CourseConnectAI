@@ -1,87 +1,93 @@
-/**
- * React hook for getting user's location and timezone
- */
+"use client";
 
 import { useState, useEffect } from 'react';
 
-interface UserLocation {
+interface UseUserLocationReturn {
+  currentTime: Date;
   timezone: string;
-  city: string;
-  country: string;
-  currentTime: string;
+  city: string | null;
+  country: string | null;
   isLoading: boolean;
-  error: string | null;
+  error: Error | null;
 }
 
-export function useUserLocation(): UserLocation {
-  const [location, setLocation] = useState<UserLocation>({
-    timezone: 'UTC',
-    city: 'Unknown',
-    country: 'Unknown',
-    currentTime: new Date().toLocaleTimeString(),
-    isLoading: true,
-    error: null
-  });
+export function useUserLocation(): UseUserLocationReturn {
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [timezone, setTimezone] = useState('UTC');
+  const [city, setCity] = useState<string | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    // Update time every second
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    // Get timezone
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      setTimezone(tz);
+    } catch (err) {
+      console.warn('Could not detect timezone:', err);
+      setTimezone('UTC');
+    }
+
+    // Try to get location (optional - may require user permission)
     const getLocation = async () => {
       try {
-        // Get timezone from Intl API
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        
-        // Get current time in user's timezone
-        const now = new Date();
-        const currentTime = now.toLocaleTimeString('en-US', {
-          timeZone: timezone,
-          hour12: true,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-
-        // Try to get city and country from timezone
-        const parts = timezone.split('/');
-        const city = parts[parts.length - 1] || 'Unknown'; // Get the last part (city name)
-        const country = parts[0] || 'Unknown';
-        
-        setLocation({
-          timezone,
-          city: city.replace(/_/g, ' '), // Replace underscores with spaces
-          country: country.replace(/_/g, ' '),
-          currentTime,
-          isLoading: false,
-          error: null
-        });
-
-        // Update time every second
-        const interval = setInterval(() => {
-          const newTime = new Date().toLocaleTimeString('en-US', {
-            timeZone: timezone,
-            hour12: true,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          });
-          
-          setLocation(prev => ({
-            ...prev,
-            currentTime: newTime
-          }));
-        }, 1000);
-
-        return () => clearInterval(interval);
-      } catch (error) {
-        console.error('Failed to get user location:', error);
-        setLocation(prev => ({
-          ...prev,
-          isLoading: false,
-          error: 'Failed to get location'
-        }));
+        // Try to get location from browser (requires permission)
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                // Use a reverse geocoding service (you can replace with your preferred service)
+                const response = await fetch(
+                  `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`
+                );
+                if (response.ok) {
+                  const data = await response.json();
+                  setCity(data.city || null);
+                  setCountry(data.countryName || null);
+                }
+              } catch (err) {
+                console.warn('Could not fetch location details:', err);
+              } finally {
+                setIsLoading(false);
+              }
+            },
+            () => {
+              // User denied or error getting location
+              setIsLoading(false);
+            },
+            { timeout: 5000 }
+          );
+        } else {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn('Error getting location:', err);
+        setError(err as Error);
+        setIsLoading(false);
       }
     };
 
     getLocation();
+
+    return () => {
+      clearInterval(timeInterval);
+    };
   }, []);
 
-  return location;
+  return {
+    currentTime,
+    timezone,
+    city,
+    country,
+    isLoading,
+    error,
+  };
 }
+
+

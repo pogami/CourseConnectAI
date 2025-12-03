@@ -89,6 +89,8 @@ export function GlobalCommandMenu() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      // Clear uploaded syllabi on logout
+      localStorage.removeItem('uploaded-syllabi');
       toast.success('Logged out successfully! 👋');
       router.push('/login');
     } catch (error) {

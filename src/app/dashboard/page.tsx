@@ -5,7 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import { MessageSquare, Upload, BookOpen, Users, TrendingUp, Clock, Sparkles, Crown, Target, Calendar, Award, GraduationCap, FileText, Bell } from "lucide-react";
+import {
+  Chatting01Icon,
+  Upload01Icon,
+  BookOpen01Icon,
+  UserGroupIcon,
+  AnalyticsUpIcon,
+  Clock01Icon,
+  SparklesIcon,
+  CrownIcon,
+  Target01Icon,
+  Calendar01Icon,
+  Award01Icon,
+  GraduationScrollIcon,
+  Book01Icon,
+  Notification01Icon
+} from "hugeicons-react";
 import Image from "next/image";
 import { StatCards } from "@/components/stat-cards";
 import { useChatStore } from "@/hooks/use-chat-store";
@@ -18,12 +33,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useState, useEffect } from "react";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { MobileButton } from "@/components/ui/mobile-button";
-import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import GeolocationGreeting from "@/components/geolocation-greeting";
 import { StudyFocusSuggestions } from "@/components/study-focus-suggestions";
 import { ChatSummariesDashboard } from "@/components/chat-summaries-dashboard";
 import { DailyBriefing } from "@/components/dashboard/daily-briefing";
 import { DashboardAgenda } from "@/components/dashboard/dashboard-agenda";
+import { NextBestStepStrip } from "@/components/next-best-step-strip";
 import dynamic from "next/dynamic";
 
 
@@ -414,6 +429,7 @@ export default function DashboardPage() {
               localStorage.removeItem('guestUser');
               localStorage.removeItem('guest-notifications');
               localStorage.removeItem('guest-onboarding-completed');
+              localStorage.removeItem('uploaded-syllabi'); // Clear uploaded syllabi when new user signs in
               setUser(user);
             } else {
               // No authenticated user, check for guest user
@@ -528,6 +544,9 @@ export default function DashboardPage() {
         {/* Daily Briefing - Personalized morning update */}
         <DailyBriefing user={user} stats={stats} />
 
+        {/* Next Best Step - lightweight, always-visible strip driven by real course data */}
+        <NextBestStepStrip />
+
         {/* Stats - Standard Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Study Time */}
@@ -536,7 +555,7 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div className="h-10 w-10 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 dark:from-cyan-500 dark:to-blue-600 flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-white" strokeWidth={2} />
+                    <Clock01Icon className="h-5 w-5 text-white" />
                   </div>
                   <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Time</p>
                 </div>
@@ -553,7 +572,7 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-400 to-green-500 dark:from-emerald-500 dark:to-green-600 flex items-center justify-center">
-                    <Target className="h-5 w-5 text-white" strokeWidth={2} />
+                    <Target01Icon className="h-5 w-5 text-white" />
                   </div>
                   <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Done</p>
                 </div>
@@ -570,7 +589,7 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div className="h-10 w-10 bg-gradient-to-br from-purple-500 via-pink-500 to-rose-500 dark:from-purple-600 dark:via-pink-600 dark:to-rose-600 flex items-center justify-center rounded-2xl shadow-sm">
-                    <Award className="h-5 w-5 text-white" strokeWidth={2.5} />
+                    <Award01Icon className="h-5 w-5 text-white" />
                   </div>
                   <p className="text-[10px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-widest">Streak</p>
                 </div>
@@ -592,7 +611,7 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 dark:from-orange-500 dark:to-red-600 flex items-center justify-center">
-                    <Calendar className="h-5 w-5 text-white" strokeWidth={2} />
+                    <Calendar01Icon className="h-5 w-5 text-white" />
                   </div>
                   <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Due</p>
                 </div>
@@ -624,7 +643,7 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-3 text-lg">
                 <div className="p-2 rounded-lg bg-pink-50 dark:bg-pink-950/40">
-                  <TrendingUp className="h-5 w-5 text-pink-600" />
+                  <AnalyticsUpIcon className="h-5 w-5 text-pink-600" />
                 </div>
                 Topics waiting for you
               </CardTitle>
@@ -741,7 +760,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 shadow-lg">
-                  <Crown className="h-6 w-6 text-white" />
+                  <CrownIcon className="h-6 w-6 text-white" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Unlock Pro Features</h3>
@@ -752,14 +771,14 @@ export default function DashboardPage() {
                 <Dialog open={isAdvancedDialogOpen} onOpenChange={setIsAdvancedDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white">
-                      <Crown className="h-4 w-4 mr-2" />
+                      <CrownIcon className="h-4 w-4 mr-2" />
                       Try Free
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
-                        <Crown className="h-5 w-5 text-purple-600" />
+                        <CrownIcon className="h-5 w-5 text-purple-600" />
                         Unlock Pro Features
                       </DialogTitle>
                       <DialogDescription>
@@ -782,7 +801,7 @@ export default function DashboardPage() {
                       <div className="flex flex-col gap-3">
                         <Button asChild className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700">
                           <Link href="/features" onClick={() => setIsAdvancedDialogOpen(false)}>
-                            <Crown className="h-4 w-4 mr-2" />
+                            <CrownIcon className="h-4 w-4 mr-2" />
                             View Features
                           </Link>
                         </Button>
@@ -819,7 +838,7 @@ export default function DashboardPage() {
               <div className="relative z-10 max-w-lg mx-auto">
                 <div className="flex items-center justify-center mb-6">
                   <div className="p-6 rounded-3xl bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 dark:from-cyan-600 dark:via-blue-600 dark:to-indigo-600 w-24 h-24 flex items-center justify-center shadow-2xl">
-                    <Upload className="h-12 w-12 text-white" strokeWidth={2.5} />
+                    <Upload01Icon className="h-12 w-12 text-white" />
                   </div>
                 </div>
                 <h3 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white mb-4 text-center leading-tight">
@@ -845,7 +864,7 @@ export default function DashboardPage() {
                 <div className="flex justify-center">
                   <Button asChild size="lg" className="bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:via-blue-700 hover:to-indigo-700 text-white shadow-xl shadow-cyan-500/30 dark:shadow-cyan-900/50 font-bold text-base px-8 py-6 rounded-2xl">
                     <Link href="/dashboard/upload">
-                      <Upload className="h-5 w-5 mr-2" />
+                      <Upload01Icon className="h-5 w-5 mr-2" />
                       Upload Syllabus
                     </Link>
                   </Button>
@@ -861,7 +880,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-lg">
               <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/50">
-                <Users className="h-5 w-5 text-blue-600" />
+                <UserGroupIcon className="h-5 w-5 text-blue-600" />
               </div>
               Study Groups
             </CardTitle>
@@ -873,7 +892,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                      <BookOpen className="h-4 w-4 text-blue-600" />
+                      <BookOpen01Icon className="h-4 w-4 text-blue-600" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">You have {classCount} active class{classCount !== 1 ? 'es' : ''}</p>
@@ -888,13 +907,13 @@ export default function DashboardPage() {
             ) : (
               <div className="text-center py-8">
                 <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800 w-fit mx-auto mb-4">
-                  <BookOpen className="h-8 w-8 text-gray-400" />
+                  <BookOpen01Icon className="h-8 w-8 text-gray-400" />
                 </div>
                 <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">No study groups yet</h3>
                 <p className="text-gray-600 dark:text-gray-400 mb-6">Upload a syllabus to find and join study groups</p>
                 <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Link href="/dashboard/upload">
-                    <Upload className="mr-2 h-4 w-4" />
+                    <Upload01Icon className="mr-2 h-4 w-4" />
                     Upload Syllabus
                   </Link>
                 </Button>
@@ -906,7 +925,6 @@ export default function DashboardPage() {
       </div>
       
       {/* PWA Install Prompt */}
-      <PWAInstallPrompt />
       
     </div>
   );

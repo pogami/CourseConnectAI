@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { CCLogo } from '@/components/icons/cc-logo';
 import { useTheme } from '@/contexts/theme-context';
@@ -10,6 +11,8 @@ import { Sun, Moon, Menu, X, ArrowRight, Home, Layout, Info } from 'lucide-react
 
 const navigation = [
   { name: 'Features', href: '/features' },
+  // { name: 'Pricing', href: '/pricing' }, // Hidden until pricing page is ready
+  { name: 'Changelog', href: '/changelog' },
   { name: 'About', href: '/about' },
 ];
 
@@ -18,6 +21,7 @@ export function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const pathname = usePathname();
 
   useEffect(() => {
     setIsMounted(true);
@@ -44,14 +48,14 @@ export function Navigation() {
           {shouldShowScrolled ? (
             /* Scrolled state - Floating capsule header */
             <motion.div 
-              className="flex items-center bg-white/5 dark:bg-gray-900/5 backdrop-blur-3xl shadow-2xl border border-white/40 dark:border-white/30 rounded-full px-8 py-4 gap-10 relative overflow-hidden mx-auto"
+              className="flex items-center bg-white/10 dark:bg-gray-900/10 backdrop-blur-3xl shadow-2xl border border-white/20 dark:border-white/10 rounded-full px-8 py-4 gap-10 relative overflow-hidden mx-auto"
               animate={{
                 background: [
-                  "linear-gradient(45deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05), rgba(255,255,255,0.1))",
-                  "linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05), rgba(255,255,255,0.15))",
-                  "linear-gradient(225deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05), rgba(255,255,255,0.1))",
-                  "linear-gradient(315deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05), rgba(255,255,255,0.15))",
-                  "linear-gradient(45deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05), rgba(255,255,255,0.1))"
+                  "linear-gradient(45deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08), rgba(255,255,255,0.15))",
+                  "linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.08), rgba(255,255,255,0.2))",
+                  "linear-gradient(225deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08), rgba(255,255,255,0.15))",
+                  "linear-gradient(315deg, rgba(255,255,255,0.2), rgba(255,255,255,0.08), rgba(255,255,255,0.2))",
+                  "linear-gradient(45deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08), rgba(255,255,255,0.15))"
                 ]
               }}
               transition={{
@@ -62,7 +66,7 @@ export function Navigation() {
             >
               {/* Liquid glass shimmer overlay */}
               <motion.div 
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-full pointer-events-none"
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full pointer-events-none"
                 animate={{
                   x: ["-100%", "100%"],
                   opacity: [0, 0.6, 0]
@@ -77,7 +81,7 @@ export function Navigation() {
               
               {/* Liquid glass ripple effect */}
               <motion.div 
-                className="absolute inset-0 bg-gradient-radial from-white/20 via-transparent to-transparent rounded-full pointer-events-none"
+                className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent rounded-full pointer-events-none"
                 animate={{
                   scale: [0.8, 1.2, 0.8],
                   opacity: [0.3, 0.6, 0.3]
@@ -99,16 +103,32 @@ export function Navigation() {
 
               {/* Desktop Navigation */}
               <div className="relative z-10 hidden md:flex items-center gap-8" suppressHydrationWarning>
-                {navigation.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 font-medium text-base"
-                    suppressHydrationWarning
-                  >
-                    {item.name}
-                  </Link>
-                ))}
+                {navigation.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`relative transition-colors duration-200 font-medium text-base ${
+                        isActive 
+                          ? 'text-blue-600 dark:text-blue-400' 
+                          : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400'
+                      }`}
+                      suppressHydrationWarning
+                    >
+                      {item.name}
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeNav"
+                          className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.2 }}
+                        />
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
 
               {/* Desktop CTA */}
@@ -129,7 +149,7 @@ export function Navigation() {
                   Sign In
                 </Button>
                 <Button 
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white text-sm px-5 py-2 h-9"
+                  className="bg-sky-600 hover:bg-sky-700 text-white text-sm px-5 py-2 h-9 shadow-md hover:shadow-lg transition-all"
                   onClick={() => window.location.href = '/login?state=signup'}
                 >
                   Get Started
@@ -179,7 +199,7 @@ export function Navigation() {
                   Sign In
                 </Button>
                 <Button 
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+                  className="bg-sky-600 hover:bg-sky-700 text-white shadow-md hover:shadow-lg transition-all"
                   onClick={() => window.location.href = '/login?state=signup'}
                 >
                   Get Started
@@ -244,7 +264,7 @@ export function Navigation() {
                   Sign In
                 </Button>
                 <Button 
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white h-12"
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white h-12"
                   onClick={() => window.location.href = '/login?state=signup'}
                 >
                   Get Started

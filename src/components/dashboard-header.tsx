@@ -22,7 +22,14 @@ import { auth, db } from "@/lib/firebase/client-simple";
 import { doc, getDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { Skeleton } from "./ui/skeleton";
-import { User as UserIcon, Settings as SettingsIcon, LogOut, Bell, Shield, BookOpen } from "lucide-react";
+import { 
+  UserIcon, 
+  Settings01Icon, 
+  Logout01Icon, 
+  Notification01Icon, 
+  Shield01Icon, 
+  BookOpen01Icon 
+} from "hugeicons-react";
 import { toast } from "sonner";
 import { useChatStore } from "@/hooks/use-chat-store";
 import { NotificationBell } from "@/components/notification-bell";
@@ -156,10 +163,15 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
             const userData = userDocSnap.data();
             // If user has a Firebase document, they're not a guest
             setIsGuest(false);
-            // Set profile picture from Firestore if available
+            // Set profile picture from Firestore if available, otherwise fall back to auth photoURL
             if (userData.profilePicture) {
               setUserProfilePicture(userData.profilePicture);
+            } else if (user.photoURL) {
+              setUserProfilePicture(user.photoURL);
             }
+          } else if (user.photoURL) {
+            // User document doesn't exist yet, use auth photoURL
+            setUserProfilePicture(user.photoURL);
           }
         } catch (error) {
           console.error("Error checking guest status:", error);
@@ -217,6 +229,7 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
     if (user.isGuest || user.isAnonymous) {
       console.log('Guest user logout');
       localStorage.removeItem('guestUser');
+      localStorage.removeItem('uploaded-syllabi'); // Clear uploaded syllabi on logout
       clearGuestData();
       toast.success("Logged out successfully", {
         description: "You have been signed out of your guest account.",
@@ -251,6 +264,7 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
       localStorage.removeItem('guestUser');
       localStorage.removeItem('showOnboarding');
       localStorage.removeItem('isLoggingOut');
+      localStorage.removeItem('uploaded-syllabi'); // Clear uploaded syllabi on logout
       
       toast.dismiss();
       toast.success("Logged out successfully 👋", {
@@ -401,7 +415,7 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
                 <>
               <DropdownMenuItem asChild className="group px-3 sm:px-4 py-2 sm:py-3 rounded-lg hover:bg-primary/15 hover:text-primary hover:shadow-md hover:scale-[1.01] hover:ring-2 hover:ring-primary/20 transition-all duration-150">
                 <Link href="/login?state=signup" className="flex items-center gap-2 sm:gap-3">
-                  <Shield className="size-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                  <Shield01Icon className="size-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
                   <span className="text-sm sm:text-base">Create Account</span>
                 </Link>
               </DropdownMenuItem>
@@ -416,24 +430,25 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="group px-3 sm:px-4 py-2 sm:py-3 rounded-lg hover:bg-primary/15 hover:text-primary hover:shadow-md hover:scale-[1.01] hover:ring-2 hover:ring-primary/20 transition-all duration-150">
                 <Link href="/dashboard/settings" className="flex items-center gap-2 sm:gap-3">
-                  <SettingsIcon className="size-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                  <Settings01Icon className="size-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
                   <span className="text-sm sm:text-base">Settings</span>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="group px-3 sm:px-4 py-2 sm:py-3 rounded-lg hover:bg-primary/15 hover:text-primary hover:shadow-md hover:scale-[1.01] hover:ring-2 hover:ring-primary/20 transition-all duration-150">
                 <Link href="/dashboard/notifications" className="flex items-center gap-2 sm:gap-3">
-                  <Bell className="size-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                  <Notification01Icon className="size-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
                   <span className="text-sm sm:text-base">Notifications</span>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem 
-                onClick={() => {
-                  localStorage.setItem('showOnboarding', 'true');
-                  window.location.reload();
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Dispatch custom event to trigger onboarding without page reload
+                  window.dispatchEvent(new CustomEvent('showOnboarding'));
                 }}
                 className="group px-3 sm:px-4 py-2 sm:py-3 rounded-lg hover:bg-primary/15 hover:text-primary hover:shadow-md hover:scale-[1.01] hover:ring-2 hover:ring-primary/20 transition-all duration-150"
               >
-                <BookOpen className="size-4 mr-2 sm:mr-3 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                <BookOpen01Icon className="size-4 mr-2 sm:mr-3 text-muted-foreground group-hover:text-primary flex-shrink-0" />
                 <span className="text-sm sm:text-base">Tutorial</span>
                 <Badge className="ml-auto bg-blue-500 text-white text-xs">Tips</Badge>
               </DropdownMenuItem>
@@ -442,7 +457,7 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
                 onClick={handleLogout} 
                 className="group px-3 sm:px-4 py-2 sm:py-3 rounded-lg hover:bg-destructive/15 hover:shadow-md hover:scale-[1.01] hover:ring-2 hover:ring-destructive/20 transition-all text-destructive focus:text-destructive"
               >
-                <LogOut className="size-4 mr-2 sm:mr-3 flex-shrink-0" />
+                <Logout01Icon className="size-4 mr-2 sm:mr-3 flex-shrink-0" />
                 <span className="text-sm sm:text-base">Logout</span>
               </DropdownMenuItem>
             </>

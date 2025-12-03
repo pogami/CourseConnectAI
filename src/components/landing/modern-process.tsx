@@ -2,39 +2,44 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Upload, CalendarDays, MessageCircle, Target, ArrowRight } from 'lucide-react';
+import {
+  Upload01Icon,
+  Calendar01Icon,
+  Chatting01Icon,
+  Target01Icon,
+} from "hugeicons-react";
 
 const processSteps = [
   {
-    title: 'Upload once',
+    title: 'Drag & Drop',
     description:
       'Stop digging through syllabi. Drag your syllabus once, and we instantly extract every deadline, reading, and grading policy for you.',
     tag: 'Syllabus Intelligence',
-    icon: Upload,
+    icon: Upload01Icon,
     color: 'blue',
   },
   {
-    title: 'Daily Briefing',
+    title: 'Wake up to a plan',
     description:
       'Waking up scattered? Get a daily briefing that prioritizes your deadlines, classes, and knowledge gaps before you even get out of bed.',
     tag: 'AI Briefing',
-    icon: CalendarDays,
+    icon: Calendar01Icon,
     color: 'purple',
   },
   {
-    title: 'Class chat that remembers',
+    title: "Ask, don't search",
     description:
       'Your notes are everywhere. Ask the Class Chat, and it pulls answers from your syllabus, uploads, and past questions in seconds.',
     tag: 'Contextual Tutor',
-    icon: MessageCircle,
+    icon: Chatting01Icon,
     color: 'indigo',
   },
   {
-    title: 'Exam triage plan',
+    title: 'Cram smarter',
     description:
       'Stop guessing what to study. We generate a personalized triage plan that targets your weakest topics so you can raise your grade fast.',
     tag: 'Triage Plan',
-    icon: Target,
+    icon: Target01Icon,
     color: 'pink',
   },
 ];
@@ -85,10 +90,10 @@ export function StickyProcessSection() {
                   How It Works
                 </div>
                 <h2 className="text-5xl md:text-6xl font-black text-gray-900 dark:text-white mb-6 tracking-tight leading-tight">
-                  Built for the way college actually works.
+                  A study tool that<br />actually gets it.
                 </h2>
                 <p className="text-xl text-gray-600 dark:text-gray-400 leading-relaxed mb-8">
-                  Stop wasting hours digging through PDFs and juggling deadlines. We automate the busywork—extracting deadlines, organizing your schedule, and answering course questions—so you can focus on what actually matters: learning.
+                  We automate the busywork—extracting deadlines, organizing your schedule, and answering course questions—so you can focus on learning, not logistics.
                 </p>
               </motion.div>
             </div>

@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+interface ErrorProps {
+  error: Error & { digest?: string };
+  reset: () => void;
+}
+
 export default function Error({
   error,
   reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+}: ErrorProps) {
   useEffect(() => {
     // Log the error to an error reporting service
     console.error('Application error:', error);

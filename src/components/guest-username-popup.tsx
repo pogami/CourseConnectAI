@@ -152,58 +152,76 @@ export function GuestUsernamePopup({ isOpen, onClose, onUsernameSet }: GuestUser
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md border-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Choose Your Username
+          <div className="mx-auto w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/10 to-purple-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+            <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          </div>
+          <DialogTitle className="text-center text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Choose Your Alias
           </DialogTitle>
-          <DialogDescription>
-            Enter a unique username to join the chat as a guest. This username will be visible to other users.
+          <DialogDescription className="text-center text-gray-500 dark:text-gray-400">
+            Enter a unique username to join the chat as a guest.
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Input
-              type="text"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => handleUsernameChange(e.target.value)}
-              onBlur={handleUsernameBlur}
-              disabled={isChecking}
-              className="w-full"
-              maxLength={20}
-            />
-            
-            {/* Validation indicator - only show after blur or submit */}
-            {error && (
-              <div className="flex items-center gap-2 text-sm">
-                <XCircle className="h-4 w-4 text-red-500" />
-                <span className="text-red-600">{error}</span>
+        <form onSubmit={handleSubmit} className="space-y-6 mt-2">
+          <div className="space-y-3">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span className="text-gray-400 font-medium">@</span>
               </div>
-            )}
-            {isValid === true && !error && (
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-green-600">Username is available</span>
-              </div>
-            )}
+              <Input
+                type="text"
+                placeholder="username"
+                value={username}
+                onChange={(e) => handleUsernameChange(e.target.value)}
+                onBlur={handleUsernameBlur}
+                disabled={isChecking}
+                className="pl-8 h-12 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all rounded-xl"
+                maxLength={20}
+              />
+              {isValid === true && !error && (
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none animate-in fade-in zoom-in duration-200">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                </div>
+              )}
+              {error && (
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none animate-in fade-in zoom-in duration-200">
+                  <XCircle className="h-5 w-5 text-red-500" />
+                </div>
+              )}
+            </div>
             
+            {/* Validation Message */}
+            <div className="min-h-[20px]">
+              {error && (
+                <p className="text-xs text-red-500 font-medium flex items-center justify-center gap-1.5 animate-in slide-in-from-top-1 fade-in">
+                  {error}
+                </p>
+              )}
+              {isValid === true && !error && (
+                <p className="text-xs text-green-500 font-medium flex items-center justify-center gap-1.5 animate-in slide-in-from-top-1 fade-in">
+                  Username available
+                </p>
+              )}
+            </div>
           </div>
           
-          <div className="flex gap-2 justify-end">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               type="button"
               variant="outline"
               onClick={handleClose}
               disabled={isChecking}
+              className="h-11 rounded-xl border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={!username.trim() || isValid !== true || isChecking}
+              className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isChecking ? (
                 <>
@@ -217,11 +235,22 @@ export function GuestUsernamePopup({ isOpen, onClose, onUsernameSet }: GuestUser
           </div>
         </form>
         
-        <div className="text-xs text-muted-foreground space-y-1">
-          <p>• Username must be 2-20 characters</p>
-          <p>• Only letters, numbers, underscores, and hyphens allowed</p>
-          <p>• No inappropriate content</p>
-          <p>• Must be unique</p>
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-2 mt-2 border border-gray-100 dark:border-gray-800">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Requirements</p>
+          <div className="grid grid-cols-1 gap-2">
+            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <div className={`w-1.5 h-1.5 rounded-full ${username.length >= 2 && username.length <= 20 ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+              2-20 characters
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <div className={`w-1.5 h-1.5 rounded-full ${/^[a-zA-Z0-9_-]*$/.test(username) && username.length > 0 ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+              Letters, numbers, underscores, hyphens
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <div className={`w-1.5 h-1.5 rounded-full ${username.length > 0 && isValid === true ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+              Unique & appropriate
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

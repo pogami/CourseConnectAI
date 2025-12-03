@@ -3,9 +3,14 @@ import { db } from '@/lib/firebase/admin';
 
 export const runtime = 'nodejs';
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'courseconnect2025';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 function verifyAdmin(request: NextRequest): boolean {
+  // Security check: require environment variable to be set
+  if (!ADMIN_PASSWORD) {
+    return false;
+  }
+  
   const password = request.headers.get('x-admin-password') || request.nextUrl.searchParams.get('password');
   return password === ADMIN_PASSWORD;
 }

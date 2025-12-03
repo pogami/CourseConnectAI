@@ -1,30 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  X, 
-  Upload, 
-  MessageSquare, 
-  Users, 
-  Brain, 
-  BookOpen, 
-  Command,
-  CheckCircle,
-  ArrowRight
-} from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { ArrowRight01Icon } from "hugeicons-react";
+import {
+  ArrowLeft01Icon,
+  Cancel01Icon,
+  Upload01Icon,
+  CommandIcon,
+  CheckmarkCircle01Icon,
+  Chatting01Icon,
+  FlashIcon,
+  ChartBarLineIcon,
+  SparklesIcon
+} from "hugeicons-react";
 import { useChatStore } from "@/hooks/use-chat-store";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 interface OnboardingSlide {
   id: string;
   title: string;
   description: string;
   icon: React.ReactNode;
-  features: string[];
+  actions: string[];
   color: string;
 }
 
@@ -32,93 +32,87 @@ const slides: OnboardingSlide[] = [
   {
     id: "welcome",
     title: "Welcome to CourseConnect AI",
-    description: "Your AI-powered learning companion is ready to help you succeed",
-    icon: <img src="/apple-touch-icon.png" alt="CourseConnect" className="size-20" style={{ imageRendering: 'high-quality' }} />,
-    features: [
-      "Upload your syllabus for personalized insights",
-      "AI tutoring for each course",
-      "Smart flashcards and study tools",
-      "Track assignments and exams automatically"
+    description: "Your AI-powered study companion that helps you excel in every course.",
+    icon: <img src="/apple-touch-icon.png" alt="CourseConnect" className="size-8" style={{ imageRendering: 'high-quality' }} />,
+    actions: [
+      "Upload your course syllabi to get personalized AI tutoring",
+      "Ask questions and get instant help with homework",
+      "Generate practice quizzes and flashcards automatically",
+      "Track all assignments and deadlines in one place"
     ],
-    color: "from-purple-500 to-blue-600"
+    color: "blue"
   },
   {
     id: "command-menu",
-    title: "Command Menu (⌘K)",
-    description: "Navigate instantly with keyboard shortcuts",
-    icon: <Command className="size-12 text-purple-500" />,
-    features: [
-      "Press Ctrl+K (or ⌘K on Mac) anywhere",
-      "Access all your course chats instantly",
-      "Navigate between pages quickly",
-      "Upload new syllabus on the fly"
+    title: "Navigate with Speed",
+    description: "Press ⌘K (Mac) or Ctrl+K (Windows) from anywhere to open the command menu.",
+    icon: <CommandIcon className="size-8" />,
+    actions: [
+      "Instantly jump between your courses and chats",
+      "Quickly navigate to upload, flashcards, or settings",
+      "Search and access all features without using your mouse"
     ],
-    color: "from-purple-500 to-indigo-600"
+    color: "purple"
   },
   {
     id: "upload",
-    title: "Upload Your Syllabus",
-    description: "AI analyzes and creates your course chat automatically",
-    icon: <Upload className="size-12 text-blue-500" />,
-    features: [
-      "Drag & drop or click to upload PDF",
-      "AI extracts course info automatically",
-      "Automatic deadline tracking",
-      "Pro tip: Upload all syllabi at once!"
+    title: "Upload & Organize",
+    description: "Upload your course documents and let AI extract all the important information automatically.",
+    icon: <Upload01Icon className="size-8" />,
+    actions: [
+      "Drag and drop PDF, DOCX, or image files of your syllabus",
+      "AI automatically extracts course name, professor, topics, and deadlines",
+      "Your course chat is created instantly with all the information organized"
     ],
-    color: "from-blue-500 to-indigo-600"
+    color: "cyan"
   },
   {
     id: "ai-tutor",
-    title: "AI-Powered Class Chats",
-    description: "Personalized AI tutoring that understands your specific courses",
-    icon: <MessageSquare className="size-12 text-indigo-500" />,
-    features: [
-      "Ask: 'When is my next exam?'",
-      "Get help: 'Help me study for the midterm'",
-      "Generate: 'Create a practice quiz on Chapter 3'",
-      "Explain: 'Explain this concept in simple terms'"
+    title: "Your Personal AI Tutor",
+    description: "Get instant help tailored to your specific courses. The AI knows your syllabus and can answer course-specific questions.",
+    icon: <Chatting01Icon className="size-8" />,
+    actions: [
+      "Ask course-specific questions like 'When is my next exam?' or 'What topics are covered?'",
+      "Get step-by-step help with homework problems in any subject",
+      "Request explanations of concepts in simple terms or detailed summaries"
     ],
-    color: "from-indigo-500 to-purple-600"
+    color: "pink"
   },
   {
     id: "interactive-learning",
-    title: "Interactive Learning",
-    description: "Quizzes, exams, and flashcards powered by AI",
-    icon: <Users className="size-12 text-green-500" />,
-    features: [
-      "Interactive quizzes (5-question quick tests)",
-      "Practice exams (20-question timed tests)",
-      "Smart flashcards from course content",
-      "Just ask: 'Quiz me on Baroque music'"
+    title: "Practice & Test",
+    description: "Reinforce your knowledge with AI-generated study materials based on your course content.",
+    icon: <FlashIcon className="size-8" />,
+    actions: [
+      "Ask the AI to 'quiz me on a topic' for instant 5-question quizzes",
+      "Generate flashcards automatically from your course chat history",
+      "Study with interactive flashcards to test your knowledge and track progress"
     ],
-    color: "from-green-500 to-emerald-600"
+    color: "amber"
   },
   {
     id: "analytics",
-    title: "Study Analytics",
-    description: "Track your progress and build better study habits",
-    icon: <BookOpen className="size-12 text-orange-500" />,
-    features: [
-      "Monitor daily study time and streaks",
-      "Track assignment completion rates",
-      "Get insights on your learning patterns",
-      "Build consistent study habits"
+    title: "Track Your Progress",
+    description: "Monitor your study habits and see your progress across all courses in one dashboard.",
+    icon: <ChartBarLineIcon className="size-8" />,
+    actions: [
+      "View your daily study streak and total time spent learning",
+      "Track how many assignments you've completed across all courses",
+      "See upcoming deadlines and stay on top of your workload"
     ],
-    color: "from-orange-500 to-red-600"
+    color: "emerald"
   },
   {
     id: "complete",
     title: "You're All Set",
-    description: "Start your learning journey with these quick steps",
-    icon: <CheckCircle className="size-12 text-green-500" />,
-    features: [
-      "1. Upload your syllabi",
-      "2. Try the command menu (⌘K)",
-      "3. Ask the AI for help",
-      "4. Generate a practice quiz"
+    description: "You're ready to succeed! Upload your first syllabus and start learning with AI-powered tools designed to help you excel.",
+    icon: <CheckmarkCircle01Icon className="size-8" />,
+    actions: [
+      "Go to Upload to add your first course syllabus",
+      "Visit your Dashboard to see all your courses",
+      "Start a chat with your AI tutor to ask your first question"
     ],
-    color: "from-green-500 to-emerald-600"
+    color: "green"
   }
 ];
 
@@ -136,35 +130,20 @@ export function OnboardingSlideshow({ isOpen, onClose, onComplete }: OnboardingS
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
+      setCurrentSlide(0);
     }
   }, [isOpen]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsVisible(false);
     setTimeout(() => {
       onClose();
     }, 300);
-  };
+  }, [onClose]);
 
-  const handleNext = () => {
-    if (currentSlide < slides.length - 1) {
-      setCurrentSlide(currentSlide + 1);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentSlide > 0) {
-      setCurrentSlide(currentSlide - 1);
-    }
-  };
-
-  const handleComplete = () => {
-    // Set onboarding completion flags
+  const handleComplete = useCallback(() => {
     localStorage.setItem('onboarding-completed', 'true');
     
-    // Also set guest-specific key if user is a guest
     try {
       const guestUserData = localStorage.getItem('guestUser');
       if (guestUserData) {
@@ -177,152 +156,204 @@ export function OnboardingSlideshow({ isOpen, onClose, onComplete }: OnboardingS
       console.warn('Error checking guest status for onboarding:', error);
     }
     
-    // Activate trial for new users
     activateTrial();
     handleClose();
     onComplete();
-  };
+  }, [activateTrial, handleClose, onComplete]);
 
-  const handleSkip = () => {
-    handleClose();
-    onComplete();
-  };
+  const handleNext = useCallback(() => {
+    if (currentSlide < slides.length - 1) {
+      setCurrentSlide(prev => prev + 1);
+    } else {
+      handleComplete();
+    }
+  }, [currentSlide, handleComplete]);
+
+  const handlePrevious = useCallback(() => {
+    if (currentSlide > 0) {
+      setCurrentSlide(prev => prev - 1);
+    }
+  }, [currentSlide]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") handleNext();
+      if (e.key === "ArrowLeft") handlePrevious();
+      if (e.key === "Escape") handleClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, handleNext, handlePrevious, handleClose]);
 
   if (!isOpen) return null;
 
   const currentSlideData = slides[currentSlide];
   const progress = ((currentSlide + 1) / slides.length) * 100;
 
+  const colorClasses = {
+    blue: "bg-blue-500 text-blue-500",
+    purple: "bg-purple-500 text-purple-500",
+    cyan: "bg-cyan-500 text-cyan-500",
+    pink: "bg-pink-500 text-pink-500",
+    amber: "bg-amber-500 text-amber-500",
+    emerald: "bg-emerald-500 text-emerald-500",
+    green: "bg-green-500 text-green-500"
+  };
+
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm transition-all duration-300 ${
-      isVisible ? 'opacity-100' : 'opacity-0'
-    }`} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-      <Card className={`w-full max-w-2xl mx-4 shadow-2xl border-0 bg-white dark:bg-gray-900 transition-all duration-300 ${
-        isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
-      }`} style={{ margin: 'auto' }}>
-        <CardContent className="p-0">
-          {/* Header */}
-          <div className="relative p-6 pb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute top-1 right-2 h-8 w-8 p-0 hover:bg-transparent"
-              onClick={handleSkip}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-            
-            {/* Progress Bar */}
-            <div className="mb-6">
-              <div className="flex justify-between text-sm text-muted-foreground mb-2">
-                <span>Step {currentSlide + 1} of {slides.length}</span>
-                <span>{Math.round(progress)}%</span>
-              </div>
-              <div className="w-full bg-muted/30 rounded-full h-2">
-                <div 
-                  className={`bg-gradient-to-r ${currentSlideData.color} h-2 rounded-full transition-all duration-500`}
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-            </div>
-
-            {/* Slide Content */}
-            <div className="text-center space-y-6">
-              {/* Icon */}
-              <div className="inline-flex">
-                {currentSlideData.icon}
-              </div>
-
-              {/* Title */}
-              <h2 className="text-2xl font-bold text-foreground">
-                {currentSlideData.title}
-              </h2>
-
-              {/* Description */}
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                {currentSlideData.description}
-              </p>
-
-              {/* Features */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-3">
-                  {currentSlideData.features.filter((_, index) => index % 2 === 0).map((feature, index) => (
-                    <div key={index} className="flex items-start gap-2 text-sm">
-                      <CheckCircle className="size-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <span className="text-muted-foreground leading-relaxed">{feature}</span>
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) handleClose();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98, y: 10 }}
+            transition={{ duration: 0.2 }}
+            className="w-full max-w-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Card className="overflow-hidden border shadow-xl bg-white dark:bg-zinc-900">
+              <div className="p-8 md:p-12">
+                {/* Header */}
+                <div className="flex justify-between items-start mb-8">
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Step {currentSlide + 1} of {slides.length}
                     </div>
-                  ))}
-                </div>
-                <div className="space-y-3">
-                  {currentSlideData.features.filter((_, index) => index % 2 === 1).map((feature, index) => (
-                    <div key={index} className="flex items-start gap-2 text-sm">
-                      <CheckCircle className="size-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <span className="text-muted-foreground leading-relaxed">{feature}</span>
+                    <div className="h-1.5 w-48 bg-muted rounded-full overflow-hidden">
+                      <motion.div 
+                        className={cn("h-full rounded-full", colorClasses[currentSlideData.color as keyof typeof colorClasses].split(" ")[0])}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        transition={{ duration: 0.3 }}
+                      />
                     </div>
-                  ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleClose}
+                    className="h-8 w-8"
+                  >
+                    <Cancel01Icon className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Content */}
+                <div className="space-y-8">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentSlide}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-6"
+                    >
+                      {/* Icon & Title */}
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "p-3 rounded-lg",
+                          colorClasses[currentSlideData.color as keyof typeof colorClasses].split(" ")[0] + "/10"
+                        )}>
+                          <div className={cn(colorClasses[currentSlideData.color as keyof typeof colorClasses].split(" ")[1])}>
+                            {currentSlideData.icon}
+                          </div>
+                        </div>
+                        <div>
+                          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+                            {currentSlideData.title}
+                          </h2>
+                          <p className="text-muted-foreground mt-1">
+                            {currentSlideData.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="space-y-3">
+                        {currentSlideData.actions.map((action, index) => (
+                          <div
+                            key={index}
+                            className="flex items-start gap-3 text-foreground/80"
+                          >
+                            <CheckmarkCircle01Icon className={cn(
+                              "h-5 w-5 mt-0.5 flex-shrink-0",
+                              colorClasses[currentSlideData.color as keyof typeof colorClasses].split(" ")[1]
+                            )} />
+                            <span className="leading-relaxed">{action}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Navigation */}
+                <div className="flex items-center justify-between mt-10 pt-6 border-t">
+                  <Button
+                    variant="ghost"
+                    onClick={handlePrevious}
+                    disabled={currentSlide === 0}
+                    className={currentSlide === 0 ? "invisible" : ""}
+                  >
+                    <ArrowLeft01Icon className="mr-2 h-4 w-4" />
+                    Previous
+                  </Button>
+
+                  <div className="flex gap-1.5">
+                    {slides.map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentSlide(index)}
+                        className={cn(
+                          "h-1.5 rounded-full transition-all duration-200",
+                          index === currentSlide 
+                            ? cn("w-8", colorClasses[currentSlideData.color as keyof typeof colorClasses].split(" ")[0])
+                            : "w-1.5 bg-muted"
+                        )}
+                      />
+                    ))}
+                  </div>
+                  
+                  <Button 
+                    onClick={handleNext}
+                    className={cn(
+                      "min-w-[120px]",
+                      colorClasses[currentSlideData.color as keyof typeof colorClasses].split(" ")[0],
+                      "text-white hover:opacity-90"
+                    )}
+                  >
+                    {currentSlide === slides.length - 1 ? (
+                      <span className="flex items-center">
+                        Get Started
+                        <ArrowRight01Icon className="ml-2 h-4 w-4" />
+                      </span>
+                    ) : (
+                      <span className="flex items-center">
+                        Next
+                        <ArrowRight01Icon className="ml-2 h-4 w-4" />
+                      </span>
+                    )}
+                  </Button>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="p-6 pt-4 border-t border-border/50">
-            <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={handlePrevious}
-                disabled={currentSlide === 0}
-                className="flex items-center gap-2"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
-
-              <div className="flex gap-2">
-                {slides.map((_, index) => (
-                  <div
-                    key={index}
-                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                      index === currentSlide 
-                        ? `bg-gradient-to-r ${currentSlideData.color}` 
-                        : 'bg-muted'
-                    }`}
-                  />
-                ))}
-              </div>
-
-              <Button
-                onClick={handleNext}
-                className={`bg-gradient-to-r ${currentSlideData.color} hover:opacity-90 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2`}
-              >
-                {currentSlide === slides.length - 1 ? (
-                  <>
-                    Get Started
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                ) : (
-                  <>
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {/* Skip Option */}
-            <div className="text-center mt-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSkip}
-                className="hover:bg-transparent text-muted-foreground hover:text-foreground"
-              >
-                Skip Tour
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+            </Card>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

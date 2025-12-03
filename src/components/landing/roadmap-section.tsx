@@ -2,59 +2,55 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Smartphone, Users, Clock } from 'lucide-react';
+import { CheckCircle2, Sparkles, Zap, ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
-const roadmapItems = [
+const currentFeatures = [
   {
-    title: 'Calendar Sync',
-    description: 'Automatically sync your deadlines with Google Calendar, Outlook, and Apple Calendar. Never miss a due date again.',
-    icon: Calendar,
-    color: 'blue',
-    status: 'Coming Soon'
+    title: 'AI-Powered Course Chat',
+    description: 'Get instant help tailored to your specific course materials and syllabus.',
+    status: 'Available Now',
+    icon: '✨'
   },
   {
-    title: 'Study Groups',
-    description: 'Connect with classmates, share notes, and prepare for exams together in AI-moderated study groups.',
-    icon: Users,
-    color: 'purple',
-    status: 'Future'
+    title: 'Smart Syllabus Parser',
+    description: 'Automatically extract deadlines, assignments, and course info from any syllabus.',
+    status: 'Available Now',
+    icon: '📄'
   },
   {
-    title: 'Mobile App',
-    description: 'Access your syllabus, deadlines, and AI tutor on the go with our dedicated iOS and Android apps.',
-    icon: Smartphone,
-    color: 'pink',
-    status: 'Future'
+    title: 'Transparent AI Thinking',
+    description: 'See how the AI reasons through your questions in real-time.',
+    status: 'Available Now',
+    icon: '🧠'
+  },
+  {
+    title: 'Study Focus Suggestions',
+    description: 'Get personalized recommendations on what to study next.',
+    status: 'Available Now',
+    icon: '🎯'
+  },
+  {
+    title: 'Flashcard Generator',
+    description: 'Create study materials from your course content automatically.',
+    status: 'Available Now',
+    icon: '📚'
+  },
+  {
+    title: 'Privacy-First Processing',
+    description: 'Your data is processed securely and never stored permanently.',
+    status: 'Available Now',
+    icon: '🔒'
   }
 ];
 
-const colorClasses = {
-  blue: {
-    bg: 'bg-blue-50 dark:bg-blue-950/30',
-    border: 'border-blue-100 dark:border-blue-900/40',
-    icon: 'text-blue-600 dark:text-blue-400',
-    badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-    hover: 'from-blue-500/5'
-  },
-  purple: {
-    bg: 'bg-purple-50 dark:bg-purple-950/30',
-    border: 'border-purple-100 dark:border-purple-900/40',
-    icon: 'text-purple-600 dark:text-purple-400',
-    badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-    hover: 'from-purple-500/5'
-  },
-  pink: {
-    bg: 'bg-pink-50 dark:bg-pink-950/30',
-    border: 'border-pink-100 dark:border-pink-900/40',
-    icon: 'text-pink-600 dark:text-pink-400',
-    badge: 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300',
-    hover: 'from-pink-500/5'
-  }
-};
-
 export function RoadmapSection() {
   return (
-    <section className="py-24 bg-white dark:bg-gray-950 relative overflow-hidden">
+    <section className="py-32 bg-white dark:bg-gray-950 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-800 to-transparent" />
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <motion.div
@@ -63,23 +59,24 @@ export function RoadmapSection() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-semibold uppercase tracking-wider mb-6">
-              Future Roadmap
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200/50 dark:border-green-800/50 text-green-700 dark:text-green-300 text-sm font-semibold mb-6">
+              <CheckCircle2 className="w-4 h-4" />
+              What's Available Now
             </div>
-            <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white mb-6 tracking-tight">
-              We're just getting started.
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 dark:text-white mb-6 tracking-tight">
+              Everything you need to{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-400 dark:to-emerald-400">
+                succeed today
+              </span>
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400 leading-relaxed">
-              We're building the ultimate study companion. Here's a sneak peek at what's coming next to help you ace your classes.
+              No waiting, no promises. These features are live and ready to help you ace your classes right now.
             </p>
           </motion.div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {roadmapItems.map((item, idx) => {
-            const Icon = item.icon;
-            const colors = colorClasses[item.color as keyof typeof colorClasses];
-
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {currentFeatures.map((item, idx) => {
             return (
               <motion.div
                 key={item.title}
@@ -89,25 +86,21 @@ export function RoadmapSection() {
                 transition={{ duration: 0.5, delay: idx * 0.1 }}
                 className="group relative"
               >
-                <div className="relative h-full p-8 rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl shadow-gray-200/50 dark:shadow-none hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                  {/* Gradient Glow on Hover */}
-                  <div className={`absolute inset-0 rounded-3xl bg-gradient-to-br ${colors.hover} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                <div className="relative h-full p-6 rounded-2xl border-2 border-green-200/50 dark:border-green-800/50 bg-white dark:bg-gray-900 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-green-300 dark:hover:border-green-700">
+                  {/* Status Badge */}
+                  <div className="absolute top-4 right-4">
+                    <span className="px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Live
+                    </span>
+                  </div>
                   
-                  <div className="relative">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className={`p-3 rounded-2xl ${colors.bg} ${colors.border} border`}>
-                        <Icon className={`w-6 h-6 ${colors.icon}`} />
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${colors.badge}`}>
-                        {item.status}
-                      </span>
-                    </div>
-                    
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                  <div className="pr-16">
+                    <div className="text-3xl mb-3">{item.icon}</div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                       {item.title}
                     </h3>
-                    
-                    <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                       {item.description}
                     </p>
                   </div>
@@ -116,8 +109,8 @@ export function RoadmapSection() {
             );
           })}
         </div>
+
       </div>
     </section>
   );
 }
-

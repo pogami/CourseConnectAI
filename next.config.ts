@@ -18,6 +18,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/__/auth/handler',
+        destination: '/api/auth/handler',
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
@@ -44,13 +52,11 @@ const nextConfig: NextConfig = {
   // Turbopack configuration (replaces webpack config)
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
-    serverComponentsExternalPackages: ["pdf-parse"],
   },
   // External packages for server components
-  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas'],
+  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas', 'pdf-parse'],
   // Exclude problematic test pages from build
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
-  output: 'standalone',
   // Webpack configuration for canvas/pdfjs-dist compatibility
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
     // Disable canvas on client-side (not needed in browser)

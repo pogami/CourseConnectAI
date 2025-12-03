@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
 // GET endpoint to get notification statistics
 export async function GET() {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002'}/api/push-notifications/subscribe`);
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.courseconnectai.com'}/api/push-notifications/subscribe`);
     const data = await response.json();
     
     return NextResponse.json({

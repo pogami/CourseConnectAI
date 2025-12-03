@@ -3,7 +3,18 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, X, Home, MessageSquare, Upload, BookOpen, Users, Settings, LogOut, Bell } from "lucide-react";
+import {
+  Menu01Icon,
+  Cancel01Icon,
+  Home01Icon,
+  Chatting01Icon,
+  Upload01Icon,
+  BookOpen01Icon,
+  UserGroupIcon,
+  Settings01Icon,
+  Logout01Icon,
+  Notification01Icon
+} from "hugeicons-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -25,12 +36,12 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
   const { clearGuestData } = useChatStore();
 
   const navigationItems = [
-    { name: "Dashboard", href: "/dashboard", icon: Home },
-    { name: "Class Chat", href: "/dashboard/chat", icon: MessageSquare },
-    { name: "Syllabus Upload", href: "/dashboard/upload", icon: Upload },
-    { name: "Classes", href: "/dashboard/classes", icon: BookOpen },
-    { name: "Study Groups", href: "/dashboard/groups", icon: Users },
-    { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
+    { name: "Dashboard", href: "/dashboard", icon: Home01Icon },
+    { name: "Class Chat", href: "/dashboard/chat", icon: Chatting01Icon },
+    { name: "Syllabus Upload", href: "/dashboard/upload", icon: Upload01Icon },
+    { name: "Classes", href: "/dashboard/classes", icon: BookOpen01Icon },
+    { name: "Study Groups", href: "/dashboard/groups", icon: UserGroupIcon },
+    { name: "Notifications", href: "/dashboard/notifications", icon: Notification01Icon },
   ];
 
   const closeSheet = () => setIsOpen(false);
@@ -48,6 +59,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
     if (user.isGuest || user.isAnonymous) {
       console.log('Mobile guest user logout');
       localStorage.removeItem('guestUser');
+      localStorage.removeItem('uploaded-syllabi'); // Clear uploaded syllabi on logout
       clearGuestData();
       toast({
         title: "Logged out successfully",
@@ -77,6 +89,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
       clearGuestData();
       localStorage.removeItem('guestUser');
       localStorage.removeItem('showOnboarding');
+      localStorage.removeItem('uploaded-syllabi'); // Clear uploaded syllabi on logout
       
       toast({
         title: "Logged out successfully",
@@ -119,7 +132,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
             className="h-10 w-10 p-0 touch-manipulation hover:bg-transparent"
             aria-label="Open navigation menu"
           >
-            <Menu className="h-5 w-5" />
+            <Menu01Icon className="h-5 w-5" />
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-72 p-0">
@@ -136,7 +149,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
                 className="h-8 w-8 p-0 hover:bg-transparent"
                 onClick={closeSheet}
               >
-                <X className="h-4 w-4" />
+                <Cancel01Icon className="h-4 w-4" />
               </Button>
             </div>
 
@@ -189,7 +202,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
                 asChild
               >
                 <Link href="/dashboard/settings" onClick={closeSheet}>
-                  <Settings className="h-4 w-4 mr-2" />
+                  <Settings01Icon className="h-4 w-4 mr-2" />
                   Settings
                 </Link>
               </Button>
@@ -201,7 +214,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
                   handleLogout();
                 }}
               >
-                <LogOut className="h-4 w-4 mr-2" />
+                <Logout01Icon className="h-4 w-4 mr-2" />
                 Sign Out
               </Button>
             </div>

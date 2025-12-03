@@ -3,7 +3,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Home, Users, FilePlus, MessageSquare, Bell, GraduationCap, AlertTriangle, Megaphone, X, FileText } from "lucide-react";
+import {
+  Home01Icon,
+  UserGroupIcon,
+  FileAddIcon,
+  Chatting01Icon,
+  Notification01Icon,
+  GraduationScrollIcon,
+  AlertTriangleIcon,
+  Speaker01Icon,
+  Cancel01Icon,
+  Book01Icon
+} from "hugeicons-react";
 import { GlobalCommandMenu } from "@/components/global-command-menu";
 import {
   SidebarProvider,
@@ -71,12 +82,24 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!mounted) return; // Don't run until mounted on client
     
-    // Increased timeout to 5 seconds to allow Firebase auth to propagate
+    // Increased timeout to 10 seconds to allow Firebase auth to propagate
+    // If timeout occurs, gracefully fall back to guest mode instead of showing error
     const authTimeout = setTimeout(() => {
-      console.warn('Dashboard: Auth initialization timeout, proceeding without auth');
+      console.warn('Dashboard: Auth initialization timeout, proceeding in guest mode');
       setLoading(false);
-      setError(new Error('Auth timeout'));
-    }, 5000); // 5 second timeout
+      // Don't set error - just proceed in guest mode
+      setError(null);
+      // Check for guest user as fallback
+      const guestUserData = localStorage.getItem('guestUser');
+      if (guestUserData) {
+        try {
+          const guestUser = JSON.parse(guestUserData);
+          setUser(guestUser);
+        } catch (error) {
+          console.warn("Dashboard: Error parsing guest user data on timeout:", error);
+        }
+      }
+    }, 10000); // 10 second timeout - more lenient
 
     // Check for guest user first (faster than Firebase auth)
     const guestUserData = localStorage.getItem('guestUser');
@@ -330,6 +353,18 @@ export default function DashboardLayout({
     }
   }, [user, loading]);
 
+  // Listen for custom event to show onboarding (from Tips button)
+  useEffect(() => {
+    const handleShowOnboarding = () => {
+      setShowOnboarding(true);
+    };
+
+    window.addEventListener('showOnboarding', handleShowOnboarding);
+    return () => {
+      window.removeEventListener('showOnboarding', handleShowOnboarding);
+    };
+  }, []);
+
   // Show welcome toast for new users
   useEffect(() => {
     if (!loading && user) {
@@ -370,7 +405,7 @@ export default function DashboardLayout({
       <div className="flex h-screen items-center justify-center bg-transparent">
         <div className="text-center">
           <div className="text-red-500 mb-4">
-            <AlertTriangle className="h-12 w-12 mx-auto" />
+            <AlertTriangleIcon className="h-12 w-12 mx-auto" />
           </div>
           <h2 className="text-lg font-semibold mb-2 text-red-600">Authentication Error</h2>
           <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
@@ -420,7 +455,7 @@ export default function DashboardLayout({
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                   }`}
                 >
-                  <Home className="size-5" />
+                  <Home01Icon className="size-5" />
                   <span className="font-semibold text-sm">Home</span>
                 </Link>
               </SidebarMenuItem>
@@ -564,7 +599,7 @@ export default function DashboardLayout({
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 border-gray-300 dark:border-gray-600"
                   }`}
                 >
-                  <FilePlus className="size-5" />
+                  <FileAddIcon className="size-5" />
                   <span className="font-medium text-sm">Add Course</span>
                 </Link>
               </SidebarMenuItem>
@@ -585,7 +620,7 @@ export default function DashboardLayout({
                       ? "bg-blue-100 dark:bg-blue-900/50" 
                       : "bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
                   }`}>
-                    <Users className="size-4" />
+                    <UserGroupIcon className="size-4" />
                   </div>
                   <span className="font-medium text-sm">Classes Overview</span>
                 </Link>
@@ -605,7 +640,7 @@ export default function DashboardLayout({
                       ? "bg-blue-100 dark:bg-blue-900/50" 
                       : "bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
                   }`}>
-                    <GraduationCap className="size-4" />
+                    <GraduationScrollIcon className="size-4" />
                   </div>
                   <span className="font-medium text-sm">Flashcards</span>
                 </Link>
@@ -627,7 +662,7 @@ export default function DashboardLayout({
                       ? "bg-blue-100 dark:bg-blue-900/50" 
                       : "bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
                   }`}>
-                    <FileText className="size-4" />
+                    <Book01Icon className="size-4" />
                   </div>
                   <span className="font-medium text-sm">Citation & Plagiarism</span>
                 </Link>
@@ -648,7 +683,7 @@ export default function DashboardLayout({
                       ? "bg-blue-100 dark:bg-blue-900/50" 
                       : "bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
                   }`}>
-                    <Bell className="size-4" />
+                    <Notification01Icon className="size-4" />
                   </div>
                   <span className="font-medium text-sm">Notifications</span>
                 </Link>

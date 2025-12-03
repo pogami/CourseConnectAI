@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, Sparkles, CheckCircle, Zap, MessageSquare, Target, ArrowRight } from "lucide-react";
+import { Upload, FileText, Sparkles, CheckCircle, Zap, MessageSquare, Target, ArrowRight, FileCog } from "lucide-react";
 import InteractiveSyllabusDemo from "@/components/interactive-syllabus-demo";
 import { HowItWorksSlideshow } from "@/components/how-it-works-slideshow";
 import { motion } from "framer-motion";
@@ -38,7 +38,7 @@ const steps = [
     id: 2,
     title: "AI Processing",
     description: "We map assignments & schedule",
-    icon: <Sparkles className="size-5 text-white" />,
+    icon: <FileCog className="size-5 text-white" />,
     color: "bg-purple-500"
   },
   {
@@ -78,9 +78,8 @@ export default function EnhancedSyllabusUploadPage() {
           transition={{ duration: 0.5 }}
           className="text-center space-y-6"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-2">
-            <Sparkles className="size-3.5" />
-            <span>New: Enhanced AI Parsing</span>
+          <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-blue-500/10 border border-blue-500/20 text-sm font-medium mb-2 backdrop-blur-sm shadow-sm hover:bg-blue-500/20 transition-colors cursor-default">
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent font-semibold">New: Enhanced AI Parsing</span>
           </div>
           
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">
@@ -111,16 +110,6 @@ export default function EnhancedSyllabusUploadPage() {
                 <InteractiveSyllabusDemo redirectToSignup={false} />
               </div>
             </div>
-
-            {/* Feature Badges */}
-            <div className="flex flex-wrap justify-center gap-3">
-              {features.map((feature, i) => (
-                <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border/50">
-                  {feature.icon}
-                  <span className="text-sm font-medium">{feature.title}</span>
-                </div>
-              ))}
-            </div>
           </motion.div>
 
           {/* Right Column: How it works & Info */}
@@ -131,21 +120,41 @@ export default function EnhancedSyllabusUploadPage() {
             className="lg:col-span-5 space-y-6"
           >
             {/* How It Works Card */}
-            <Card className="border-0 bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-sm border border-white/10 shadow-lg overflow-hidden">
-              <CardContent className="p-6 sm:p-8">
-                <h3 className="text-xl font-semibold mb-6">How It Works</h3>
+            <Card className="border bg-card/50 backdrop-blur-xl shadow-xl overflow-hidden relative group/card hover:shadow-2xl transition-all duration-500 border-primary/10">
+              {/* Decorative background elements */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-500/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+              
+              <CardContent className="p-6 sm:p-8 relative">
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="h-8 w-1.5 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full" />
+                  <div>
+                    <h3 className="text-xl font-bold tracking-tight">How It Works</h3>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Simple 3-Step Process</p>
+                  </div>
+                </div>
+
                 <div className="space-y-8 relative">
-                  {/* Connecting Line */}
-                  <div className="absolute left-5 top-2 bottom-2 w-0.5 bg-border/50 -z-10" />
+                  {/* Connecting Line with Gradient */}
+                  <div className="absolute left-[19px] top-4 bottom-8 w-0.5 bg-gradient-to-b from-blue-500 via-purple-500 to-green-500/50 opacity-30" />
                   
                   {steps.map((step, index) => (
-                    <div key={step.id} className="flex gap-4 relative">
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-full ${step.color} flex items-center justify-center shadow-lg ring-4 ring-background`}>
-                        {step.icon}
+                    <div key={step.id} className="flex gap-6 relative group">
+                      {/* Step Indicator */}
+                      <div className="relative z-10">
+                        <div className={`w-10 h-10 rounded-xl ${step.color} flex items-center justify-center shadow-lg transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 ring-4 ring-background`}>
+                          {step.icon}
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-base">{step.title}</h4>
-                        <p className="text-sm text-muted-foreground mt-1">{step.description}</p>
+                      
+                      {/* Content */}
+                      <div className="flex-1 pt-1">
+                        <h4 className="font-bold text-base text-foreground group-hover:text-primary transition-colors duration-300">
+                          {step.title}
+                        </h4>
+                        <p className="text-sm text-muted-foreground mt-1 leading-relaxed group-hover:text-muted-foreground/80">
+                          {step.description}
+                        </p>
                       </div>
                     </div>
                   ))}

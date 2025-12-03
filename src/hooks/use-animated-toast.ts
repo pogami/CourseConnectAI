@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 
-export interface Toast {
+export interface AnimatedToast {
   id: string;
   title: string;
   description?: string;
@@ -11,25 +11,29 @@ export interface Toast {
 }
 
 export function useAnimatedToast() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<AnimatedToast[]>([]);
 
-  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { ...toast, id }]);
+  const toast = useCallback((toastData: Omit<AnimatedToast, 'id'>) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    const newToast: AnimatedToast = {
+      ...toastData,
+      id,
+    };
+    
+    setToasts((prev) => [...prev, newToast]);
+    
+    return id;
   }, []);
 
   const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const toast = useCallback((toast: Omit<Toast, 'id'>) => {
-    addToast(toast);
-  }, [addToast]);
-
   return {
-    toasts,
     toast,
-    addToast,
+    toasts,
     removeToast,
   };
 }
+
+

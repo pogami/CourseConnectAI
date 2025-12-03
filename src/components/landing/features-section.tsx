@@ -29,7 +29,7 @@ const features = [
     icon: MessageCircle,
     title: 'AI-Powered Tutoring',
     description: 'Get instant help with homework, assignments, and exam prep. CourseConnect AI provides detailed explanations tailored to your course.',
-    color: 'purple'
+    color: 'teal'
   },
   {
     icon: FileText,
@@ -77,7 +77,7 @@ export function FeaturesSection() {
             className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-6"
           >
             Everything you need to{' '}
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-slate-700 to-slate-600 bg-clip-text text-transparent">
               ace your courses
             </span>
           </motion.h2>
@@ -97,7 +97,7 @@ export function FeaturesSection() {
           {features.map((feature, index) => {
             const colorClasses = {
               blue: 'bg-blue-500',
-              purple: 'bg-purple-500',
+              teal: 'bg-teal-500',
               green: 'bg-green-500',
               orange: 'bg-orange-500',
               pink: 'bg-pink-500',
@@ -184,7 +184,7 @@ export function FeaturesSection() {
             ].map((step, index) => (
               <div key={step.step} className="text-center">
                 <div className="relative">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4">
                     <step.icon className="h-8 w-8 text-white" />
                   </div>
                   <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">

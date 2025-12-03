@@ -613,11 +613,11 @@ export default function SettingsPage() {
         throw new Error('Database not available');
       }
 
-      // Update user settings in Firestore
-      await updateDoc(doc(db, 'users', user.uid), {
+      // Update user settings in Firestore (use setDoc with merge to handle missing documents)
+      await setDoc(doc(db, 'users', user.uid), {
         'settings.data.autoSync': enabled,
         lastUpdated: new Date().toISOString()
-      });
+      }, { merge: true });
 
       toast.success(enabled ? "Auto Sync Enabled" : "Auto Sync Disabled", {
         description: enabled
@@ -678,11 +678,11 @@ export default function SettingsPage() {
         throw new Error('Database not available');
       }
 
-      // Update user settings in Firestore
-      await updateDoc(doc(db, 'users', user.uid), {
+      // Update user settings in Firestore (use setDoc with merge to handle missing documents)
+      await setDoc(doc(db, 'users', user.uid), {
         'settings.data.analytics': enabled,
         lastUpdated: new Date().toISOString()
-      });
+      }, { merge: true });
 
       toast.success(enabled ? "Analytics Enabled" : "Analytics Disabled", {
         description: enabled
@@ -756,11 +756,11 @@ export default function SettingsPage() {
         console.warn('Failed to sync settings:', error);
       }
 
-      // Update last sync time
-      await updateDoc(doc(db, 'users', user.uid), {
+      // Update last sync time (use setDoc with merge to handle missing documents)
+      await setDoc(doc(db, 'users', user.uid), {
         lastSyncTime: new Date().toISOString(),
         syncStatus: 'completed'
-      });
+      }, { merge: true });
 
       toast.success("Sync Complete", {
         description: "Your data has been synced across all devices."

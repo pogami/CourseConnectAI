@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, XCircle, Wifi, Bell, Mail, Globe2, Activity, Cpu, Users, Database } from 'lucide-react';
+import { CheckCircle2, XCircle, Wifi, Bell, Mail, Globe2, Activity, Cpu, Users, Database, Upload, MessageSquare, FileText } from 'lucide-react';
 import { MotionCard, MotionHeadline, MotionSection } from '@/components/ui/motion-section';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +28,12 @@ export default function StatusPage() {
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [ollamaHealthy, setOllamaHealthy] = useState<boolean | null>(null);
   const [activeUsers, setActiveUsers] = useState<number | null>(null);
-  const [rtdbConnected, setRtdbConnected] = useState<boolean | null>(true); // Mock as connected
+  const [firestoreConnected, setFirestoreConnected] = useState<boolean | null>(null);
+  const [websiteHealthy, setWebsiteHealthy] = useState<boolean | null>(null);
+  const [syllabusUploadHealthy, setSyllabusUploadHealthy] = useState<boolean | null>(null);
+  const [aiChatHealthy, setAiChatHealthy] = useState<boolean | null>(null);
+  const [geminiHealthy, setGeminiHealthy] = useState<boolean | null>(null);
+  const [openaiHealthy, setOpenaiHealthy] = useState<boolean | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -36,6 +41,22 @@ export default function StatusPage() {
 
   useEffect(() => {
     const poll = () => {
+      // Website health check (check if we can reach the API)
+      fetch('/api/status')
+        .then(res => {
+          setWebsiteHealthy(res.ok);
+          return res.ok ? res.json() : Promise.reject(res);
+        })
+        .then(data => {
+          setActiveUsers(data.activeUsers ?? 0);
+          setFirestoreConnected(data.firestoreConnected ?? false);
+        })
+        .catch(() => {
+          setWebsiteHealthy(false);
+          setActiveUsers(0);
+          setFirestoreConnected(false);
+        });
+
       // Email subscriber count
       fetch('/api/changelog-email')
         .then(res => res.ok ? res.json() : Promise.reject(res))
@@ -48,80 +69,91 @@ export default function StatusPage() {
         .then(data => setPushSubscribers(data.totalSubscriptions ?? 0))
         .catch(() => setPushSubscribers(0));
 
-      // Simple API health check via newsletter GET with email param
-      fetch('/api/newsletter?email=status-check@example.com')
+      // API health check
+      fetch('/api/newsletter/subscribe', { method: 'OPTIONS' })
         .then(res => setApiHealthy(res.ok))
-        .catch(() => setApiHealthy(false));
+        .catch(() => {
+          // Fallback: try a simple GET
+          fetch('/api/status')
+            .then(res => setApiHealthy(res.ok))
+            .catch(() => setApiHealthy(false));
+        });
 
-      // LLM/Ollama availability
-      fetch('/api/status/ollama')
+      // Service health checks
+      fetch('/api/status/services')
         .then(res => res.ok ? res.json() : Promise.reject(res))
-        .then(data => setOllamaHealthy(!!data.ok))
-        .catch(() => setOllamaHealthy(false));
+        .then(data => {
+          setSyllabusUploadHealthy(data.checks?.syllabusUpload?.ok ?? false);
+          setAiChatHealthy(data.checks?.aiChat?.ok ?? false);
+          setGeminiHealthy(data.checks?.gemini?.ok ?? false);
+          setOpenaiHealthy(data.checks?.openai?.ok ?? false);
+        })
+        .catch(() => {
+          setSyllabusUploadHealthy(false);
+          setAiChatHealthy(false);
+          setGeminiHealthy(false);
+          setOpenaiHealthy(false);
+        });
     };
 
     // initial poll
     poll();
-    // poll every 30s
-    const intervalId = setInterval(poll, 30000);
-
-    // Firebase RTDB status removed - using mock data
-    setRtdbConnected(true);
-    setActiveUsers(42);
+    // poll every 15s for real-time updates
+    const intervalId = setInterval(poll, 15000);
     return () => clearInterval(intervalId);
   }, []);
 
   const services: ServiceStatus[] = useMemo(() => [
     {
       name: 'Website',
-      ok: true,
-      value: 'Operational',
+      ok: websiteHealthy ?? false,
+      value: websiteHealthy == null ? 'Checking…' : websiteHealthy ? 'Operational' : 'Degraded',
       icon: <Globe2 className="h-5 w-5" />,
-      description: 'Static assets and routing'
+      description: 'Main website and routing'
     },
     {
-      name: 'APIs',
-      ok: apiHealthy ?? false,
-      value: apiHealthy == null ? 'Checking…' : apiHealthy ? 'Healthy' : 'Degraded',
-      icon: <Activity className="h-5 w-5" />,
-      description: 'Core Next.js API routes'
+      name: 'Syllabus Upload',
+      ok: syllabusUploadHealthy ?? false,
+      value: syllabusUploadHealthy == null ? 'Checking…' : syllabusUploadHealthy ? 'Operational' : 'Degraded',
+      icon: <Upload className="h-5 w-5" />,
+      description: 'PDF, DOCX, TXT processing'
     },
     {
-      name: 'Email (Newsletters)',
-      ok: (emailSubscribers ?? 0) >= 0,
-      value: emailSubscribers == null ? '—' : emailSubscribers,
-      icon: <Mail className="h-5 w-5" />,
-      description: 'Changelog and newsletter subscribers'
+      name: 'AI Chat Service',
+      ok: aiChatHealthy ?? false,
+      value: aiChatHealthy == null ? 'Checking…' : aiChatHealthy ? 'Operational' : 'Degraded',
+      icon: <MessageSquare className="h-5 w-5" />,
+      description: 'Course-specific AI tutoring'
     },
     {
-      name: 'Push Notifications',
-      ok: (pushSubscribers ?? 0) >= 0,
-      value: pushSubscribers == null ? '—' : pushSubscribers,
-      icon: <Bell className="h-5 w-5" />,
-      description: 'Web push subscription count'
+      name: 'Gemini AI',
+      ok: geminiHealthy ?? false,
+      value: geminiHealthy == null ? 'Checking…' : geminiHealthy ? 'Available' : 'Unavailable',
+      icon: <Cpu className="h-5 w-5" />,
+      description: 'Google Gemini API status'
     },
     {
-      name: 'Realtime presence',
-      ok: rtdbConnected ?? false,
-      value: rtdbConnected == null ? 'Checking…' : rtdbConnected ? 'Connected' : 'Offline',
-      icon: <Wifi className="h-5 w-5" />,
-      description: 'Presence and live updates'
+      name: 'OpenAI',
+      ok: openaiHealthy ?? false,
+      value: openaiHealthy == null ? 'Checking…' : openaiHealthy ? 'Available' : 'Unavailable',
+      icon: <Cpu className="h-5 w-5" />,
+      description: 'OpenAI API fallback status'
+    },
+    {
+      name: 'Firestore Database',
+      ok: firestoreConnected ?? false,
+      value: firestoreConnected == null ? 'Checking…' : firestoreConnected ? 'Connected' : 'Offline',
+      icon: <Database className="h-5 w-5" />,
+      description: 'Database connection'
     },
     {
       name: 'Active Users',
       ok: (activeUsers ?? 0) >= 0,
-      value: activeUsers == null ? '—' : activeUsers,
+      value: activeUsers == null ? '—' : `${activeUsers} online`,
       icon: <Users className="h-5 w-5" />,
-      description: 'Users online (presence)'
+      description: 'Users active in last 5 minutes'
     },
-    {
-      name: 'CourseConnect AI',
-      ok: ollamaHealthy ?? false,
-      value: ollamaHealthy == null ? 'Checking…' : ollamaHealthy ? 'Available' : 'Unavailable',
-      icon: <Cpu className="h-5 w-5" />,
-      description: 'AI engine availability'
-    },
-  ], [apiHealthy, emailSubscribers, pushSubscribers, rtdbConnected, activeUsers, ollamaHealthy]);
+  ], [websiteHealthy, syllabusUploadHealthy, aiChatHealthy, geminiHealthy, openaiHealthy, firestoreConnected, activeUsers]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-purple-950">
@@ -173,23 +205,33 @@ export default function StatusPage() {
         <MotionSection delay={0.1} className="mt-12">
           <Card className="border border-gray-200/60 dark:border-gray-800/60 bg-white/70 dark:bg-gray-900/70 backdrop-blur">
             <CardHeader>
-              <CardTitle className="text-lg">Diagnostics</CardTitle>
+              <CardTitle className="text-lg">Service Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  APIs: `GET /api/newsletter?email=…` and `GET /api/changelog-email`.
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="font-semibold text-gray-900 dark:text-white mb-2">Core Services</div>
+                  <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                    <li>• Syllabus Upload: PDF, DOCX, TXT processing</li>
+                    <li>• AI Chat: Course-specific tutoring</li>
+                    <li>• Database: Firestore for user data</li>
+                  </ul>
                 </div>
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Push: `GET /api/push-notifications/subscribe`.
-                </div>
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Presence: Firebase RTDB `status/` and `.info/connected`.
+                <div>
+                  <div className="font-semibold text-gray-900 dark:text-white mb-2">AI Providers</div>
+                  <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                    <li>• Google Gemini: Primary AI engine</li>
+                    <li>• OpenAI: Fallback AI provider</li>
+                    <li>• Status updates every 15 seconds</li>
+                  </ul>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
                 <Button size="sm" variant="secondary" onClick={() => window.location.reload()}>
-                  Refresh
+                  Refresh Status
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <a href="/contact">Contact Support</a>
                 </Button>
               </div>
             </CardContent>

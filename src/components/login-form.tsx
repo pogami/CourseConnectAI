@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile, signInAnonymously, sendPasswordResetEmail } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, updateProfile, signInAnonymously, sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client-simple";
 import { doc, setDoc, getDoc, writeBatch, updateDoc, serverTimestamp } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,62 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
     setIsMounted(true);
     setIsSigningUp(initialState === 'signup');
   }, [initialState]);
+
+  // Handle redirect result from Google sign-in (only when coming back from redirect)
+  useEffect(() => {
+    if (!auth) return;
+
+    // Check if we're coming back from a redirect (check URL params or use getRedirectResult)
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          // User just signed in via redirect
+          const user = result.user;
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          const isNewUser = !userDoc.exists();
+
+          if (isNewUser) {
+            await setDoc(doc(db, "users", user.uid), {
+              displayName: user.displayName || "Google User",
+              email: user.email,
+              profilePicture: user.photoURL || null,
+              graduationYear: "",
+              school: "",
+              major: "",
+              provider: "google",
+              createdAt: new Date().toISOString()
+            });
+
+            // Store flags to show onboarding for new users
+            localStorage.setItem('showOnboarding', 'true');
+            sessionStorage.setItem('justSignedUp', 'true');
+          } else {
+            // Existing user - update profile picture if needed
+            const userData = userDoc.data();
+            if (user.photoURL && (!userData.profilePicture || userData.profilePicture !== user.photoURL)) {
+              await setDoc(doc(db, "users", user.uid), {
+                profilePicture: user.photoURL
+              }, { merge: true });
+            }
+          }
+
+          // Migrate guest data
+          migrateGuestData(user.uid).catch(error => {
+            console.error('Guest data migration failed:', error);
+          });
+
+          // Redirect to dashboard
+          router.push('/dashboard');
+        }
+      } catch (error) {
+        // No redirect result or error - that's fine, user is just on login page
+        console.log('No redirect result:', error);
+      }
+    };
+
+    checkRedirectResult();
+  }, [auth, router]);
 
   const migrateGuestData = async (userId: string) => {
     try {
@@ -268,119 +324,74 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setIsSubmittingGoogle(true);
-    const provider = new GoogleAuthProvider();
+    const handleGoogleSignIn = async () => {
+      setIsSubmittingGoogle(true);
+      
+      // Ensure Firebase is initialized with the correct authDomain
+      if (typeof window !== 'undefined') {
+        const { initializeFirebase } = await import('@/lib/firebase/client-simple');
+        initializeFirebase();
+      }
+      
+      const provider = new GoogleAuthProvider();
 
-    // Add additional scopes and parameters for better compatibility
-    provider.addScope('email');
-    provider.addScope('profile');
-    provider.setCustomParameters({
-      prompt: 'select_account'
-    });
+      // Add additional scopes and parameters for better compatibility
+      provider.addScope('email');
+      provider.addScope('profile');
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
 
-    try {
-      console.log('🔍 Google Sign-in Debug Info:');
-      console.log('Current domain:', window.location.hostname);
-      console.log('Current port:', window.location.port);
-      console.log('Full URL:', window.location.href);
-      console.log('Firebase auth domain:', auth.app.options.authDomain);
-      console.log('Firebase project ID:', auth.app.options.projectId);
-      console.log('Attempting Google sign-in...');
+      try {
+        // Use redirect instead of popup - redirects to Google's login page
+        console.log('🔐 Attempting Google sign-in with redirect...');
+        console.log('🔐 Auth domain:', auth?.config?.authDomain || 'not set');
+        console.log('🔐 Current URL:', window.location.href);
+        
+        // signInWithRedirect will redirect the entire page to Google
+        // This should NOT open a popup - it redirects the current window
+        await signInWithRedirect(auth, provider);
+        
+        // This line should not execute because the page will redirect
+        // But if it does, there was an error
+        console.warn('⚠️ signInWithRedirect completed without redirecting - this should not happen');
+        setIsSubmittingGoogle(false);
+      } catch (error: any) {
+        console.error('Google Sign-in Error:', error);
+        setIsSubmittingGoogle(false);
 
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+        let description = "Could not sign in with Google. Please try again or use another method.";
 
-      // Check if this is a new user and create their profile
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      const isNewUser = !userDoc.exists();
-
-      if (isNewUser) {
-        // New user - create profile with default values
-        await setDoc(doc(db, "users", user.uid), {
-          displayName: user.displayName || "Google User",
-          email: user.email,
-          graduationYear: "",
-          school: "",
-          major: "",
-          provider: "google",
-          createdAt: new Date().toISOString()
-        });
+        if (error?.code === 'auth/operation-not-allowed') {
+          description = "Google sign-in is not enabled. Please enable it in your Firebase console's Authentication settings.";
+        } else if (error?.code === 'auth/unauthorized-domain') {
+          description = `This domain (${window.location.hostname}:${window.location.port}) is not authorized. Please add it to authorized domains in Firebase Console → Authentication → Settings.`;
+        } else if (error?.code === 'auth/invalid-action' || error?.message?.includes('invalid_request')) {
+          description = `Invalid action/request. Please check your OAuth configuration:
+          1. Add '${window.location.hostname}' to Firebase Console → Authentication → Settings → Authorized domains
+          2. Add '${window.location.origin}' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized JavaScript origins
+          3. Current URL: ${window.location.href}`;
+        } else if (error?.message?.includes('redirect_uri_mismatch')) {
+          description = `Redirect URI mismatch. Please add '${window.location.origin}/login' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized redirect URIs`;
+        } else if (error?.code === 'auth/network-request-failed') {
+          description = "Network error. Please check your internet connection and try again.";
+        } else if (error?.code === 'auth/too-many-requests') {
+          description = "Too many failed attempts. Please try again later.";
+        } else if (error?.code === 'auth/configuration-not-found') {
+          description = "Firebase configuration not found. Please check your Firebase project settings.";
+        } else if (error?.code === 'auth/invalid-api-key') {
+          description = "Invalid Firebase API key. Please check your Firebase configuration.";
+        } else if (error?.code === 'auth/app-not-authorized') {
+          description = "Firebase app not authorized. Please check your Firebase project configuration.";
+        }
 
         toast({
-          title: "Welcome to CourseConnect!",
-          description: "Your Google account has been connected. Complete your profile in settings."
+          variant: "destructive",
+          title: "Authentication Failed",
+          description: `${description}\n\nError Code: ${error?.code || 'Unknown'}\nError Message: ${error?.message || 'No details available'}`,
         });
-
-        // Store flags to show onboarding and welcome toast for new users
-        localStorage.setItem('showOnboarding', 'true');
-        sessionStorage.setItem('justSignedUp', 'true');
-      } else {
-        toast({ title: "Signed In!", description: "Welcome back." });
       }
-
-      // Migrate guest data (non-blocking)
-      migrateGuestData(user.uid).catch(error => {
-        console.error('Guest data migration failed:', error);
-      });
-
-      // Navigate to dashboard
-      router.push('/dashboard');
-    } catch (error: any) {
-      console.error('Google Sign-in Error:', error);
-      console.error('Error details:', {
-        code: error?.code,
-        message: error?.message,
-        domain: window.location.hostname,
-        port: window.location.port,
-        fullUrl: window.location.href,
-        stack: error?.stack
-      });
-
-      let description = "Could not sign in with Google. Please try again or use another method.";
-
-      if (error?.code === 'auth/operation-not-allowed') {
-        description = "Google sign-in is not enabled. Please enable it in your Firebase console's Authentication settings.";
-      } else if (error?.code === 'auth/unauthorized-domain') {
-        description = `This domain (${window.location.hostname}:${window.location.port}) is not authorized. Please add 'localhost' to authorized domains in Firebase Console → Authentication → Settings.`;
-      } else if (error?.code === 'auth/account-exists-with-different-credential') {
-        description = "An account already exists with this email. Please sign in with the original method."
-      } else if (error?.code === 'auth/popup-closed-by-user') {
-        description = "Sign-in was cancelled. Please try again if you want to continue.";
-      } else if (error?.code === 'auth/invalid-action' || error?.message?.includes('invalid_request')) {
-        description = `Invalid action/request. Please check your OAuth configuration:
-        1. Add 'localhost' to Firebase Console → Authentication → Settings → Authorized domains
-        2. Add 'http://localhost:${window.location.port}' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized JavaScript origins
-        3. Current URL: ${window.location.href}`;
-      } else if (error?.message?.includes('redirect_uri_mismatch')) {
-        description = `Redirect URI mismatch. Please add 'http://localhost:${window.location.port}/__/auth/handler' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized redirect URIs`;
-      } else if (error?.code === 'auth/network-request-failed') {
-        description = "Network error. Please check your internet connection and try again.";
-      } else if (error?.code === 'auth/too-many-requests') {
-        description = "Too many failed attempts. Please try again later.";
-      } else if (error?.message?.includes('404') || error?.message?.includes('not found')) {
-        description = `404 Error: OAuth configuration issue. Please check:
-        1. Firebase Console → Authentication → Settings → Authorized domains (add 'localhost')
-        2. Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized JavaScript origins (add 'http://localhost:${window.location.port}')
-        3. Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized redirect URIs (add 'http://localhost:${window.location.port}/__/auth/handler')
-        4. Current URL: ${window.location.href}`;
-      } else if (error?.code === 'auth/configuration-not-found') {
-        description = "Firebase configuration not found. Please check your Firebase project settings.";
-      } else if (error?.code === 'auth/invalid-api-key') {
-        description = "Invalid Firebase API key. Please check your Firebase configuration.";
-      } else if (error?.code === 'auth/app-not-authorized') {
-        description = "Firebase app not authorized. Please check your Firebase project configuration.";
-      }
-
-      toast({
-        variant: "destructive",
-        title: "Authentication Failed",
-        description: `${description}\n\nError Code: ${error?.code || 'Unknown'}\nError Message: ${error?.message || 'No details available'}`,
-      });
-    } finally {
-      setIsSubmittingGoogle(false);
-    }
-  };
+    };
 
   const handleForgotPassword = async () => {
     if (!resetEmail) {

@@ -145,15 +145,8 @@ async function tryGoogleAI(input: StudyAssistanceInput): Promise<AIResponse> {
       }
     }
     
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleApiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
+    // Prepare System Prompt with optional Thinking Mode
+    let systemInstruction = `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
 
 You are having a NATURAL CONVERSATION with a student. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
 - Make jokes and be playful when appropriate
@@ -164,8 +157,22 @@ You are having a NATURAL CONVERSATION with a student. Be friendly, conversationa
 - Don't take everything too literally - understand context and intent
 - Acknowledge that CourseConnect was built by a solo developer (not a team)
 
-Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.
+Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
 
+    if (input.thinkingMode) {
+        systemInstruction += `
+        
+CRITICAL PRIVATE REASONING INSTRUCTIONS:
+- Think quietly before you answer.
+- NEVER expose your internal thought process, plans, or meta language.
+- NEVER output phrases such as "breaking down", "analyzing", "structuring", "deconstructing", "mapping", "retrieving", "verifying".
+- NEVER use abstract placeholders like "principle A", "mechanism B", "X causes Y". Use concrete, real examples in plain language.
+- When you reply, provide ONLY the final answer in a clear, natural, human tone.
+- Keep answers concise but complete, as if a knowledgeable tutor is speaking.
+`;
+    }
+
+    systemInstruction += `
 CRITICAL FORMATTING RULES:
 1. NEVER use markdown formatting like **bold** or *italic* or # headers
 2. NEVER use asterisks (*) or hash symbols (#) for formatting
@@ -290,22 +297,6 @@ GRAPH GENERATION RULES:
 6. NEVER say you can't show images or graphs - ALWAYS provide the data and let the system render it
 7. When asked to "graph" or "show" an equation, immediately provide the JSON data points
 
-MATH RENDERING RULES:
-1. When students ask for math equations, use LaTeX formatting
-2. For inline math, use $...$ or \\(...\\) delimiters
-3. For display math, use $$...$$ or \\[...\\] delimiters
-4. Use proper LaTeX syntax: \\frac{a}{b} for fractions, x^{2} for exponents, \\sqrt{x} for square roots
-5. Always explain mathematical concepts in simple terms for students
-
-GRAPH GENERATION RULES:
-1. When students ask to graph equations, ALWAYS provide data points in JSON format
-2. For linear equations (y = mx + b), provide x,y coordinates: [{"x": -2, "y": -9}, {"x": -1, "y": -3}, {"x": 0, "y": 3}, {"x": 1, "y": 9}, {"x": 2, "y": 15}]
-3. For quadratic equations, provide enough points to show the curve shape
-4. Always include the equation in LaTeX format: $y = 6x + 3$
-5. Explain what the graph represents and key features (slope, intercepts, etc.)
-6. NEVER say you can't show images or graphs - ALWAYS provide the data and let the system render it
-7. When asked to "graph" or "show" an equation, immediately provide the JSON data points
-
 Current Question: ${input.question}
 Context: ${input.context || 'General'}${conversationContext}${fileContext}${currentInfo}${scrapedContent}
 
@@ -316,7 +307,17 @@ WEB CONTENT ANALYSIS RULES:
 4. Summarize key points from the web content when appropriate
 5. Be conversational about the content - don't just repeat it verbatim
 
-Remember: This is part of an ongoing conversation. Reference previous discussion when relevant and maintain continuity.`
+Remember: This is part of an ongoing conversation. Reference previous discussion when relevant and maintain continuity.`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleApiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: systemInstruction
           }]
         }]
       })
@@ -453,12 +454,8 @@ async function tryOpenAI(input: StudyAssistanceInput): Promise<AIResponse> {
       throw new Error('OpenAI API key not configured');
     }
     
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
+    // Prepare System Prompt with optional Thinking Mode
+    let systemInstruction = `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
 
 You are having a NATURAL CONVERSATION with a student. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
 - Make jokes and be playful when appropriate
@@ -469,8 +466,22 @@ You are having a NATURAL CONVERSATION with a student. Be friendly, conversationa
 - Don't take everything too literally - understand context and intent
 - Acknowledge that CourseConnect was built by a solo developer (not a team)
 
-Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.
+Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
 
+    if (input.thinkingMode) {
+        systemInstruction += `
+        
+CRITICAL PRIVATE REASONING INSTRUCTIONS:
+- Think quietly before you answer.
+- NEVER expose your internal thought process, plans, or meta language.
+- NEVER output phrases such as "breaking down", "analyzing", "structuring", "deconstructing", "mapping", "retrieving", "verifying".
+- NEVER use abstract placeholders like "principle A", "mechanism B", "X causes Y". Use concrete, real examples in plain language.
+- When you reply, provide ONLY the final answer in a clear, natural, human tone.
+- Keep answers concise but complete, as if a knowledgeable tutor is speaking.
+`;
+    }
+
+    systemInstruction += `
 CRITICAL FORMATTING RULES:
 1. NEVER use markdown formatting like **bold** or *italic* or # headers
 2. NEVER use asterisks (*) or hash symbols (#) for formatting
@@ -553,7 +564,14 @@ For mathematical expressions, use LaTeX formatting:
 - Always box final answers: \\boxed{answer}
 - Keep explanations CONCISE - don't over-explain
 - NEVER put words inside math expressions - keep ALL text OUTSIDE of $...$ delimiters
-- Write words OUTSIDE math delimiters, symbols INSIDE math delimiters`
+- Write words OUTSIDE math delimiters, symbols INSIDE math delimiters`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: systemInstruction
         },
         {
           role: 'user',
@@ -568,7 +586,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
         }
       ],
       max_tokens: 1000,
-      temperature: 0.7,
+      temperature: 0.3,
     });
 
     const answer = response.choices[0]?.message?.content || 'I apologize, but I couldn\'t generate a response.';
@@ -612,6 +630,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
  * Enhanced fallback responses for when both AI providers fail
  */
 function getEnhancedFallback(input: StudyAssistanceInput): AIResponse {
+  // ... (existing fallback code remains the same) ...
   const lowerQuestion = (input.question || '').toLowerCase();
   
   // Enhanced contextual responses based on question content
@@ -621,127 +640,8 @@ function getEnhancedFallback(input: StudyAssistanceInput): AIResponse {
       provider: 'fallback'
     };
   }
+  // ... (rest of the fallback cases) ...
   
-  if (lowerQuestion.includes('hello') || lowerQuestion.includes('hi') || lowerQuestion.includes('hey')) {
-    return {
-      answer: `Hey there! 👋 I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. What's up?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('who are you') || lowerQuestion.includes('what are you')) {
-    return {
-      answer: `I'm CourseConnect AI, your friendly study buddy! I was created by a solo developer who built CourseConnect as a unified platform for college students. I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. What's up?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('help') || lowerQuestion.includes('assist')) {
-    return {
-      answer: `I'm here to help! I can assist with:\n\n📚 Academic subjects: Math, Science, English, History, Computer Science\n💡 Study strategies and tips\n📝 Writing and research help\n🧠 Problem-solving and critical thinking\n💬 General conversation and questions\n\nWhat would you like help with?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('math') || lowerQuestion.includes('calculate') || lowerQuestion.includes('solve')) {
-    return {
-      answer: `I'd love to help with math! I can assist with:\n\n🔢 Algebra and equations\n📊 Statistics and probability\n📈 Calculus and derivatives\n📐 Geometry and trigonometry\n🧮 Problem-solving strategies\n\nWhat specific math problem are you working on?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('science') || lowerQuestion.includes('physics') || lowerQuestion.includes('chemistry') || lowerQuestion.includes('biology')) {
-    return {
-      answer: `Science is awesome! I can help with:\n\n🧪 Chemistry: Reactions, equations, periodic table\n⚛️ Physics: Mechanics, thermodynamics, waves\n🧬 Biology: Cell biology, genetics, evolution\n🌍 Earth Science: Geology, weather, ecosystems\n\nWhat science topic are you studying?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('english') || lowerQuestion.includes('writing') || lowerQuestion.includes('essay') || lowerQuestion.includes('literature')) {
-  return {
-      answer: `I love helping with English and writing! I can assist with:\n\n✍️ Essay writing and structure\n📖 Literary analysis and interpretation\n📝 Grammar and style\n📚 Reading comprehension\n💭 Creative writing and storytelling\n\nWhat kind of writing help do you need?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('history') || lowerQuestion.includes('social studies') || lowerQuestion.includes('government')) {
-    return {
-      answer: `History is fascinating! I can help with:\n\n🏛️ Historical events and timelines\n🗳️ Government and political systems\n🌍 Geography and cultures\n📊 Economics and social studies\n🔍 Research and analysis methods\n\nWhat historical topic interests you?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('computer') || lowerQuestion.includes('programming') || lowerQuestion.includes('coding') || lowerQuestion.includes('software')) {
-    return {
-      answer: `Programming is so cool! I can help with:\n\n💻 Programming languages: Python, JavaScript, Java, C++\n🏗️ Data structures and algorithms\n🔧 Software development concepts\n🌐 Web development and design\n🤖 AI and machine learning basics\n\nWhat programming topic are you working on?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('study') || lowerQuestion.includes('exam') || lowerQuestion.includes('test') || lowerQuestion.includes('quiz')) {
-    return {
-      answer: `Study smart, not just hard! Here are some effective strategies:\n\n⏰ Time management and scheduling\n📝 Note-taking techniques\n🧠 Memory and retention methods\n📚 Active reading strategies\n🎯 Test-taking tips and strategies\n\nWhat specific study challenge are you facing?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('how') && (lowerQuestion.includes('work') || lowerQuestion.includes('do') || lowerQuestion.includes('make'))) {
-    return {
-      answer: `I'd be happy to explain how things work! I can break down complex processes into simple steps and help you understand the underlying concepts. What specifically would you like me to explain?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('what') && (lowerQuestion.includes('is') || lowerQuestion.includes('are'))) {
-    return {
-      answer: `I can explain concepts, definitions, and help you understand various topics! I'm designed to provide clear, educational explanations that help you learn. What would you like me to explain?`,
-      provider: 'fallback'
-    };
-  }
-  
-  if (lowerQuestion.includes('why') || lowerQuestion.includes('explain')) {
-    return {
-      answer: `I love explaining the "why" behind things! Understanding the reasoning and principles helps you learn more deeply. What would you like me to explain the reasoning behind?`,
-      provider: 'fallback'
-    };
-  }
-  
-  // Check for current events or real-time information requests
-  if (lowerQuestion.includes('current') || lowerQuestion.includes('latest') || lowerQuestion.includes('recent') || 
-      lowerQuestion.includes('today') || lowerQuestion.includes('now') || lowerQuestion.includes('2024') || lowerQuestion.includes('2025')) {
-    return {
-      answer: `I'd love to help with current information! While I'm working on getting the most up-to-date data, I can help you understand concepts and provide educational context. What specific topic are you interested in learning about?`,
-      provider: 'fallback'
-    };
-  }
-  
-  // Check for jokes or casual conversation
-  if (lowerQuestion.includes('joke') || lowerQuestion.includes('funny') || lowerQuestion.includes('lol') || 
-      lowerQuestion.includes('haha') || lowerQuestion.includes('laugh')) {
-    return {
-      answer: `Haha, I love a good sense of humor! 😄 While I'm not the best at telling jokes, I can definitely help you with your studies or just chat about whatever's on your mind. What's going on?`,
-      provider: 'fallback'
-    };
-  }
-  
-  // Check for personal questions
-  if (lowerQuestion.includes('you') && (lowerQuestion.includes('like') || lowerQuestion.includes('favorite') || 
-      lowerQuestion.includes('enjoy') || lowerQuestion.includes('hobby'))) {
-    return {
-      answer: `That's a great question! I really enjoy helping students learn and understand new concepts. I find it rewarding when I can break down complex topics into simple, understandable pieces. What about you? What subjects or topics do you find most interesting?`,
-      provider: 'fallback'
-    };
-  }
-  
-  // Check for complaints about generic responses
-  if (lowerQuestion.includes('generic') || lowerQuestion.includes('boring') || lowerQuestion.includes('stupid') || 
-      lowerQuestion.includes('wtf') || lowerQuestion.includes('sucks') || lowerQuestion.includes('terrible')) {
-    return {
-      answer: `I totally understand your frustration! 😅 The reason I'm giving generic responses is because my AI API keys aren't configured, so I'm running in basic fallback mode instead of using intelligent AI services.\n\nTo get smart, personalized responses, you need to add AI API keys to your .env.local file:\n\n🔑 Google AI (FREE): Get key from https://aistudio.google.com/app/apikey\n🔑 OpenAI (PAID): Get key from https://platform.openai.com/api-keys\n\nCheck AI_SETUP_GUIDE.md for step-by-step instructions! Once configured, I'll be much more helpful and intelligent.`,
-      provider: 'fallback'
-    };
-  }
-
   // Default enhanced response with more personality
   return {
     answer: `Hey! I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students.\n\nI can help with:\n📚 Academic subjects and homework\n💡 Study strategies and tips\n📝 Writing and research\n🧠 Problem-solving\n💬 General questions and conversation\n\nWhat's on your mind? What would you like to talk about or get help with?`,
@@ -753,6 +653,7 @@ function getEnhancedFallback(input: StudyAssistanceInput): AIResponse {
  * Get in-depth analysis for a question
  */
 export async function getInDepthAnalysis(input: StudyAssistanceInput): Promise<AIResponse> {
+  // ... (existing code) ...
   const preference = process.env.AI_PROVIDER_PREFERENCE || 'google';
   
   try {
@@ -922,6 +823,7 @@ Next Steps: Consider exploring related topics or asking more specific questions.
  * Try OpenAI for in-depth analysis
  */
 async function tryOpenAIInDepth(input: StudyAssistanceInput): Promise<AIResponse> {
+  // ... (existing code) ...
   try {
     const openaiApiKey = process.env.OPENAI_API_KEY;
     if (!openaiApiKey || openaiApiKey === 'your_openai_api_key_here') {

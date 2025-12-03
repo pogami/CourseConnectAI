@@ -98,6 +98,11 @@ export async function searchCurrentInformation(query: string): Promise<WebSearch
       
       if (googleResponse.ok) {
         const googleData = await googleResponse.json();
+        console.log('🔍 Google Raw Response Stats:', {
+          kind: googleData.kind,
+          totalResults: googleData.searchInformation?.totalResults,
+          itemsCount: googleData.items?.length || 0
+        });
         
         if (googleData.items && googleData.items.length > 0) {
           googleData.items.forEach((item: any) => {
@@ -111,55 +116,25 @@ export async function searchCurrentInformation(query: string): Promise<WebSearch
           console.log('✅ Google search completed with', results.length, 'results');
           lastSearchTime = Date.now();
         } else {
-          console.log('⚠️ No results found from Google Search');
+          console.log('⚠️ Google returned OK (200) but "items" array was empty/missing.');
+          // This happens if the query matches nothing, or the CSE is misconfigured (e.g. restrictive site list)
         }
       } else {
         console.error('❌ Google Search API error:', googleResponse.status, googleResponse.statusText);
         const errorText = await googleResponse.text();
         console.error('Raw error text:', errorText);
         
-        // Try to parse error JSON for more details
-        try {
-          const errorJson = JSON.parse(errorText);
-          console.error('📋 Parsed error JSON:', JSON.stringify(errorJson, null, 2));
-          
-          // Extract detailed error information
-          if (errorJson.error) {
-            const error = errorJson.error;
-            console.error('🔍 Error Code:', error.code);
-            console.error('🔍 Error Message:', error.message);
-            
-            if (error.errors && Array.isArray(error.errors)) {
-              error.errors.forEach((err: any, index: number) => {
-                console.error(`🔍 Error ${index + 1}:`, {
-                  domain: err.domain,
-                  reason: err.reason,
-                  message: err.message,
-                  location: err.location,
-                  locationType: err.locationType
-                });
-              });
-            }
-          }
-          
-          // Check specific error types
-          if (errorJson.error?.status === 'INVALID_ARGUMENT' || errorJson.error?.code === 400) {
-            console.error('⚠️ INVALID_ARGUMENT Error - Possible causes:');
-            console.error('  1. ❌ API key does NOT have "Custom Search API" enabled');
-            console.error('     → Go to: https://console.cloud.google.com/apis/library/customsearch.googleapis.com');
-            console.error('     → Click "Enable" if not already enabled');
-            console.error('  2. ❌ Search Engine ID (cx) is incorrect or not accessible by this API key');
-            console.error('     → Check your engine ID at: https://cse.google.com/cse/all');
-            console.error('  3. ❌ API key has restrictions (IP, HTTP referrer) that block this request');
-            console.error('     → Go to: https://console.cloud.google.com/apis/credentials');
-            console.error('     → Edit your API key and check "Application restrictions"');
-            console.error('  4. ❌ API key quota exceeded or billing not enabled');
-            console.error('     → Check quota at: https://console.cloud.google.com/apis/api/customsearch.googleapis.com/quotas');
-          }
-        } catch (e) {
-          console.error('❌ Could not parse error as JSON:', e);
-          console.error('Raw error text was:', errorText);
-        }
+        // Return this specific error to the UI so we can see it
+        return {
+          results: [{
+            title: `Google API Error: ${googleResponse.status}`,
+            snippet: `Raw Error: ${errorText.substring(0, 300)}...`,
+            url: 'https://console.cloud.google.com/apis/api/customsearch.googleapis.com/metrics',
+            date: new Date().toISOString()
+          }],
+          query,
+          timestamp: new Date().toISOString()
+        };
       }
     } catch (error) {
       console.error('❌ Google Custom Search failed:', error);
@@ -169,7 +144,12 @@ export async function searchCurrentInformation(query: string): Promise<WebSearch
     if (results.length === 0) {
       console.log('⚠️ No results found from Google Search');
       return {
-        results: [],
+        results: [{
+          title: 'No Results Found',
+          snippet: 'The search query returned no results. This could be due to API key configuration, quota limits, or the query itself.',
+          url: '#',
+          date: new Date().toISOString()
+        }],
         query,
         timestamp: new Date().toISOString()
       };

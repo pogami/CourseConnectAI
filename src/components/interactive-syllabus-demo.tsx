@@ -369,7 +369,13 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
 
       if (file.type === 'text/plain') {
         console.log('✅ Detected as TXT file');
-        text = await file.text();
+        try {
+          text = await file.text();
+        } catch (txtError: any) {
+          console.error('❌ TXT file reading error:', txtError);
+          setError('TXT files can be tricky - try copying the content and pasting it into a new TXT file, or upload a DOCX instead!');
+          throw new Error('TXT files can be tricky - try copying the content and pasting it into a new TXT file, or upload a DOCX instead!');
+        }
       } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.toLowerCase().endsWith('.docx')) {
         console.log('✅ Detected as DOCX file');
         try {
@@ -436,8 +442,16 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
 
         } catch (docxError: any) {
           console.error('❌ DOCX extraction error:', docxError);
-          setError(docxError.message || 'Failed to extract text from DOCX');
-          throw new Error(`Failed to extract text from DOCX: ${docxError.message}. Please try a TXT file instead.`);
+          const errorMsg = docxError.message || 'Failed to extract text from DOCX';
+          
+          // Check if it's already our friendly message
+          if (errorMsg.includes('DOCX') && errorMsg.includes('TXT')) {
+            setError(errorMsg);
+            throw new Error(errorMsg);
+          }
+          
+          setError('DOCX files can be tricky - try uploading a TXT file instead and we\'ll handle the rest!');
+          throw new Error('DOCX files can be tricky - try uploading a TXT file instead and we\'ll handle the rest!');
         }
       } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         try {
@@ -457,7 +471,7 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           setProgress(30);
           setProcessingStep('Course Connect is parsing PDF...');
 
-          const response = await fetch('/api/test-pdf-upload', {
+          const response = await fetch('/api/parse-pdf', {
             method: 'POST',
             body: formData,
           });
@@ -474,14 +488,8 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
                 console.error('Failed to parse error JSON:', e);
               }
             } else {
-              // If not JSON, try to get text
-              try {
-                const text = await response.text();
-                console.error('Server returned non-JSON error:', text);
-                errorData = { error: text };
-              } catch (e) {
-                console.error('Failed to read error response:', e);
-              }
+              // If not JSON, it's likely a 404 or HTML error page
+              throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
             }
 
             console.error('❌ Server Error Response:', {
@@ -493,14 +501,19 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
               fullError: errorData
             });
 
-            const errorMessage = errorData.details || errorData.error || `Server error: ${response.status}`;
-            throw new Error(errorMessage);
+            // Check if the API returned helpful alternatives
+            if (errorData.alternatives && Array.isArray(errorData.alternatives)) {
+              throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
+            }
+
+            const errorMessage = errorData.error || errorData.details || `Server error: ${response.status}`;
+            throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
           }
 
           const result = await response.json();
 
-          if (!result.text) {
-            throw new Error('No text extracted from PDF');
+          if (!result.success || !result.text) {
+            throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
           }
 
           text = result.text;
@@ -513,12 +526,22 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
 
         } catch (pdfError: any) {
           console.error('PDF extraction error:', pdfError);
-          setError(pdfError.message || 'Failed to extract text from PDF');
-          throw new Error(`Failed to extract text from PDF: ${pdfError.message}. Please try a TXT or DOCX file instead.`);
+          const errorMsg = pdfError.message || 'Failed to extract text from PDF';
+          
+          // Check if it's already our friendly message
+          if (errorMsg.includes('PDFs can be tricky')) {
+            setError(errorMsg);
+            throw new Error(errorMsg);
+          }
+          
+          setError('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
+          throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
         }
-      } else if (false && (file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(file.name))) {
+      } else if (false && file !== null && (file!.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(file!.name))) {
         // Image support temporarily disabled - OCR is slow and unreliable
         // Handle images with OCR
+        // This code is unreachable (condition starts with false), but TypeScript still checks it
+        const currentFile = file!; // Non-null assertion since we check file !== null above
         let timeoutId: NodeJS.Timeout | null = null;
         try {
           console.log('✅ Detected as image file, using OCR');
@@ -527,11 +550,7 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
 
           // Use dedicated OCR endpoint for faster, more reliable text extraction
           const ocrFormData = new FormData();
-          if (file) {
-            ocrFormData.append('file', file);
-          } else {
-            throw new Error("No file selected");
-          }
+          ocrFormData.append('file', currentFile);
 
           setProgress(30);
           setProcessingStep('Extracting text with OCR... (this may take 1-2 minutes, especially on first use)');
@@ -549,7 +568,10 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
             signal: controller.signal,
           });
 
-          if (timeoutId) clearTimeout(timeoutId);
+          if (timeoutId !== null) {
+            clearTimeout(timeoutId as NodeJS.Timeout);
+            timeoutId = null;
+          }
 
           if (!ocrResponse.ok) {
             let errorData: any = {};
@@ -571,14 +593,17 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
 
           console.log('✅ Image OCR extraction successful:', {
             textLength: text.length,
-            fileName: file.name,
+            fileName: currentFile.name,
             confidence: ocrResult.confidence,
             preview: text.substring(0, 100) + '...'
           });
           setProgress(50);
 
         } catch (imageError: any) {
-          if (timeoutId) clearTimeout(timeoutId);
+          if (timeoutId !== null) {
+            clearTimeout(timeoutId as NodeJS.Timeout);
+            timeoutId = null;
+          }
           console.error('❌ Image OCR extraction error:', imageError);
 
           let errorMessage = 'Failed to extract text from image';
@@ -764,11 +789,6 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           year: extractedData.year || 'Unknown Year',
           classTime: extractedData.classTime || 'Unknown Time',
           department: extractedData.department || 'Unknown Department',
-          topics: extractedData.topics || [],
-          assignments: extractedData.assignments || [],
-          topics: extractedData.topics || [],
-          assignments: extractedData.assignments || [],
-          exams: extractedData.exams || [],
           topics: extractedData.topics || [],
           assignments: extractedData.assignments || [],
           exams: extractedData.exams || [],

@@ -27,7 +27,9 @@ GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here
 SEARCH_RESULTS_LIMIT=12  # Optional: Number of results (1-20, default: 12)
 
 # Admin Password (for admin and feedback pages)
-ADMIN_PASSWORD=your_admin_password_here
+# WARNING: This is exposed client-side. Use a strong, unique password.
+# Consider using server-side authentication for better security.
+NEXT_PUBLIC_ADMIN_PASSWORD=your_admin_password_here
 
 # Instructions:
 # 1. Copy this file to .env.local for local development

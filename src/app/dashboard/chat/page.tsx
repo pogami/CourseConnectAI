@@ -1,14 +1,31 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isMathOrPhysicsContent } from '@/utils/math-detection';
 import { AIResponse } from '@/components/ai-response';
-import { MessageSquare, Users, MoreVertical, Download, RotateCcw, Upload, BookOpen, Trash2, Brain, Copy, Check, Globe, FileText, Sparkles, ScrollText, BookUser } from "lucide-react";
+import {
+  Chatting01Icon,
+  UserGroupIcon,
+  MoreVerticalIcon,
+  Download01Icon,
+  RotateLeft01Icon,
+  Upload01Icon,
+  BookOpen01Icon,
+  Delete01Icon,
+  Brain01Icon,
+  Copy01Icon,
+  CheckmarkCircle01Icon,
+  Globe01Icon,
+  Book01Icon,
+  SparklesIcon,
+  ScrollVerticalIcon,
+  BookUserIcon
+} from "hugeicons-react";
 import { useChatStore } from "@/hooks/use-chat-store";
 import { useTextExtraction } from "@/hooks/use-text-extraction";
 import { useSmartDocumentAnalysis } from "@/hooks/use-smart-document-analysis";
@@ -70,7 +87,13 @@ function getSmartThinkingSteps(message: string): string[] {
   const msg = (message || "").toLowerCase();
   const steps = ["Analyzing request context..."];
   
-  if (msg.includes("quiz") || msg.includes("test") || msg.includes("exam")) {
+  // Check for syllabus-related questions
+  const syllabusKeywords = ["syllabus", "assignment", "due", "deadline", "exam", "test", "quiz", "professor", "class time", "meeting", "office hours", "grade", "grading", "policy", "course", "when is", "what is due", "prioritize", "priority"];
+  const isSyllabusQuestion = syllabusKeywords.some(keyword => msg.includes(keyword));
+  
+  if (isSyllabusQuestion) {
+    steps.push("Checking your syllabus...", "Analyzing assignments and deadlines...", "Formulating response...");
+  } else if (msg.includes("quiz") || msg.includes("test") || msg.includes("exam")) {
     steps.push("Checking question bank...", "Formulating practice questions...", "Verifying answers...");
   } else if (msg.includes("summar") || msg.includes("explain")) {
     steps.push("Scanning course content...", "Extracting key points...", "Synthesizing summary...");
@@ -89,8 +112,16 @@ function getSmartThinkingSteps(message: string): string[] {
   return steps;
 }
 
+// Helper function to detect if question is syllabus-related for custom thinking text
+function isSyllabusQuestion(message: string): boolean {
+  const msg = (message || "").toLowerCase();
+  const syllabusKeywords = ["syllabus", "assignment", "due", "deadline", "exam", "test", "quiz", "professor", "class time", "meeting", "office hours", "grade", "grading", "policy", "course", "when is", "what is due", "prioritize", "priority"];
+  return syllabusKeywords.some(keyword => msg.includes(keyword));
+}
+
 export default function ChatPage() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const { 
         chats, 
         addMessage, 
@@ -135,6 +166,8 @@ export default function ChatPage() {
     const [chatSummary, setChatSummary] = useState<string>('');
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
     const [copiedSummary, setCopiedSummary] = useState(false);
+    // AbortController for stopping AI responses (works for all chat types: General, Class, Public)
+    const abortControllerRef = useRef<AbortController | null>(null);
     // New chat creation is disabled here (only via Upload Syllabus)
     const [unreadById, setUnreadById] = useState<Record<string, number>>({});
     const [prevLengths, setPrevLengths] = useState<Record<string, number>>({});
@@ -951,6 +984,20 @@ export default function ChatPage() {
         if (!inputValue.trim()) return;
 
         const messageText = inputValue.trim();
+
+        // If this chat was opened with a ?prefill= param (e.g. from the dashboard),
+        // clear that query param as soon as the user sends the first message so
+        // it doesn't keep re-populating the input on re-render.
+        try {
+            const prefillParam = searchParams.get('prefill');
+            if (prefillParam) {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.delete('prefill');
+                router.replace(currentUrl.pathname + currentUrl.search);
+            }
+        } catch (e) {
+            // Fail silently if we can't touch the URL (SSR, etc.)
+        }
         const currentChat = chats[currentTab || 'private-general-chat'];
         const isPublicChat = currentChat?.chatType === 'public';
         const isClassChat = currentChat?.chatType === 'class';
@@ -1067,6 +1114,7 @@ export default function ChatPage() {
 
         // Only get AI response if appropriate
         if (shouldCallAIFinal) {
+            let timeoutId: NodeJS.Timeout | null = null;
             try {
                 // Get AI response via API call with enhanced error handling
                 let aiResponse;
@@ -1137,6 +1185,13 @@ export default function ChatPage() {
                     setStreamingResponse("");
                     setIsStreamingComplete(false);
                     
+                    // Create AbortController for manual stop (works for all chat types)
+                    const abortController = new AbortController();
+                    abortControllerRef.current = abortController;
+                    
+                    // Combine manual abort with timeout
+                    timeoutId = setTimeout(() => abortController.abort(), 35000);
+                    
                     const response = await fetch(apiEndpoint, {
                         method: 'POST',
                         headers: {
@@ -1144,8 +1199,7 @@ export default function ChatPage() {
                             'User-Agent': 'CourseConnect-Client/1.0',
                         },
                         body: JSON.stringify(requestBody),
-                        // Add timeout for better device compatibility
-                        signal: AbortSignal.timeout(35000) // 35 second timeout
+                        signal: abortController.signal
                     });
 
                     console.log('API response status:', response.status);
@@ -1170,6 +1224,12 @@ export default function ChatPage() {
                     let buffer = "";
 
                     while (true) {
+                        // Check if aborted before reading
+                        if (abortController.signal.aborted) {
+                            console.log('Stream aborted by user');
+                            break;
+                        }
+                        
                         const { done, value } = await reader.read();
 
                         if (done) {
@@ -1311,7 +1371,27 @@ export default function ChatPage() {
                     if (metadata && currentTab) {
                         updateChatMetadata(currentTab, metadata);
                     }
-                } catch (apiError) {
+                    
+                    // Clear abort controller on success
+                    if (timeoutId) clearTimeout(timeoutId);
+                    abortControllerRef.current = null;
+                } catch (apiError: any) {
+                    // Check if user manually aborted before clearing ref
+                    const wasAborted = apiError?.name === 'AbortError' || abortControllerRef.current?.signal.aborted;
+                    
+                    // Clear timeout and abort controller on error
+                    if (timeoutId) clearTimeout(timeoutId);
+                    abortControllerRef.current = null;
+                    
+                    // Don't show error if user manually aborted
+                    if (wasAborted) {
+                        console.log('AI response stopped by user');
+                        setIsLoading(false);
+                        setStreamingResponse("");
+                        setStreamingMessageId(null);
+                        return;
+                    }
+                    
                     console.warn("API call failed, using enhanced fallback:", apiError);
                     
                     // Clear streaming state on error
@@ -2219,7 +2299,7 @@ export default function ChatPage() {
                         <div className="h-full flex flex-col">
                             <div className="pb-3 p-4">
                                 <div className="flex items-center gap-2 text-lg font-semibold">
-                                    <MessageSquare className="h-5 w-5" />
+                                    <Chatting01Icon className="h-5 w-5" />
                                     Chats
                                 </div>
                             </div>
@@ -2359,11 +2439,11 @@ export default function ChatPage() {
                                                     >
                                                         <div className="flex-shrink-0">
                                                             {isPrivate ? (
-                                                                <MessageSquare className="h-4 w-4" />
+                                                                <Chatting01Icon className="h-4 w-4" />
                                                             ) : isPublic ? (
-                                                                <Globe className="h-4 w-4" />
+                                                                <Globe01Icon className="h-4 w-4" />
                                                             ) : (
-                                                                <BookOpen className="h-4 w-4" />
+                                                                <BookOpen01Icon className="h-4 w-4" />
                                                             )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
@@ -2460,30 +2540,30 @@ export default function ChatPage() {
                                                 className="h-9 px-4 text-xs font-semibold bg-gradient-to-r from-sky-500/10 via-blue-500/10 to-indigo-500/10 hover:from-sky-500/20 hover:via-blue-500/20 hover:to-indigo-500/20 border border-blue-200/70 dark:border-blue-900/60 text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md transition-all duration-200 rounded-full"
                                                 disabled={isGeneratingSummary}
                                             >
-                                                <ScrollText className="h-3.5 w-3.5 mr-1.5 text-blue-600 dark:text-blue-300" />
+                                                <ScrollVerticalIcon className="h-3.5 w-3.5 mr-1.5 text-blue-600 dark:text-blue-300" />
                                                 {isGeneratingSummary ? 'Generating...' : 'Generate AI Summary'}
                                             </Button>
                                             {currentChat?.chatType === 'class' && (
                                                 <Badge variant="secondary" className="text-xs">
-                                                    <BookUser className="h-3 w-3 mr-1" />
+                                                    <BookUserIcon className="h-3 w-3 mr-1" />
                                                     Class Chat
                                                 </Badge>
                                             )}
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="outline" size="sm" className="h-8 w-8 p-0 hover:bg-transparent hover:text-current">
-                                                        <MoreVertical className="h-4 w-4" />
+                                                        <MoreVerticalIcon className="h-4 w-4" />
                                                         <span className="sr-only">Chat options</span>
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuItem onClick={handleExportChat}>
-                                                    <Download className="h-4 w-4 mr-2" />
+                                                    <Download01Icon className="h-4 w-4 mr-2" />
                                                     Export Chat
                                                 </DropdownMenuItem>
                                                 {!currentChat?.disabled && (
                                                 <DropdownMenuItem onClick={() => setShowResetDialog(true)}>
-                                                    <RotateCcw className="h-4 w-4 mr-2" />
+                                                    <RotateLeft01Icon className="h-4 w-4 mr-2" />
                                                     Reset Chat
                                                 </DropdownMenuItem>
                                                 )}
@@ -2491,7 +2571,7 @@ export default function ChatPage() {
                                                     <>
                                                         <DropdownMenuSeparator />
                                                         <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive">
-                                                            <Trash2 className="h-4 w-4 mr-2" />
+                                                            <Delete01Icon className="h-4 w-4 mr-2" />
                                                             Delete Chat
                                                         </DropdownMenuItem>
                                                     </>
@@ -2688,7 +2768,7 @@ export default function ChatPage() {
                                                                                         <img src={f.url} alt={f.name} className="w-full h-32 object-cover" />
                                                                                     ) : (
                                                                                         <div className="px-3 py-2 flex items-center gap-2 text-xs bg-primary/10">
-                                                                                            <FileText className="h-4 w-4 text-primary" />
+                                                                                            <Book01Icon className="h-4 w-4 text-primary" />
                                                                                             <span className="font-medium truncate">{f.name}</span>
                                                                                         </div>
                                                                                     )}
@@ -2751,7 +2831,6 @@ export default function ChatPage() {
                                                                     <div className="mb-2 -mt-1">
                                                                         <ThinkingProcess 
                                                                             status="complete"
-                                                                            steps={(message as any).thinkingSteps}
                                                                             defaultOpen={false}
                                                                         />
                                                                     </div>
@@ -2764,86 +2843,13 @@ export default function ChatPage() {
                             isSearchRequest={(message as any).isSearchRequest || false}
                             messageId={message.id}
                             onSendMessage={async (msg) => {
-                              // Automatically send quiz results to AI (without showing in input field)
-                              const currentChat = chats[currentTab || 'private-general-chat'];
-                              const isClassChat = currentChat?.chatType === 'class';
-                              
-                              // Add user message immediately
-                              const userMessage = {
-                                id: generateMessageId(),
-                                text: msg,
-                                sender: 'user' as const,
-                                name: isGuest ? getGuestDisplayName() : (user?.displayName || 'Anonymous'),
-                                userId: user?.uid || 'guest',
-                                timestamp: Date.now()
-                              };
-                              
-                              await addMessage(currentTab || 'private-general-chat', userMessage);
-                              setIsLoading(true);
-                              
-                              try {
-                                // Get AI response
-                                const apiEndpoint = isClassChat ? '/api/chat/class' : '/api/chat';
-                                
-                                // Get userId from logged-in user (notifications only work for authenticated users)
-                                const effectiveUserId = user?.uid;
-                                
-                                const requestBody: any = {
-                                  question: msg,
-                                  context: currentChat?.title || 'General Chat',
-                                  conversationHistory: currentChat?.messages?.slice(-10).map(m => ({
-                                    role: m.sender === 'user' ? 'user' : 'assistant',
-                                    content: typeof m.text === 'string' ? m.text : JSON.stringify(m.text)
-                                  })) || [],
-                                  shouldCallAI: true,
-                                  isPublicChat: false,
-                                  userId: effectiveUserId, // Add userId for notification
-                                  chatId: currentTab, // Add chatId for notification
-                                  chatTitle: currentChat?.title // Add chatTitle for notification
-                                };
-                                
-                                if (isClassChat && currentChat?.courseData) {
-                                  requestBody.courseData = currentChat.courseData;
-                                  requestBody.chatId = currentTab;
-                                  requestBody.metadata = currentChat.metadata;
-                                }
-                                
-                                const response = await fetch(apiEndpoint, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify(requestBody),
-                                  signal: AbortSignal.timeout(35000)
-                                });
-                                
-                                const data = await response.json();
-                                
-                                if (data.response) {
-                                    const aiMessage = {
-                                    id: generateMessageId(),
-                                    text: data.response,
-                                    sender: 'bot' as const,
-                                    name: 'CourseConnect AI',
-                                    timestamp: Date.now(),
-                                    thinkingSteps: thinkingSteps // Save thinking steps to message history
-                                  };
-                                  
-                                  await addMessage(currentTab || 'private-general-chat', aiMessage);
-                                  
-                                  // Update metadata if provided
-                                  if (data.metadata && currentTab) {
-                                    updateChatMetadata(currentTab, data.metadata);
-                                  }
-                                }
-                              } catch (error) {
-                                console.error('Failed to get AI response:', error);
-                                toast({
-                                  title: "Error",
-                                  description: "Failed to get AI response. Please try again.",
-                                  variant: "destructive"
-                                });
-                              } finally {
-                                setIsLoading(false);
-                              }
+                              // Use the same handleSendMessage logic but with the follow-up question text
+                              // Set the input value and immediately trigger send
+                              setInputValue(msg);
+                              // Use requestAnimationFrame to ensure state is updated before sending
+                              requestAnimationFrame(() => {
+                                handleSendMessage(true);
+                              });
                             }}
                             onFeedback={(feedback) => {
                               // Store feedback in localStorage
@@ -2902,8 +2908,13 @@ export default function ChatPage() {
                                                             <div className="mb-2 mt-1">
                                                                 <ThinkingProcess 
                                                                     status="thinking"
-                                                                    steps={thinkingSteps}
                                                                     defaultOpen={true}
+                                                                    customText={(() => {
+                                                                        // Get the last user message to check if it's syllabus-related
+                                                                        const lastUserMessage = generalChat?.messages?.filter(m => m.sender === 'user')?.at(-1);
+                                                                        const messageText = typeof lastUserMessage?.text === 'string' ? lastUserMessage.text : JSON.stringify(lastUserMessage?.text || '');
+                                                                        return isSyllabusQuestion(messageText) ? "checking your syllabus..." : undefined;
+                                                                    })()}
                                                                 />
                                                             </div>
                                                         </div>
@@ -2935,7 +2946,6 @@ export default function ChatPage() {
                                                               <div className="mb-4">
                                                                 <ThinkingProcess 
                                                                     status="complete"
-                                                                    steps={thinkingSteps}
                                                                     defaultOpen={false}
                                                                 />
                                                               </div>
@@ -2979,7 +2989,7 @@ export default function ChatPage() {
                                                         <Avatar className="w-6 h-6 flex-shrink-0">
                                                             <AvatarImage src="" />
                                                             <AvatarFallback className="bg-muted/50 text-muted-foreground text-xs">
-                                                                <Users className="w-2.5 h-2.5" />
+                                                                <UserGroupIcon className="w-2.5 h-2.5" />
                                                             </AvatarFallback>
                                                         </Avatar>
                                                         <div className="flex-1 min-w-0">
@@ -3010,6 +3020,18 @@ export default function ChatPage() {
                                             onSend={handleSendMessage}
                                             onSearchSelect={handleSearchSelect}
                                             onFileUpload={handleFileUpload}
+                                            isSending={isLoading}
+                                            onStop={() => {
+                                                // Stop AI response for all chat types (General, Class, Public)
+                                                if (abortControllerRef.current) {
+                                                    abortControllerRef.current.abort();
+                                                    abortControllerRef.current = null;
+                                                }
+                                                setIsLoading(false);
+                                                setStreamingResponse("");
+                                                setStreamingMessageId(null);
+                                                console.log('AI response stopped by user');
+                                            }}
                                             onFileProcessed={async (payload: any) => {
                                                 // payload: { files: File[], text: string }
                                                 const files: File[] = payload?.files || [];
@@ -3221,7 +3243,7 @@ export default function ChatPage() {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <RotateCcw className="h-5 w-5 text-orange-500" />
+                        <RotateLeft01Icon className="h-5 w-5 text-orange-500" />
                         Reset Chat
                     </DialogTitle>
                     <DialogDescription>
@@ -3250,7 +3272,7 @@ export default function ChatPage() {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Trash2 className="h-5 w-5 text-destructive" />
+                        <Delete01Icon className="h-5 w-5 text-destructive" />
                         Delete Chat
                     </DialogTitle>
                     <DialogDescription>
@@ -3279,7 +3301,7 @@ export default function ChatPage() {
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <ScrollText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        <ScrollVerticalIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                         Chat Summary
                     </DialogTitle>
                     <DialogDescription>
@@ -3324,12 +3346,12 @@ export default function ChatPage() {
                         >
                             {copiedSummary ? (
                                 <>
-                                    <Check className="h-4 w-4 mr-2" />
+                                    <CheckmarkCircle01Icon className="h-4 w-4 mr-2" />
                                     Copied
                                 </>
                             ) : (
                                 <>
-                                    <Copy className="h-4 w-4 mr-2" />
+                                    <Copy01Icon className="h-4 w-4 mr-2" />
                                     Copy
                                 </>
                             )}

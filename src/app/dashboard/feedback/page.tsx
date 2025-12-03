@@ -34,10 +34,17 @@ export default function FeedbackPage() {
   const [error, setError] = useState('');
 
   // Password for accessing the feedback page
-  const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'courseconnect2025';
+  const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Security check: require environment variable to be set
+    if (!ADMIN_PASSWORD) {
+      setError('Admin access is not configured. Please set NEXT_PUBLIC_ADMIN_PASSWORD environment variable.');
+      return;
+    }
+    
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
       setError('');

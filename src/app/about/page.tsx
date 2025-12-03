@@ -4,7 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/landing/navigation';
 import { Footer } from '@/components/landing/footer';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, Target, Lightbulb, Heart, Award, Globe, Zap, TrendingUp, Clock, CheckCircle, Star, Play, Sparkles, Shield, MessageCircle } from 'lucide-react';
+import {
+  ArrowLeft01Icon,
+  UserGroupIcon,
+  Target01Icon,
+  BulbIcon,
+  FavouriteIcon,
+} from 'hugeicons-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { MotionSection, MotionHeadline, MotionCard } from '@/components/ui/motion-section';
 import { HideAISupport } from '@/components/hide-ai-support';
@@ -22,22 +28,22 @@ export default function AboutPage() {
 
   const values = [
     {
-      icon: Users,
+      icon: UserGroupIcon,
       title: 'Student-Centered',
       description: 'Building features with students\' needs in mind, starting with AI-powered chat and syllabus analysis.'
     },
     {
-      icon: Target,
+      icon: Target01Icon,
       title: 'Academic Excellence',
       description: 'Committed to empowering students through the tools we\'re developing for academic success.'
     },
     {
-      icon: Lightbulb,
+      icon: BulbIcon,
       title: 'Innovation',
       description: 'Continuously developing new educational technology features to enhance learning experiences.'
     },
     {
-      icon: Heart,
+      icon: FavouriteIcon,
       title: 'Community',
       description: 'Working to build connections between students and create collaborative learning environments.'
     }
@@ -48,49 +54,7 @@ export default function AboutPage() {
       <Navigation />
 
       {/* Header */}
-      <div className="relative bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900 overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0">
-          <motion.div
-            animate={{
-              x: [0, 100, 0],
-              y: [0, -100, 0],
-              rotate: [0, 180, 360],
-            }}
-            transition={{
-              duration: 20,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-            className="absolute top-20 left-20 w-32 h-32 bg-blue-200/20 rounded-full blur-xl"
-          />
-          <motion.div
-            animate={{
-              x: [0, -150, 0],
-              y: [0, 100, 0],
-              rotate: [360, 180, 0],
-            }}
-            transition={{
-              duration: 25,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-            className="absolute top-40 right-20 w-24 h-24 bg-purple-200/20 rounded-full blur-xl"
-          />
-          <motion.div
-            animate={{
-              x: [0, 80, 0],
-              y: [0, -80, 0],
-              scale: [1, 1.2, 1],
-            }}
-            transition={{
-              duration: 15,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className="absolute bottom-20 left-1/3 w-16 h-16 bg-pink-200/20 rounded-full blur-lg"
-          />
-        </div>
+      <div className="relative bg-slate-50 dark:bg-slate-950 border-b border-slate-200/60 dark:border-slate-800">
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
           <div className="text-center">
@@ -105,7 +69,7 @@ export default function AboutPage() {
                 onClick={() => window.history.back()}
                 className="mb-4 hover:bg-white/50 backdrop-blur-sm"
               >
-                <ArrowLeft className="h-4 w-4 mr-2" />
+                <ArrowLeft01Icon className="h-4 w-4 mr-2" />
                 Back
               </Button>
             </motion.div>
@@ -113,7 +77,7 @@ export default function AboutPage() {
             <MotionHeadline className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
               About{' '}
               <motion.span
-                className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+                className="bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent"
                 animate={{
                   backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
                 }}
@@ -168,21 +132,21 @@ export default function AboutPage() {
                 year: "Aug 2025",
                 title: "The Beginning",
                 description: "CourseConnect was born from a real classroom experience: a course with inconsistent instruction, fragmented communication where students were left on read, and low engagement due to non-mandatory attendance. Facing these challenges firsthand, I built CourseConnect to provide reliable AI-powered support, ensuring every student has access to quality tutoring and study resources regardless of class dynamics.",
-                icon: Lightbulb,
+                icon: BulbIcon,
                 side: "left"
               },
               {
                 year: "Sep-Oct 2025",
                 title: "Development Phase",
                 description: "Worked intensively on the platform, developing core AI features, smart syllabus analysis, and intelligent chat assistance. Built the foundation for what would become a comprehensive student success platform.",
-                icon: Users,
+                icon: UserGroupIcon,
                 side: "right"
               },
               {
                 year: "Future",
                 title: "Our Vision",
                 description: "Envision CourseConnect expanding to universities nationwide, integrating with LMS systems, and becoming a comprehensive ecosystem where students, professors, and institutions collaborate for academic success through AI-powered tools.",
-                icon: Heart,
+                icon: FavouriteIcon,
                 side: "left"
               }
             ].map((item, index) => (
@@ -196,14 +160,14 @@ export default function AboutPage() {
               >
                 <div className={`w-1/2 ${item.side === 'left' ? 'pr-12 text-right' : 'pl-12 text-left'}`}>
                   <motion.div
-                    whileHover={{ scale: 1.02, y: -5 }}
-                    className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-8 shadow-xl border border-white/20 dark:border-gray-700/50 relative overflow-hidden group"
+                    whileHover={{ scale: 1.01, y: -4 }}
+                    className="bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-md border border-slate-200/70 dark:border-slate-800 relative overflow-hidden group"
                   >
-                    <div className={`absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                    <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                     <div className={`flex items-center gap-4 ${item.side === 'left' ? 'justify-end' : 'justify-start'} mb-4 relative z-10`}>
-                      <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                        <item.icon className="h-7 w-7 text-white" />
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm bg-sky-50 dark:bg-slate-900 border border-sky-500/40">
+                        <item.icon className="h-7 w-7 text-sky-600 dark:text-white" />
                       </div>
                       <div>
                         <div className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">{item.year}</div>
@@ -216,8 +180,8 @@ export default function AboutPage() {
 
                 {/* Timeline Dot */}
                 <div className="relative z-10 flex items-center justify-center w-8 h-8">
-                  <div className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full shadow-[0_0_0_4px_rgba(255,255,255,1)] dark:shadow-[0_0_0_4px_rgba(17,24,39,1)]"></div>
-                  <div className="absolute w-8 h-8 bg-blue-500/20 rounded-full animate-ping"></div>
+                  <div className="w-4 h-4 bg-sky-500 rounded-full shadow-[0_0_0_4px_rgba(255,255,255,1)] dark:shadow-[0_0_0_4px_rgba(17,24,39,1)]"></div>
+                  <div className="absolute w-8 h-8 bg-sky-500/10 rounded-full motion-safe:animate-ping"></div>
                 </div>
 
                 <div className="w-1/2"></div>
@@ -280,14 +244,14 @@ export default function AboutPage() {
             transition={{ duration: 0.5 }}
             className="mb-16"
           >
-            <div className="bg-white/40 dark:bg-gray-800/40 backdrop-blur-2xl rounded-[2.5rem] p-8 md:p-12 border border-white/50 dark:border-gray-700/50 shadow-2xl">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 md:p-12 border border-slate-200/70 dark:border-slate-800 shadow-md">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                 <div>
                   <motion.div
                     initial={{ scale: 0.8 }}
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-blue-500/20"
+                    className="w-20 h-20 rounded-2xl flex items-center justify-center mb-8 shadow-md bg-sky-600 dark:bg-sky-600 border border-sky-500/60"
                   >
                     {React.createElement(values[activeValue].icon, { className: "h-10 w-10 text-white" })}
                   </motion.div>
@@ -324,13 +288,13 @@ export default function AboutPage() {
                   y: -10,
                   transition: { duration: 0.2 }
                 }}
-                className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-8 shadow-lg border border-white/20 dark:border-gray-700/50 hover:shadow-2xl transition-all duration-300 cursor-pointer group text-center"
+                className="bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-md border border-slate-200/70 dark:border-slate-800 hover:shadow-lg transition-all duration-300 cursor-pointer group text-center"
                 onClick={() => setActiveValue(index)}
               >
                 <motion.div
                   whileHover={{ rotate: 360 }}
                   transition={{ duration: 0.5 }}
-                  className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:shadow-lg transition-all duration-300"
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:shadow-lg transition-all duration-300 bg-sky-600 dark:bg-sky-600 border border-sky-500/60"
                 >
                   {React.createElement(value.icon, { className: "h-7 w-7 text-white" })}
                 </motion.div>
@@ -347,8 +311,8 @@ export default function AboutPage() {
       </div>
 
       {/* Mission Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-10" />
+      <div className="bg-slate-950 py-24 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.04]" />
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -359,7 +323,7 @@ export default function AboutPage() {
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-8 tracking-tight">
               Our Mission
             </h2>
-            <p className="text-xl md:text-2xl text-blue-100 mb-10 leading-relaxed font-medium">
+            <p className="text-xl md:text-2xl text-slate-100 mb-10 leading-relaxed font-medium">
               To democratize access to quality education by building AI-powered tools that help students succeed academically.
               Starting with intelligent chat assistance and syllabus analysis, we're creating the foundation for collaborative learning.
             </p>

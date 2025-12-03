@@ -5,6 +5,7 @@ import { useScroll, useTransform, motion } from 'framer-motion';
 import { Calendar, CheckCircle, Clock, FileText, Sparkles, Zap, AlertCircle, TrendingUp, ShieldCheck, Check, Upload, BookOpen, ArrowRight } from 'lucide-react';
 
 import { RippleText } from '@/components/ripple-text';
+import { ThinkingProcess } from '@/components/ui/thinking-process';
 
 export function ScrollFeatureSection() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,21 +55,21 @@ export function ScrollFeatureSection() {
                 </div>
                 
                 <h3 className="text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 dark:text-white tracking-tight leading-[1.1]">
-                  Upload once.<br />
+                  Stop drowning<br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400">
-                    Never miss a deadline again.
+                    in PDFs.
                   </span>
                 </h3>
                 
                 <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 leading-relaxed max-w-lg">
-                  Drop your PDF, DOCX, or TXT syllabus. We instantly extract every deadline, exam date, and assignment—then organize it all in one dashboard. No manual entry. No surprises. Just peace of mind.
+                  Upload your syllabus and let the AI hunt for deadlines, exams, and readings so you don’t have to. It finds the dates you missed and puts them on your calendar.
                 </p>
 
                 <ul className="space-y-3">
                   {[
-                    'PDF Parsing',
-                    'Instant Sync',
-                    'Smart Extraction'
+                    'No manual data entry',
+                    'Deadlines extracted instantly',
+                    'Supports PDF & DOCX',
                   ].map((item) => (
                     <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
                       <div className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
@@ -155,21 +156,21 @@ export function ScrollFeatureSection() {
                 </div>
                 
                 <h3 className="text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 dark:text-white tracking-tight leading-[1.1]">
-                  Every deadline,<br />
+                  Your entire semester,<br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                    in one place.
+                    actually organized.
                   </span>
                 </h3>
                 
                 <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 leading-relaxed max-w-lg">
-                  Your entire semester organized automatically. See what's due this week, what's coming up, and what you've already completed—all in one dashboard.
+                  See exactly what's due this week without checking 5 different Canvas pages. One dashboard, zero chaos. You'll finally know if you have a free weekend or not.
                 </p>
 
                 <ul className="space-y-3">
                   {[
-                    'Automatic deadline extraction',
-                    'Color-coded by course',
-                    'Calendar sync (coming soon)'
+                    'Auto-sorted by urgency',
+                    'Color-coded by class',
+                    'Visual timeline',
                   ].map((item) => (
                     <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
                       <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -204,20 +205,20 @@ export function ScrollFeatureSection() {
                     <div className="p-5 space-y-4">
                       <div className="flex justify-between items-center pb-3 border-b border-gray-50 dark:border-gray-800">
                         <span className="text-xs text-gray-500 font-medium">Course Name</span>
-                        <span className="text-sm font-bold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">Intro to Neuroscience</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">Biology 101</span>
                       </div>
                       <div className="flex justify-between items-center pb-3 border-b border-gray-50 dark:border-gray-800">
                         <span className="text-xs text-gray-500 font-medium">Professor</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-[10px] font-bold text-indigo-600 dark:text-indigo-400">SM</div>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">Dr. Sarah Miller</span>
+                          <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-[10px] font-bold text-indigo-600 dark:text-indigo-400">JP</div>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">Dr. James Park</span>
                         </div>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-gray-500 font-medium">Schedule</span>
                         <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-gray-400" />
-                          Mon/Wed 2:00 PM
+                          Tue/Thu 10:00 AM
                         </span>
                       </div>
                     </div>
@@ -238,34 +239,50 @@ export function ScrollFeatureSection() {
                     </div>
                     <div className="p-4 space-y-3">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-500">Upcoming Assessments</span>
-                        <span className="text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">2 Found</span>
+                        <span className="text-xs font-medium text-gray-500">Upcoming This Week</span>
+                        <span className="text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">3 Found</span>
                       </div>
                       <div className="space-y-2">
+                        {/* Lab Report #4 */}
                         <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 hover:border-purple-200 dark:hover:border-purple-800 transition-colors group/item">
                           <div className="flex items-center gap-3">
                             <div className="w-1 h-8 bg-purple-500 rounded-full"></div>
                             <div>
-                              <div className="text-xs font-semibold text-gray-900 dark:text-white">Midterm Exam</div>
-                              <div className="text-[10px] text-gray-500">Weight: 25%</div>
+                              <div className="text-xs font-semibold text-gray-900 dark:text-white">Lab Report #4</div>
+                              <div className="text-[10px] text-gray-500">Weight: 8% • Mon</div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-xs font-bold text-gray-900 dark:text-white">Oct 24</div>
-                            <div className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">In 5 days</div>
+                            <div className="text-xs font-bold text-gray-900 dark:text-white">Oct 28</div>
+                            <div className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">Priority 1</div>
                           </div>
                         </div>
+                        {/* Problem Set 3 */}
                         <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 hover:border-purple-200 dark:hover:border-purple-800 transition-colors group/item">
                           <div className="flex items-center gap-3">
                             <div className="w-1 h-8 bg-purple-500/50 rounded-full"></div>
                             <div>
-                              <div className="text-xs font-semibold text-gray-900 dark:text-white">Final Exam</div>
-                              <div className="text-[10px] text-gray-500">Weight: 40%</div>
+                              <div className="text-xs font-semibold text-gray-900 dark:text-white">Problem Set 3</div>
+                              <div className="text-[10px] text-gray-500">Weight: 5% • Wed</div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-xs font-bold text-gray-900 dark:text-white">Dec 12</div>
-                            <div className="text-[10px] text-gray-400">2 months</div>
+                            <div className="text-xs font-bold text-gray-900 dark:text-white">Oct 30</div>
+                            <div className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">Priority 2</div>
+                          </div>
+                        </div>
+                        {/* Reading Response */}
+                        <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 hover:border-purple-200 dark:hover:border-purple-800 transition-colors group/item">
+                          <div className="flex items-center gap-3">
+                            <div className="w-1 h-8 bg-purple-500/30 rounded-full"></div>
+                            <div>
+                              <div className="text-xs font-semibold text-gray-900 dark:text-white">Reading Response</div>
+                              <div className="text-[10px] text-gray-500">Weight: 2% • Fri</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-bold text-gray-900 dark:text-white">Nov 1</div>
+                            <div className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">Priority 3</div>
                           </div>
                         </div>
                       </div>
@@ -299,17 +316,17 @@ export function ScrollFeatureSection() {
                 </div>
                 <h3 className="text-5xl md:text-6xl font-black text-gray-900 dark:text-white tracking-tight">
                   <span className="text-sm uppercase tracking-[0.4em] text-gray-400 dark:text-gray-600 block mb-2">Coming Soon: Lecture Notes and Handwritten Texts</span>
-                  AI that actually<br />
-                  <span className="text-indigo-600 dark:text-indigo-400">knows your course.</span>
+                  An AI that reads<br />
+                  <span className="text-indigo-600 dark:text-indigo-400">your homework.</span>
                 </h3>
                 <p className="text-xl text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Ask about anything from your syllabus or past conversations. The AI remembers it all and gives you answers grounded in your actual course materials.
+                  Don't just ChatGPT it. CourseConnect knows what your professor actually assigned, so you get answers that make sense for your class, not generic internet advice.
                 </p>
 
                 <ul className="space-y-3">
                   {[
-                    'Context Retention',
-                    'Smart Citations'
+                    'Knows your specific class',
+                    'Cites the syllabus',
                   ].map((item) => (
                     <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
                       <div className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
@@ -326,86 +343,90 @@ export function ScrollFeatureSection() {
                 <div className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden flex flex-col">
 
                   {/* Chat Body */}
-                  <div className="flex-1 p-5 space-y-5 bg-white dark:bg-gray-900">
+                    <div className="flex-1 p-5 space-y-5 bg-white dark:bg-gray-900">
 
-                    {/* User Message */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: false }}
-                      onViewportEnter={() => {
-                        // Reset state when entering view to restart animation
-                        setShowThinking(false);
-                        setShowResponse(false);
-
-                        // Start sequence
-                        setTimeout(() => setShowThinking(true), 1000);
-                        setTimeout(() => {
+                      {/* User Message */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: false }}
+                        onViewportEnter={() => {
+                          // Reset state when entering view to restart animation
                           setShowThinking(false);
-                          setShowResponse(true);
-                        }, 3500);
-                      }}
-                      className="flex justify-end"
-                    >
-                      <div className="bg-[#60A5FA] text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-[14px] font-medium shadow-sm max-w-[90%]">
-                        Remind me what Prof. Patel said about neural plasticity back in Week 2?
+                          setShowResponse(false);
+
+                          // Start sequence
+                          setTimeout(() => setShowThinking(true), 1000);
+                          setTimeout(() => {
+                            setShowThinking(false);
+                            setShowResponse(true);
+                          }, 3500);
+                        }}
+                        className="flex justify-end"
+                      >
+                        <div className="bg-[#60A5FA] text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-[14px] font-medium shadow-sm max-w-[90%]">
+                          I have 3 assignments due next week. How should I prioritize them?
+                        </div>
+                      </motion.div>
+
+                      {/* AI Response Container */}
+                      <div className="min-h-[180px]">
+                        {/* Thinking State */}
+                        {showThinking && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="flex gap-3"
+                          >
+                            <div className="flex-shrink-0 mt-0.5">
+                              <img src="/pageicon.png" alt="CourseConnect AI" className="w-8 h-8 object-contain" />
+                            </div>
+                            <ThinkingProcess customText="checking your syllabus..." />
+                          </motion.div>
+                        )}
+
+                        {/* AI Response */}
+                        {showResponse && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex gap-3"
+                          >
+                            {/* Avatar */}
+                            <div className="flex-shrink-0 mt-0.5">
+                              <img src="/pageicon.png" alt="CourseConnect AI" className="w-8 h-8 object-contain" />
+                            </div>
+
+                            <div className="flex-1 space-y-1.5">
+                              {/* Header */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">CourseConnect AI</span>
+                                <span className="text-[10px] font-mono text-gray-400">{currentTime || '--:-- --'}</span>
+                              </div>
+
+                              {/* Content */}
+                              <div className="text-[14px] text-gray-700 dark:text-gray-300 leading-relaxed space-y-3">
+                                <p>
+                                  <span className="font-semibold text-indigo-600 dark:text-indigo-400">Based on your syllabus, here's your strategic priority:</span>
+                                </p>
+                                <p>
+                                  <strong>Lab Report #4 (due Mon)</strong> – Start here. Worth 8% of your grade and typically takes 4–5 hours.
+                                </p>
+                                <p>
+                                  <strong>Problem Set 3 (due Wed)</strong> – Worth 5% but builds on concepts for the midterm. Do after the lab report.
+                                </p>
+                                <p>
+                                  <strong>Reading Response (due Fri)</strong> – Only 2% of your grade. Quick 30‑min write‑up you can do last.
+                                </p>
+                                <p className="text-gray-500 dark:text-gray-400 italic text-xs mt-2">
+                                  Analyzed weights, deadlines & complexity from your syllabus.
+                                </p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
-                    </motion.div>
-
-                    {/* AI Response Container */}
-                    <div className="min-h-[180px]">
-                      {/* Thinking State */}
-                      {showThinking && (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="flex gap-3"
-                        >
-                          <div className="flex-shrink-0 mt-0.5">
-                            <img src="/pageicon.png" alt="CourseConnect AI" className="w-8 h-8 object-contain" />
-                          </div>
-                          <div className="flex items-center">
-                            <RippleText text="thinking..." className="text-sm italic" />
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* AI Response */}
-                      {showResponse && (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="flex gap-3"
-                        >
-                          {/* Avatar */}
-                          <div className="flex-shrink-0 mt-0.5">
-                            <img src="/pageicon.png" alt="CourseConnect AI" className="w-8 h-8 object-contain" />
-                          </div>
-
-                          <div className="flex-1 space-y-1.5">
-                            {/* Header */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-gray-700 dark:text-gray-200">CourseConnect AI</span>
-                              <span className="text-[10px] font-mono text-gray-400">{currentTime || '--:-- --'}</span>
-                            </div>
-
-                            {/* Content */}
-                            <div className="text-[14px] text-gray-700 dark:text-gray-300 leading-relaxed space-y-3">
-                              <p>
-                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">Week 2 Lecture:</span> She defined neural plasticity as your brain's "remix button."
-                              </p>
-                              <p>
-                                When neurons fire together repeatedly, the activation threshold drops. That's the <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-1 rounded">LTP concept</span> you highlighted in your notes.
-                              </p>
-                              <p className="text-gray-500 dark:text-gray-400 italic text-xs mt-2">
-                                <span className="font-semibold">Coming soon:</span> Support for lecture notes and handwritten text is on the way.
-                              </p>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
 
                   </div>
                   {/* Input field removed as requested */}

@@ -4,40 +4,73 @@ import { getStorage } from "firebase/storage";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 
-// Firebase configuration
-const firebaseConfig = {
-  "projectId": "courseconnect-61eme",
-  "appId": "1:150901346125:web:116c79e5f3521488e97104",
-  "storageBucket": "courseconnect-61eme.firebasestorage.app",
-  "apiKey": process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_FIREBASE_API_KEY",
-  "authDomain": "courseconnect-61eme.firebaseapp.com",
-  "messagingSenderId": "150901346125",
+// Get authDomain - always use the Firebase auth domain (no localhost override)
+// This must be a domain that Firebase Auth hosts handlers for (e.g. auth.courseconnectai.com)
+// For production, use auth.courseconnectai.com which points to Firebase Hosting
+// For localhost, Firebase will handle it automatically
+const getAuthDomain = () => {
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    // Local development - Firebase will handle localhost automatically
+    return process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "courseconnect-61eme.firebaseapp.com";
+  }
+  // Production - use the auth subdomain that points to Firebase Hosting
+  return process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "auth.courseconnectai.com";
 };
 
-// Initialize Firebase
+// Get Firebase config - dynamically set authDomain
+const getFirebaseConfig = () => {
+  return {
+    "projectId": "courseconnect-61eme",
+    "appId": "1:150901346125:web:116c79e5f3521488e97104",
+    "storageBucket": "courseconnect-61eme.firebasestorage.app",
+    "apiKey": process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_FIREBASE_API_KEY",
+    "authDomain": getAuthDomain(),
+    "messagingSenderId": "150901346125",
+  };
+};
+
+// Initialize Firebase lazily (only on client side)
 let app: any;
-if (!getApps().length) {
-  try {
-    app = initializeApp(firebaseConfig);
-    console.log("✅ Firebase initialized successfully");
-  } catch (error) {
-    console.error("❌ Firebase initialization failed:", error);
+let storage: any, db: any, auth: any;
+let initializedAuthDomain: string | null = null;
+
+const initializeFirebase = () => {
+  const firebaseConfig = getFirebaseConfig();
+  const currentAuthDomain = firebaseConfig.authDomain;
+  
+  // If Firebase is already initialized but with a different authDomain, we need to reinitialize
+  // This can happen when switching between localhost and production
+  if (app && initializedAuthDomain && initializedAuthDomain !== currentAuthDomain) {
+    console.log(`🔄 Auth domain changed from ${initializedAuthDomain} to ${currentAuthDomain}, reinitializing...`);
+    // Note: Firebase doesn't allow reinitialization easily, but we can check if the domain matches
   }
-} else {
-  app = getApps()[0];
-}
+  
+  if (app && initializedAuthDomain === currentAuthDomain) {
+    return { app, storage, db, auth };
+  }
+  
+  try {
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+      initializedAuthDomain = currentAuthDomain;
+      console.log("✅ Firebase initialized successfully");
+      console.log("🔐 Auth Domain:", firebaseConfig.authDomain);
+    } else {
+      app = getApps()[0];
+      // Check if we need to update the auth domain
+      // Since we can't change it after init, we'll log a warning if it's different
+      if (!initializedAuthDomain) {
+        initializedAuthDomain = currentAuthDomain;
+        console.log("✅ Using existing Firebase app");
+        console.log("🔐 Expected Auth Domain:", firebaseConfig.authDomain);
+      }
+    }
 
-// Initialize services with simple error handling
-let storage, db, auth;
-
-try {
-  if (app) {
     storage = getStorage(app);
     db = getFirestore(app);
     auth = getAuth(app);
     
-    // Ensure auth persistence is set to local storage (default, but explicit is better)
-    // This keeps users logged in across page reloads
+    // Ensure auth persistence is set to local storage
     if (auth && typeof setPersistence === 'function') {
       setPersistence(auth, browserLocalPersistence).catch((error: any) => {
         console.warn("Auth persistence setting failed (non-critical):", error);
@@ -45,15 +78,30 @@ try {
     }
     
     console.log("✅ Firebase services initialized");
-  } else {
-    throw new Error('Firebase app not initialized');
+  } catch (error) {
+    console.error("❌ Firebase initialization failed:", error);
+    // Create minimal mock objects
+    storage = null;
+    db = null;
+    auth = null;
   }
-} catch (error) {
-  console.error("❌ Firebase services failed:", error);
-  // Create minimal mock objects
+  
+  return { app, storage, db, auth };
+};
+
+// Initialize immediately if in browser, otherwise lazy init
+if (typeof window !== 'undefined') {
+  const initialized = initializeFirebase();
+  app = initialized.app;
+  storage = initialized.storage;
+  db = initialized.db;
+  auth = initialized.auth;
+} else {
+  // Server-side: export getters that initialize on first use
+  app = null;
   storage = null;
   db = null;
   auth = null;
 }
 
-export { app, storage, db, auth };
+export { app, storage, db, auth, initializeFirebase };

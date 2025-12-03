@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { X, MessageSquare, Users, Brain, BookOpen, Sparkles, Zap, Calendar, Target, GraduationCap, Award, BookText } from "lucide-react";
+import { X, MessageSquare, Users, Brain, BookOpen, Sparkles, Zap, Calendar, Target, GraduationCap, Award, BookText, BarChart3, TrendingUp } from "lucide-react";
 
 interface WelcomeCardProps {
   chatType: 'general' | 'community' | 'class';
@@ -125,6 +125,87 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
         });
       }
       
+      // Add chart action only for courses that actually need it
+      const courseCodeLower = (courseData.courseCode || '').toLowerCase();
+      const courseNameLower = courseName.toLowerCase();
+      const departmentLower = (courseData.department || '').toLowerCase();
+      
+      // Check if course is math/statistics/economics/data science related
+      const isMathRelated = courseCodeLower.startsWith('math') || 
+                           courseCodeLower.startsWith('stat') ||
+                           courseCodeLower.startsWith('econ') ||
+                           courseNameLower.includes('calculus') ||
+                           courseNameLower.includes('algebra') ||
+                           courseNameLower.includes('statistics') ||
+                           courseNameLower.includes('econometrics') ||
+                           departmentLower.includes('mathematics') ||
+                           departmentLower.includes('statistics') ||
+                           departmentLower.includes('economics');
+      
+      // Check if topics suggest graphing/charting is needed
+      const hasGraphRelatedTopics = topics.some(t => {
+        const topicLower = t.toLowerCase();
+        return topicLower.includes('function') || 
+               topicLower.includes('graph') || 
+               topicLower.includes('derivative') ||
+               topicLower.includes('integral') ||
+               topicLower.includes('plot') ||
+               topicLower.includes('chart') ||
+               topicLower.includes('data visualization') ||
+               topicLower.includes('regression') ||
+               topicLower.includes('correlation');
+      });
+      
+      // Only show chart button if it's actually relevant
+      if (isMathRelated || hasGraphRelatedTopics) {
+        // Determine specific label and action based on course type
+        let chartLabel = "Create Chart";
+        let chartAction = "help me create a graph";
+        
+        // Try to use actual course topics for more relevant examples
+        const derivativeTopic = topics.find(t => t.toLowerCase().includes('derivative'));
+        const functionTopic = topics.find(t => t.toLowerCase().includes('function'));
+        const dataTopic = topics.find(t => t.toLowerCase().includes('data') || t.toLowerCase().includes('statistic'));
+        
+        if (courseNameLower.includes('calculus') || derivativeTopic) {
+          chartLabel = "Graph Functions";
+          if (functionTopic) {
+            chartAction = `graph a function related to ${functionTopic}`;
+          } else if (derivativeTopic) {
+            chartAction = `help me visualize ${derivativeTopic}`;
+          } else {
+            chartAction = "help me graph a function";
+          }
+        } else if (courseNameLower.includes('statistics') || courseCodeLower.startsWith('stat') || dataTopic) {
+          chartLabel = "Visualize Data";
+          if (dataTopic) {
+            chartAction = `create a chart for ${dataTopic}`;
+          } else {
+            chartAction = "help me visualize data";
+          }
+        } else if (courseNameLower.includes('economics') || courseCodeLower.startsWith('econ')) {
+          chartLabel = "Plot Data";
+          chartAction = "help me create a chart for economic analysis";
+        } else if (hasGraphRelatedTopics) {
+          chartLabel = "Create Graph";
+          const graphTopic = topics.find(t => {
+            const tLower = t.toLowerCase();
+            return tLower.includes('function') || tLower.includes('graph') || tLower.includes('plot');
+          });
+          if (graphTopic) {
+            chartAction = `help me graph ${graphTopic}`;
+          } else {
+            chartAction = "help me create a graph";
+          }
+        }
+        
+        actions.push({
+          icon: BarChart3,
+          label: chartLabel,
+          action: chartAction
+        });
+      }
+      
       return actions;
     } else if (isCommunity) {
       return [
@@ -136,7 +217,8 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
       return [
         { icon: Sparkles, label: "Ask AI", action: "help me understand calculus" },
         { icon: GraduationCap, label: "Study Help", action: "explain photosynthesis" },
-        { icon: Award, label: "Exam Prep", action: "best way to study for exams" }
+        { icon: BarChart3, label: "Create Chart", action: "graph y = x²" },
+        { icon: TrendingUp, label: "Visualize Data", action: "create a bar chart showing: Math 85, Science 90, English 78" }
       ];
     }
   };
@@ -178,6 +260,11 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
             {/* Description */}
             <p className="text-xs text-muted-foreground mb-3">
               {welcomeContent.description}
+              {!isCommunity && (
+                <span className="block mt-1 text-muted-foreground/80">
+                  💡 I can also create interactive charts and graphs!
+                </span>
+              )}
             </p>
 
             {/* Quick Actions */}

@@ -2,37 +2,28 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { 
-  ArrowRight, 
-  BookOpen, 
   Users, 
-  MessageSquare, 
   Upload, 
   GraduationCap,
   Mail,
-  ExternalLink,
-  Calendar,
-  Clock,
-  CheckCircle,
   Sparkles,
-  Heart,
+  BookOpen,
   Github,
   Twitter,
   Linkedin,
   Instagram,
   History,
-  X
+  Sun,
+  Moon
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CourseConnectLogo } from "@/components/icons/courseconnect-logo";
-import { SafeCompactThemeToggle } from "@/components/theme-toggle";
+import { useTheme } from "@/contexts/theme-context";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import confetti from 'canvas-confetti';
-
 
 const quickLinks = [
   { name: "Dashboard", href: "/dashboard", icon: <GraduationCap className="h-4 w-4" /> },
@@ -45,24 +36,32 @@ const quickLinks = [
 const companyLinks = [
   { name: "About Us", href: "/about" },
   { name: "Features", href: "/features" },
-  // { name: "Contact", href: "/contact" },
-  { name: "Status", href: "/status" },
-  { name: "Privacy Policy", href: "/privacy" },
-  { name: "Terms of Service", href: "/terms" },
+  { name: "Contact", href: "/contact" },
   { name: "Site Updates & Changelog", href: "/changelog", icon: <History className="h-4 w-4" /> }
 ];
 
+// Simple X (Twitter) logo
+const XIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+    <path
+      d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 const socialLinks = [
-  { name: "GitHub", href: "https://github.com/courseconnect", icon: <Github className="h-4 w-4" /> },
-  { name: "Twitter", href: "https://twitter.com/courseconnect", icon: <Twitter className="h-4 w-4" /> },
-  { name: "LinkedIn", href: "https://linkedin.com/company/courseconnect", icon: <Linkedin className="h-4 w-4" /> },
-  { name: "Instagram", href: "https://instagram.com/courseconnect", icon: <Instagram className="h-4 w-4" /> }
+  { name: "GitHub", href: "https://github.com/courseconnect", icon: Github },
+  { name: "X", href: "https://twitter.com/courseconnect", icon: XIcon },
+  { name: "LinkedIn", href: "https://linkedin.com/company/courseconnect", icon: Linkedin },
+  { name: "Instagram", href: "https://instagram.com/courseconnect", icon: Instagram }
 ];
 
 export function SiteFooter() {
   const [email, setEmail] = useState("");
   const [isSubmittingEmail, setIsSubmittingEmail] = useState(false);
   const { toast } = useToast();
+  const { theme, toggleTheme } = useTheme();
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +80,6 @@ export function SiteFooter() {
       const data = await response.json();
 
       if (response.ok) {
-        console.log('Subscription successful, triggering confetti!');
         toast({
           title: "Successfully Subscribed!",
           description: data.emailSent 
@@ -89,55 +87,11 @@ export function SiteFooter() {
             : "You're now subscribed! Welcome email sent.",
         });
         setEmail('');
-        
-        // Enhanced confetti animation
-        const duration = 4500; // Longer duration
-        const animationEnd = Date.now() + duration;
-        const defaults = { 
-          startVelocity: 35, // Slightly higher velocity
-          spread: 360, 
-          ticks: 90, // Longer particle life
-          zIndex: 0,
-          gravity: 0.75, // More noticeable gravity
-          drift: 0.05, // Slight horizontal drift
-          scalar: 1.2, // Slightly larger particles
-          shapes: ['circle', 'square', 'star'], // Add different shapes
-          colors: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#8B5A2B', '#FFD700', '#C0C0C0'] // More colors
-        };
-
-        function randomInRange(min: number, max: number) {
-          return Math.random() * (max - min) + min;
-        }
-
-        const interval: NodeJS.Timeout = setInterval(function() {
-          const timeLeft = animationEnd - Date.now();
-
-          if (timeLeft <= 0) {
-            return clearInterval(interval);
-          }
-
-          const particleCount = 75 * (timeLeft / duration); // Start with more particles
-
-          // Launch from left
-          confetti(Object.assign({}, defaults, {
-            particleCount: particleCount,
-            origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
-          }));
-          // Launch from right
-          confetti(Object.assign({}, defaults, {
-            particleCount: particleCount,
-            origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
-          }));
-          // Optional: Add a central burst occasionally
-          if (Math.random() > 0.7) {
-            confetti(Object.assign({}, defaults, {
-              particleCount: particleCount / 2,
-              angle: randomInRange(60, 120),
-              spread: randomInRange(40, 70),
-              origin: { x: 0.5, y: 0.5 }
-            }));
-          }
-        }, 200); // Slightly faster interval for more continuous flow
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
       } else {
         toast({
           variant: "destructive",
@@ -157,50 +111,52 @@ export function SiteFooter() {
   };
 
   return (
-    <footer className="bg-transparent border-t border-border/40">
-      <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Main Footer Content */}
-        <div className="py-8 sm:py-12 lg:py-16">
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8 lg:gap-12">
-            
-            {/* Brand Section */}
-            <div className="lg:col-span-1">
-              <div className="flex items-center gap-3 mb-4">
-                <CourseConnectLogo className="h-8 w-8 text-primary" />
-                <h3 className="text-xl font-bold text-primary">CourseConnect</h3>
+    <footer className="bg-white text-slate-900 dark:bg-gray-950 dark:text-slate-200 border-t border-slate-200 dark:border-slate-800 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8">
+          
+          {/* Brand Section */}
+          <div className="lg:col-span-4 space-y-6">
+            <Link href="/" className="flex items-center gap-2 group w-fit">
+              <div className="w-10 h-10 relative transition-transform group-hover:scale-110 duration-300">
+                <CourseConnectLogo className="w-full h-full object-contain" />
               </div>
-              <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                The ultimate platform for college students to connect, collaborate, and succeed academically with AI-powered tools.
-              </p>
-              <div className="flex gap-2 sm:gap-3">
-                {socialLinks.map((social) => (
-                  <Button
-                    key={social.name}
-                    variant="outline"
-                    size="sm"
-                    className="h-10 w-10 sm:h-9 sm:w-9 p-0 min-h-[44px] min-w-[44px]"
-                    asChild
-                  >
-                    <Link href={social.href} target="_blank" rel="noopener noreferrer">
-                      {social.icon}
-                      <span className="sr-only">{social.name}</span>
-                    </Link>
-                  </Button>
-                ))}
-              </div>
+              <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                CourseConnect <span className="text-blue-600 dark:text-blue-500">AI</span>
+              </span>
+            </Link>
+            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed max-w-sm">
+              The ultimate platform for college students to connect, collaborate, and succeed academically with AI-powered tools.
+            </p>
+            <div className="flex items-center gap-4 pt-2">
+              {socialLinks.map((social) => (
+                <a
+                  key={social.name}
+                  href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200"
+                  aria-label={`Follow us on ${social.name}`}
+                >
+                  <social.icon className="h-5 w-5" />
+                </a>
+              ))}
             </div>
+          </div>
 
-            {/* Quick Links */}
+          {/* Links Grid */}
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+            {/* Quick Access */}
             <div>
-              <h4 className="font-semibold text-foreground mb-4">Quick Access</h4>
-              <ul className="space-y-2 sm:space-y-3">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 text-sm uppercase tracking-wider">Quick Access</h3>
+              <ul className="space-y-3">
                 {quickLinks.map((link) => (
                   <li key={link.name}>
                     <Link 
                       href={link.href}
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors py-1 min-h-[44px]"
+                      className="flex items-center gap-2 text-sm text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors"
                     >
-                      {link.icon}
+                      {link.icon && <span className="opacity-70">{link.icon}</span>}
                       {link.name}
                     </Link>
                   </li>
@@ -210,15 +166,15 @@ export function SiteFooter() {
 
             {/* Company Links */}
             <div>
-              <h4 className="font-semibold text-foreground mb-4">Company</h4>
-              <ul className="space-y-2 sm:space-y-3">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 text-sm uppercase tracking-wider">Company</h3>
+              <ul className="space-y-3">
                 {companyLinks.map((link) => (
                   <li key={link.name}>
                     <Link 
                       href={link.href}
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors py-1 min-h-[44px]"
+                      className="flex items-center gap-2 text-sm text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors"
                     >
-                      {link.icon}
+                      {link.icon && <span className="opacity-70">{link.icon}</span>}
                       {link.name}
                     </Link>
                   </li>
@@ -227,30 +183,31 @@ export function SiteFooter() {
             </div>
 
             {/* Newsletter Signup */}
-            <div>
-              <h4 className="font-semibold text-foreground mb-4">Stay Updated</h4>
-              <p className="text-sm text-muted-foreground mb-4">
-                Get the latest updates on new features and improvements. You can also use this email to create your CourseConnect account.
+            <div className="sm:col-span-2 md:col-span-1">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 text-sm uppercase tracking-wider">Stay Updated</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                Get the latest updates on new features and improvements.
               </p>
-              <form onSubmit={handleEmailSubmit} className="flex flex-col sm:flex-row gap-2">
+              <form onSubmit={handleEmailSubmit} className="flex flex-col gap-2">
                 <Input 
                   type="email" 
                   placeholder="Enter your email" 
-                  className="flex-1 min-h-[44px]" 
+                  className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus:ring-blue-500"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
                 <Button 
                   type="submit" 
-                  size="sm" 
-                  className="px-4 min-h-[44px] min-w-[44px] sm:w-auto"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
                   disabled={isSubmittingEmail}
                 >
                   {isSubmittingEmail ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-background border-t-transparent" />
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                   ) : (
-                    <Mail className="h-4 w-4" />
+                    <div className="flex items-center gap-2 justify-center">
+                      Subscribe <Mail className="h-4 w-4" />
+                    </div>
                   )}
                 </Button>
               </form>
@@ -258,30 +215,34 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <Separator className="my-8" />
-
-        {/* Bottom Footer */}
-        <div className="py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex flex-col sm:flex-row items-center gap-2 text-sm text-muted-foreground">
-              <span>© {new Date().getFullYear()} CourseConnect.</span>
-              <span className="hidden sm:inline">•</span>
-              <span>All rights reserved.</span>
-            </div>
-            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
+        {/* Bottom Section */}
+        <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <p className="text-sm text-slate-500 dark:text-slate-500">
+              © {new Date().getFullYear()} CourseConnect <span className="text-blue-600 dark:text-blue-500">AI</span>. All rights reserved.
+            </p>
+            
+            <div className="flex items-center gap-6">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 px-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={toggleTheme}
+                aria-label="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
+              <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-500">
                 <span>Made with</span>
-                <Heart className="h-4 w-4 text-red-500" />
-                <span>for students worldwide</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <SafeCompactThemeToggle />
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-red-500 animate-pulse">
+                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                </svg>
+                <span>for students</span>
               </div>
             </div>
           </div>
         </div>
       </div>
-
     </footer>
   );
 }

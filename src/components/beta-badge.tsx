@@ -67,7 +67,7 @@ export default function BetaBadge() {
           whileTap={{ scale: 0.98 }}
         >
           {/* Glow effect behind */}
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full opacity-20 group-hover:opacity-40 blur-md transition-opacity duration-500" />
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full opacity-20 group-hover:opacity-40 blur-md transition-opacity duration-500" />
           
           {/* Badge Container */}
           <div className="relative flex items-center gap-3 px-4 py-2 rounded-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-blue-100 dark:border-blue-900/30 shadow-sm hover:shadow-md transition-all duration-300">
@@ -78,7 +78,7 @@ export default function BetaBadge() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
               </span>
-              <span className="text-xs font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent uppercase tracking-wider">
+              <span className="text-xs font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent uppercase tracking-wider">
                 Public Beta
               </span>
             </div>
@@ -172,8 +172,8 @@ export default function BetaBadge() {
                       <div className="flex gap-3 pt-2">
                         <Button
                           onClick={() => setShowReportForm(false)}
-                          variant="ghost"
-                          className="flex-1 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
+                          variant="outline"
+                          className="flex-1 rounded-xl border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 font-medium"
                           disabled={isSubmitting}
                         >
                           Cancel
@@ -181,7 +181,7 @@ export default function BetaBadge() {
                         <Button
                           onClick={handleSubmitBug}
                           disabled={!bugTitle.trim() || isSubmitting}
-                          className="flex-1 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/20"
+                          className="flex-1 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/20 font-bold tracking-wide"
                         >
                           {isSubmitting ? (
                             <span className="flex items-center gap-2">

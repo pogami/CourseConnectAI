@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from '@/components/ui/skeleton';
-import { GraduationCap } from 'lucide-react';
+import { GraduationScrollIcon } from 'hugeicons-react';
 import { useChatStore } from '@/hooks/use-chat-store';
 
 export function StatCards() {
@@ -45,7 +45,7 @@ export function StatCards() {
     const yourClassesCount = Object.keys(chats).filter(c => c !== 'general-chat').length;
     
     const statCards = [
-        { title: "Your Classes", value: yourClassesCount, icon: <GraduationCap className="text-primary" />, loading: !user },
+        { title: "Your Classes", value: yourClassesCount, icon: <GraduationScrollIcon className="text-primary" />, loading: !user },
     ];
 
     if (!user) {

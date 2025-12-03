@@ -48,32 +48,16 @@ export function HeroSection() {
         </h1>
       </motion.div>
       
-      {/* Background Layers with Parallax */}
+      {/* Background Layers with Parallax - subtle, non-flashy */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Base dotted grid - moves slower */}
-        <motion.div
-          style={{ 
-            y: backgroundY,
-            backgroundImage: `
-              radial-gradient(circle, rgba(148,163,184,0.1) 1px, transparent 1px)
-            `,
-            backgroundSize: '32px 32px',
-            opacity: 0.3
-          }}
-          className="absolute inset-0"
-        />
-        
-        {/* Gradient overlays */}
         <motion.div 
-          style={{ y: useTransform(scrollY, [0, 1000], [0, 150]) }}
-          className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[120px]"
+          style={{ y: useTransform(scrollY, [0, 1000], [0, 120]) }}
+          className="absolute top-[-20%] left-[10%] w-[480px] h-[480px] bg-sky-500/6 rounded-full blur-[120px]"
         />
         <motion.div 
-          style={{ y: useTransform(scrollY, [0, 1000], [0, 200]) }}
-          className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[100px]"
+          style={{ y: useTransform(scrollY, [0, 1000], [0, 160]) }}
+          className="absolute bottom-[-20%] right-[5%] w-[420px] h-[420px] bg-indigo-500/6 rounded-full blur-[120px]"
         />
-        
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white/50 dark:to-gray-950/50" />
       </div>
 
       <motion.div 
@@ -98,8 +82,8 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-6xl md:text-7xl lg:text-8xl font-black text-gray-900 dark:text-white mb-6 tracking-tight leading-[1.05]"
           >
-            School is Hard.{' '}
-            <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
+            School is hard.{' '}
+            <span className="bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">
               We make it easy.
             </span>
           </motion.h1>

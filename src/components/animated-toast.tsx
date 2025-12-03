@@ -22,9 +22,9 @@ const variants = {
   },
   success: {
     icon: CheckCircle,
-    bgColor: 'bg-green-50 dark:bg-green-900/20',
-    borderColor: 'border-green-200 dark:border-green-800',
-    iconColor: 'text-green-600 dark:text-green-400',
+    bgColor: 'bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/30 dark:to-cyan-950/30',
+    borderColor: 'border-emerald-200/50 dark:border-emerald-700/50',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
   },
   error: {
     icon: XCircle,
@@ -76,25 +76,26 @@ export function AnimatedToast({
         duration: 0.3 
       }}
       className={`
-        relative w-80 p-4 rounded-lg border shadow-lg backdrop-blur-sm
+        relative w-80 p-5 rounded-2xl border-2 shadow-2xl backdrop-blur-xl
         ${bgColor} ${borderColor}
-        cursor-pointer hover:shadow-xl transition-shadow duration-200
+        cursor-pointer hover:shadow-2xl hover:scale-[1.02] transition-all duration-300
+        ${variant === 'success' ? 'ring-2 ring-emerald-500/20 dark:ring-emerald-400/20' : ''}
       `}
       onClick={() => onClose(id)}
     >
       <div className="flex items-start gap-3">
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
           transition={{ 
             type: "spring", 
             stiffness: 500, 
             damping: 15,
             delay: 0.1 
           }}
-          className={`flex-shrink-0 ${iconColor}`}
+          className={`flex-shrink-0 ${variant === 'success' ? 'w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/30' : iconColor}`}
         >
-          <Icon className="w-5 h-5" />
+          <Icon className={variant === 'success' ? 'w-5 h-5 text-white' : `w-5 h-5 ${iconColor}`} />
         </motion.div>
         
         <div className="flex-1 min-w-0">
@@ -102,7 +103,11 @@ export function AnimatedToast({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-sm font-semibold text-foreground"
+            className={`text-base font-bold ${
+              variant === 'success' 
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent' 
+                : 'text-foreground'
+            }`}
           >
             {title}
           </motion.h4>
@@ -112,7 +117,11 @@ export function AnimatedToast({
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-xs text-muted-foreground mt-1"
+              className={`text-sm mt-2 leading-relaxed ${
+                variant === 'success' 
+                  ? 'text-emerald-700 dark:text-emerald-300' 
+                  : 'text-muted-foreground'
+              }`}
             >
               {description}
             </motion.p>
@@ -120,14 +129,18 @@ export function AnimatedToast({
         </div>
 
         <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4, type: "spring", stiffness: 300 }}
           onClick={(e) => {
             e.stopPropagation();
             onClose(id);
           }}
-          className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+          className={`flex-shrink-0 p-1.5 rounded-lg transition-all ${
+            variant === 'success' 
+              ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30' 
+              : 'text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
         >
           <XCircle className="w-4 h-4" />
         </motion.button>
@@ -138,7 +151,11 @@ export function AnimatedToast({
         initial={{ scaleX: 1 }}
         animate={{ scaleX: 0 }}
         transition={{ duration: duration / 1000, ease: "linear" }}
-        className="absolute bottom-0 left-0 right-0 h-1 bg-current opacity-20 origin-left"
+        className={`absolute bottom-0 left-0 right-0 h-1 origin-left rounded-b-2xl ${
+          variant === 'success' 
+            ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 opacity-60' 
+            : 'bg-current opacity-20'
+        }`}
       />
     </motion.div>
   );

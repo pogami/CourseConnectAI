@@ -47,14 +47,24 @@ export class DocumentProcessorClient {
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({}));
+          // Check if API provided helpful alternatives
+          if (errorData.alternatives && Array.isArray(errorData.alternatives)) {
+            throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
+          }
+          throw new Error(errorData.error || 'PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
+        } else {
+          // Non-JSON response (likely 404 or HTML error page)
+          throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
+        }
       }
       
       const result = await response.json();
       
       if (!result.success || !result.text) {
-        throw new Error(result.error || 'No text extracted from PDF');
+        throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
       }
       
       return {
@@ -69,7 +79,13 @@ export class DocumentProcessorClient {
     } catch (error) {
       console.error('PDF extraction error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to extract text from PDF: ${errorMessage}`);
+      
+      // If it's already our friendly message, use it
+      if (errorMessage.includes('PDFs can be tricky')) {
+        throw new Error(errorMessage);
+      }
+      
+      throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
     }
   }
   
@@ -93,7 +109,7 @@ export class DocumentProcessorClient {
       };
     } catch (error) {
       console.error('DOCX extraction error:', error);
-      throw new Error('Failed to extract text from DOCX');
+      throw new Error('DOCX files can be tricky - try uploading a TXT file instead and we\'ll handle the rest!');
     }
   }
   
@@ -109,7 +125,7 @@ export class DocumentProcessorClient {
       };
     } catch (error) {
       console.error('TXT extraction error:', error);
-      throw new Error('Failed to extract text from TXT');
+      throw new Error('TXT files can be tricky - try copying the content and pasting it into a new TXT file, or upload a DOCX instead!');
     }
   }
   

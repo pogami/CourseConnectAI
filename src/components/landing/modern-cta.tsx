@@ -26,7 +26,7 @@ export function CTASection() {
         >
           <h2 className="text-5xl md:text-6xl lg:text-7xl font-black text-gray-900 dark:text-white tracking-tight leading-tight">
             Ready to{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-indigo-600">
               ace your classes?
             </span>
           </h2>

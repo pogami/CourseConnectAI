@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { RippleText } from "@/components/ripple-text";
+import { CCLogo } from "@/components/icons/cc-logo";
 
 interface LoadingSpinnerProps {
   size?: "sm" | "md" | "lg" | "xl";
@@ -53,28 +54,11 @@ export function LoadingSpinner({ size = "md", className, text }: LoadingSpinnerP
 
 export function PageLoadingSpinner() {
   return (
-    <div className="flex h-screen items-center justify-center bg-gradient-to-br from-purple-50/50 via-blue-50/50 to-indigo-50/50 dark:from-purple-950/20 dark:via-blue-950/20 dark:to-indigo-950/20">
-      <div className="text-center space-y-6">
-        {/* Animated CourseConnect Logo */}
-        <div className="relative">
-          <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-r from-purple-600 to-blue-600 animate-pulse shadow-2xl"></div>
-          <div className="absolute inset-0 w-20 h-20 mx-auto rounded-full border-4 border-transparent border-t-purple-600 border-r-blue-600 animate-spin"></div>
-          <div className="absolute inset-2 w-16 h-16 mx-auto rounded-full border-2 border-transparent border-b-blue-600 border-l-purple-600 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
-        </div>
-        
-        {/* Loading Text with Gradient */}
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent animate-pulse">
-            CourseConnect
-          </h2>
-          <p className="text-sm text-muted-foreground font-medium">
-            Preparing your workspace...
-          </p>
-        </div>
-        
-        {/* Progress Text */}
-        <div className="flex justify-center">
-          <RippleText text="Loading..." className="text-sm text-muted-foreground" />
+    <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-950 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <CCLogo className="h-20 w-auto md:h-24" />
+        <div className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
+          CourseConnect <span className="text-blue-600 dark:text-blue-400">AI</span>
         </div>
       </div>
     </div>

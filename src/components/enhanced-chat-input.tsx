@@ -1,7 +1,17 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Upload, Mic, MicOff, Bot, Brain, FileText, Loader2 } from 'lucide-react';
+import {
+  Send01Icon,
+  Upload01Icon,
+  Microphone01Icon,
+  MicrophoneOff01Icon,
+  BotIcon,
+  Brain01Icon,
+  Book01Icon,
+  Loading01Icon,
+  Square01Icon
+} from 'hugeicons-react';
 import { useTheme } from '@/contexts/theme-context';
 import { cn } from '@/lib/utils';
 import { SearchMenu } from './search-menu';
@@ -23,6 +33,7 @@ interface EnhancedChatInputProps {
   isPublicChat?: boolean;
   isClassChat?: boolean;
   isSending?: boolean;
+  onStop?: () => void;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
 }
@@ -41,6 +52,7 @@ export function EnhancedChatInput({
   isPublicChat = false,
   isClassChat = false,
   isSending = false,
+  onStop,
   onTypingStart,
   onTypingStop
 }: EnhancedChatInputProps) {
@@ -414,7 +426,7 @@ export function EnhancedChatInput({
         )}>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <Bot className="h-4 w-4" />
+            <BotIcon className="h-4 w-4" />
             <span>AI will respond</span>
           </div>
           <div className="text-xs opacity-75">
@@ -455,7 +467,7 @@ export function EnhancedChatInput({
                     isDark ? "bg-gray-800/60" : "bg-gray-100"
                   )}>
                     <div className="flex flex-col items-center justify-center p-1 text-center">
-                      <FileText className="h-7 w-7 text-primary mb-0.5" />
+                      <Book01Icon className="h-7 w-7 text-primary mb-0.5" />
                       <span className="text-[10px] leading-tight line-clamp-2 px-1 max-w-[4.5rem]">{f.name}</span>
                     </div>
                   </div>
@@ -465,7 +477,7 @@ export function EnhancedChatInput({
                     isDark ? "bg-gray-800/60" : "bg-gray-100"
                   )}>
                     <div className="flex flex-col items-center justify-center p-1 text-center">
-                      <FileText className="h-7 w-7 text-primary mb-0.5" />
+                      <Book01Icon className="h-7 w-7 text-primary mb-0.5" />
                       <span className="text-[10px] leading-tight line-clamp-2 px-1 max-w-[4.5rem]">{f.name}</span>
                     </div>
                   </div>
@@ -491,10 +503,10 @@ export function EnhancedChatInput({
               "h-8 w-8 flex items-center justify-center cursor-pointer rounded-lg",
               "hover:bg-gray-100 dark:hover:bg-white/10 transition-colors duration-200",
               "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white",
-              (disabled || isSending) && "opacity-50 cursor-not-allowed"
+              disabled && "opacity-50 cursor-not-allowed"
             )}
           >
-            <Upload className="h-5 w-5" />
+            <Upload01Icon className="h-5 w-5" />
           </div>
 
           {/* Course selector removed per request */}
@@ -513,15 +525,12 @@ export function EnhancedChatInput({
             value={value}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={
-              isSending ? "AI is responding..." : 
-              getPlaceholder()
-            }
-            disabled={disabled || isSending}
+            placeholder={getPlaceholder()}
+            disabled={disabled}
             className={cn(
               "flex-1 bg-transparent text-base border-0 outline-none resize-none",
               "text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400",
-              (disabled || isSending) && "opacity-50 cursor-not-allowed"
+              disabled && "opacity-50 cursor-not-allowed"
             )}
             rows={1}
             style={{ 
@@ -545,27 +554,34 @@ export function EnhancedChatInput({
               isVoiceActive
                 ? "text-red-500 dark:text-red-400" 
                 : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100",
-              (disabled || isSending) && "opacity-50 cursor-not-allowed"
+              disabled && "opacity-50 cursor-not-allowed"
             )}
           >
             {isVoiceActive ? (
-              <MicOff className="h-5 w-5" />
+              <MicrophoneOff01Icon className="h-5 w-5" />
             ) : (
-              <Mic className="h-5 w-5" />
+              <Microphone01Icon className="h-5 w-5" />
             )}
           </div>
 
-          {/* Send Icon */}
-          <div
-            onClick={handleSend}
+          {/* Send / Stop Icon */}
+          <button
+            onClick={isSending ? onStop : handleSend}
+            disabled={disabled || (isSending && !onStop)}
             className={cn(
-              "h-8 w-8 flex items-center justify-center cursor-pointer rounded-full",
-              "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100",
-              "hover:bg-gray-100 dark:hover:bg-muted/50 transition-colors duration-200"
+              "h-8 w-8 flex items-center justify-center rounded-full transition-all duration-200",
+              isSending
+                ? "text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-gray-100 dark:hover:bg-muted/50"
+                : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-muted/50",
+              (disabled || (isSending && !onStop)) && "opacity-50 cursor-not-allowed"
             )}
           >
-            <Send className="h-5 w-5" />
-          </div>
+            {isSending ? (
+              <Square01Icon className="h-5 w-5" />
+            ) : (
+              <Send01Icon className="h-5 w-5" />
+            )}
+          </button>
         </div>
 
         {/* Hidden File Input */}

@@ -1,3 +1,0 @@
-This is a test PDF content for testing the file upload functionality.
-It contains some sample text that should be extracted and analyzed by the AI.
-The AI should be able to read this content and provide analysis.

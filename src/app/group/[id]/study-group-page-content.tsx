@@ -1,3 +1,4 @@
+
 'use client';
 
 import { StudyGroupData } from '@/lib/open-graph';

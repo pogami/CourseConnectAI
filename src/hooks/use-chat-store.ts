@@ -51,7 +51,8 @@ export type Message = {
         type: string;
         url: string;
     }>;
-    thinkingSteps?: string[]; // Array of thinking steps
+    thinkingSteps?: string[]; // Deprecated: Array of thinking steps (legacy)
+    thinkingContent?: string; // Natural language thinking content (stream of consciousness)
 };
 
 export type Chat = {
@@ -326,6 +327,10 @@ export const useChatStore = create<ChatState>()(
             if (user) {
               // User is signed in.
               console.log("User signed in, loading chats...");
+              // Clear uploaded syllabi when new user signs in
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('uploaded-syllabi');
+              }
               set({ isGuest: false, isStoreLoading: false }); // Keep loading false for real-time chat
               
               // Create user-specific private general chat
@@ -836,8 +841,10 @@ export const useChatStore = create<ChatState>()(
               if (savedJoinTime) {
                 const joinTime = parseInt(savedJoinTime);
                 filteredMessages = allMessages.filter((msg: any) => {
-                  // Show messages from after user joined, or if no timestamp, show all
-                  return !msg.timestamp || msg.timestamp >= joinTime;
+                  // Show ONLY messages that have a timestamp and are at/after the join time.
+                  // This prevents very old, legacy messages (that might be missing timestamps)
+                  // from reappearing after the user resets or re-joins a chat.
+                  return typeof msg.timestamp === 'number' && msg.timestamp >= joinTime;
                 });
               }
               

@@ -3,7 +3,7 @@ export const config = {
   spotify: {
     clientId: process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || '',
     clientSecret: process.env.SPOTIFY_CLIENT_SECRET || '',
-    redirectUri: process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || 'http://localhost:3000/dashboard/advanced',
+    redirectUri: process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.courseconnectai.com'}/dashboard/advanced`,
     scopes: [
       'user-read-playback-state',
       'user-modify-playback-state',

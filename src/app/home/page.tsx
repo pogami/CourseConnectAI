@@ -20,7 +20,6 @@ import { useState, useEffect } from "react";
 import { Menu } from "lucide-react";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { MobileButton } from "@/components/ui/mobile-button";
-import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { CourseConnectLogo } from "@/components/icons/courseconnect-logo";
 import { MobileAppSection } from "@/components/landing/mobile-app-section-lite";
 import { LiveActivityWidget } from "@/components/live-activity-widget";
@@ -938,7 +937,6 @@ export default function LandingPage() {
 
             
             {/* PWA Install Prompt */}
-            <PWAInstallPrompt />
             
             {/* AIBot hidden per request */}
     </div>

@@ -3,9 +3,9 @@ import { generateStudyGroupMeta, StudyGroupData } from '@/lib/open-graph';
 import StudyGroupPageContent from './study-group-page-content';
 
 interface StudyGroupPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Mock study group data - replace with actual data fetching
@@ -24,13 +24,17 @@ async function getStudyGroupData(groupId: string): Promise<StudyGroupData> {
   };
 }
 
-export async function generateMetadata({ params }: StudyGroupPageProps): Promise<Metadata> {
-  const group = await getStudyGroupData(params.id);
+export async function generateMetadata(props: StudyGroupPageProps): Promise<Metadata> {
+  const params = await props.params;
+  const { id } = params;
+  const group = await getStudyGroupData(id);
   return generateStudyGroupMeta(group);
 }
 
-export default async function StudyGroupPage({ params }: StudyGroupPageProps) {
-  const group = await getStudyGroupData(params.id);
+export default async function StudyGroupPage(props: StudyGroupPageProps) {
+  const params = await props.params;
+  const { id } = params;
+  const group = await getStudyGroupData(id);
   
   return <StudyGroupPageContent group={group} />;
 }

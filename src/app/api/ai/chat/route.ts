@@ -199,7 +199,7 @@ AI:`;
 
     // Try Ollama first with smart model selection
     let aiResponse: string;
-    let selectedModel: string;
+    let selectedModel: string = 'fallback';
     
     try {
       // Smart model selection - automatically picks best available model

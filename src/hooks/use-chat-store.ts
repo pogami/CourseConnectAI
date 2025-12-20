@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { doc, getDoc, setDoc, updateDoc, arrayUnion, Firestore, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, Firestore, onSnapshot, deleteDoc, writeBatch, getFirestore } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, User, Auth } from 'firebase/auth';
 // Socket.IO removed - using Pusher for real-time messaging
@@ -116,7 +116,7 @@ interface ChatState {
   initializeAuthListener: () => () => void; // Returns an unsubscribe function
   clearGuestData: () => void;
   resetChat: (chatId: string) => Promise<void>;
-  exportChat: (chatId: string) => void;
+  exportChat: (chatId: string, format?: 'json' | 'markdown' | 'pdf' | 'word') => void;
   deleteChat: (chatId: string) => Promise<void>;
   initializeGeneralChats: () => void;
   // Real-time messaging methods (Pusher handles this directly)
@@ -128,6 +128,128 @@ interface ChatState {
 
 const getChatId = (chatName: string) => chatName.toLowerCase().replace(/[\\s:]/g, '-');
 
+// Debounced write queue to prevent Firestore write exhaustion
+const writeQueues: Map<string, {
+  messages: any[];
+  timeout: NodeJS.Timeout | null;
+  lastWrite: number;
+}> = new Map();
+
+const DEBOUNCE_DELAY = 2000; // Wait 2 seconds after last message before writing
+const MAX_BATCH_SIZE = 10; // Batch up to 10 messages at once
+const MIN_WRITE_INTERVAL = 1000; // Minimum 1 second between writes
+
+async function debouncedWriteToFirestore(chatId: string, message: any, replaceLast: boolean = false) {
+  // Get or create queue for this chat
+  if (!writeQueues.has(chatId)) {
+    writeQueues.set(chatId, {
+      messages: [],
+      timeout: null,
+      lastWrite: 0
+    });
+  }
+  
+  const queue = writeQueues.get(chatId)!;
+  
+  // Add message to queue
+  if (replaceLast && queue.messages.length > 0) {
+    queue.messages[queue.messages.length - 1] = message;
+  } else {
+    queue.messages.push(message);
+  }
+  
+  // Clear existing timeout
+  if (queue.timeout) {
+    clearTimeout(queue.timeout);
+  }
+  
+  // If queue is full, write immediately
+  if (queue.messages.length >= MAX_BATCH_SIZE) {
+    await flushWriteQueue(chatId);
+    return;
+  }
+  
+  // Check if enough time has passed since last write
+  const timeSinceLastWrite = Date.now() - queue.lastWrite;
+  if (timeSinceLastWrite >= MIN_WRITE_INTERVAL && queue.messages.length > 0) {
+    // Write immediately if enough time has passed
+    queue.timeout = setTimeout(() => flushWriteQueue(chatId), 100) as any;
+  } else {
+    // Otherwise debounce
+    queue.timeout = setTimeout(() => flushWriteQueue(chatId), DEBOUNCE_DELAY) as any;
+  }
+}
+
+async function flushWriteQueue(chatId: string) {
+  const queue = writeQueues.get(chatId);
+  if (!queue || queue.messages.length === 0) return;
+  
+  const messagesToWrite = [...queue.messages];
+  queue.messages = [];
+  queue.lastWrite = Date.now();
+  
+  if (queue.timeout) {
+    clearTimeout(queue.timeout);
+    queue.timeout = null;
+  }
+  
+  try {
+    const chatDocRef = doc(db as Firestore, 'chats', chatId);
+    const chatDocSnap = await getDoc(chatDocRef);
+    
+    if (chatDocSnap.exists()) {
+      const currentMessages = chatDocSnap.data().messages || [];
+      // Merge new messages, avoiding duplicates
+      const existingIds = new Set(currentMessages.map((m: any) => m.id));
+      const newMessages = messagesToWrite.filter(m => !existingIds.has(m.id));
+      
+      if (newMessages.length > 0) {
+        // Update in one operation (Firestore handles batching internally)
+        await updateDoc(chatDocRef, { 
+          messages: [...currentMessages, ...newMessages],
+          updatedAt: Date.now()
+        });
+      }
+    } else {
+      // Create new chat document
+      const newChat: Omit<Chat, 'id'> = {
+        title: chatId === 'public-general-chat' ? 'Community' : chatId,
+        messages: messagesToWrite,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        chatType: chatId === 'public-general-chat' ? 'public' : 'private'
+      };
+      await setDoc(chatDocRef, newChat);
+    }
+  } catch (error: any) {
+    // Handle rate limiting and resource exhaustion
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'resource-exhausted') {
+        // Firestore is rate limiting - re-queue messages with longer delay
+        console.warn('Firestore write exhausted, queuing for retry:', chatId, messagesToWrite.length, 'messages');
+        queue.messages = [...messagesToWrite, ...queue.messages];
+        // Retry after exponential backoff (4 seconds)
+        queue.timeout = setTimeout(() => flushWriteQueue(chatId), DEBOUNCE_DELAY * 2) as any;
+      } else if (error.code === 'unavailable') {
+        // Offline mode - re-queue for when connection is restored
+        console.warn('Firestore unavailable, queuing messages:', chatId);
+        queue.messages = [...messagesToWrite, ...queue.messages];
+        queue.timeout = setTimeout(() => flushWriteQueue(chatId), DEBOUNCE_DELAY * 3) as any;
+      } else {
+        console.warn("Failed to save messages to firestore:", error.code, error.message);
+      }
+    } else {
+      console.warn("Failed to save messages to Firestore:", error);
+    }
+  }
+}
+
+// Flush all pending writes (useful for cleanup)
+export function flushAllPendingWrites() {
+  for (const [chatId] of writeQueues) {
+    flushWriteQueue(chatId);
+  }
+}
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -296,7 +418,7 @@ export const useChatStore = create<ChatState>()(
         
         if (lastInitVersion !== CHAT_VERSION) {
           console.log('🔄 Initializing default chats with clean state (v2.2)...');
-          get().initializeDefaultChats().then(() => {
+          get().initializeGeneralChats().then(() => {
             localStorage.setItem('chat-init-version', CHAT_VERSION);
             console.log('✅ Default chats initialized with v2.2');
           });
@@ -697,35 +819,19 @@ export const useChatStore = create<ChatState>()(
           chatId 
         });
 
-        // Persist to Firestore in background (non-blocking) - works for both guest and authenticated users
+        // Persist to Firestore using debounced batching to prevent write exhaustion
+        // This batches writes and debounces them to avoid hitting Firestore rate limits
         try {
-            // Don't await this - let it run in background
-            const chatDocRef = doc(db as Firestore, 'chats', chatId);
-            getDoc(chatDocRef).then(chatDocSnap => {
-              if (chatDocSnap.exists()) {
-                const currentMessages = chatDocSnap.data().messages || [];
-                const newMessages = replaceLast ? [...currentMessages.slice(0, -1), safeMessage] : [...currentMessages, safeMessage];
-                return updateDoc(chatDocRef, { messages: newMessages });
-              } else {
-                // Create the chat doc if missing (especially for public-general-chat)
-                const newChat: Omit<Chat, 'id'> = {
-                  title: chatId === 'public-general-chat' ? 'Community' : chatId,
-                  messages: [safeMessage],
-                  createdAt: Date.now(),
-                  updatedAt: Date.now(),
-                  chatType: chatId === 'public-general-chat' ? 'public' : 'private'
-                };
-                return setDoc(chatDocRef, newChat);
-              }
-            }).catch(e => {
+            // Use debounced write queue instead of immediate write
+            debouncedWriteToFirestore(chatId, safeMessage, replaceLast).catch(e => {
                 // Only log non-offline errors to reduce noise
-                if (e && typeof e === 'object' && 'code' in e && e.code !== 'unavailable') {
-                    console.warn("Failed to save message to firestore:", e);
+                if (e && typeof e === 'object' && 'code' in e && e.code !== 'unavailable' && e.code !== 'resource-exhausted') {
+                    console.warn("Failed to queue message for firestore:", e);
                 }
                 // Continue working in offline mode - the message is already in local state
             });
         } catch (error) {
-            console.warn("Failed to save message to Firestore:", error);
+            console.warn("Failed to queue message for Firestore:", error);
             // Continue in real-time mode even if Firestore fails
         }
       },
@@ -1000,8 +1106,8 @@ export const useChatStore = create<ChatState>()(
         
         // Clear from Firestore - DELETE then recreate to ensure clean state
         try {
-          const db = getFirestore();
-          const chatDocRef = doc(db, 'chats', 'public-general-chat');
+          const firestoreDb = getFirestore();
+          const chatDocRef = doc(firestoreDb, 'chats', 'public-general-chat');
           
           // First, delete the document completely
           try {
@@ -1059,8 +1165,8 @@ export const useChatStore = create<ChatState>()(
         
         // Clear from Firestore
         try {
-          const db = getFirestore();
-          const chatDocRef = doc(db, 'chats', 'private-general-chat');
+          const firestoreDb = getFirestore();
+          const chatDocRef = doc(firestoreDb, 'chats', 'private-general-chat');
           await setDoc(chatDocRef, {
             title: 'General',
             messages: [welcomeMessage],
@@ -1104,10 +1210,8 @@ export const useChatStore = create<ChatState>()(
         };
 
         try {
-          const db = getFirestore();
-          
           // Reset Community Chat in Firestore
-          const communityDocRef = doc(db, 'chats', 'public-general-chat');
+          const communityDocRef = doc(firestoreDb, 'chats', 'public-general-chat');
           
           // First, delete the document to clear all old data
           try {
@@ -1132,7 +1236,7 @@ export const useChatStore = create<ChatState>()(
           console.log(`✅ Set join time for Community Chat to ${resetTime}`);
           
           // Reset Guest General Chat in Firestore
-          const guestGeneralDocRef = doc(db, 'chats', 'private-general-chat-guest');
+          const guestGeneralDocRef = doc(firestoreDb, 'chats', 'private-general-chat-guest');
           await setDoc(guestGeneralDocRef, {
             title: 'General',
             messages: [guestWelcome],
@@ -1207,14 +1311,14 @@ export const useChatStore = create<ChatState>()(
           // Count how many class chats exist to personalize the message
           const classChats = Object.values(get().chats).filter(c => c.chatType === 'class');
           const syllabusText = classChats.length > 0 
-            ? ` I have access to all ${classChats.length} of your course ${classChats.length === 1 ? 'syllabus' : 'syllabi'}, so I can help with any of your classes!`
+            ? ` I have access to ${classChats.length === 1 ? 'your course syllabus' : `all ${classChats.length} of your course syllabi`}, so I can provide personalized help for your classes!`
             : '';
           
           newWelcomeMessage = {
             id: `welcome-${Date.now()}`,
             sender: 'bot' as const,
             name: 'CourseConnect AI',
-            text: `Welcome to General Chat! 👋 I'm your all-in-one AI assistant for ALL your courses.${syllabusText}\n\nI can help with:\n• Any question from any of your classes\n• Homework, assignments, and exam prep\n• Study strategies and explanations\n• Connecting concepts across your courses\n\nJust ask me anything about any of your classes! 🚀`,
+            text: `Welcome to General Chat! 👋 I'm your AI study assistant, here to help you succeed across all your courses.${syllabusText}\n\nI can help you with:\n• Questions from any of your classes\n• Homework, assignments, and exam prep\n• Study strategies and concept explanations\n• Connecting ideas across different courses\n\nWhat would you like to work on today? 🚀`,
             timestamp: Date.now()
           };
         }
@@ -1308,31 +1412,30 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      exportChat: (chatId) => {
+      exportChat: async (chatId: string, format: 'json' | 'markdown' | 'pdf' | 'word' = 'json') => {
         const chat = get().chats[chatId];
         if (!chat) return;
 
-        const exportData = {
-          chatName: chat.title,
-          exportDate: new Date().toISOString(),
-          messageCount: chat.messages.length,
+        // Import the export utility dynamically
+        const { exportChat: exportChatUtil } = await import('@/lib/chat-export');
+        
+        const chatForExport = {
+          id: chat.id,
+          title: chat.title,
           messages: chat.messages.map(msg => ({
-            sender: msg.sender,
+            id: msg.id || `msg-${Date.now()}-${Math.random()}`,
+            sender: (msg.sender === 'user' || msg.sender === 'bot') ? msg.sender : 'user',
             name: msg.name,
             text: msg.text,
-            timestamp: new Date(msg.timestamp).toLocaleString()
-          }))
+            timestamp: msg.timestamp,
+            sources: msg.sources,
+            file: msg.file,
+            files: msg.files
+          })),
+          createdAt: chat.createdAt
         };
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${chat.title.replace(/[^a-z0-9]/gi, '_')}_chat_export.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        
+        await exportChatUtil(chatForExport, format);
       },
 
       deleteChat: async (chatId) => {

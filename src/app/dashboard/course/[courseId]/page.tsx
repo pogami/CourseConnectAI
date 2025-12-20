@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, use } from "react";
 import { MessageSquare, BookOpen, Calendar, CheckCircle2, Clock, AlertCircle, Brain, FileText, GraduationCap, X } from "lucide-react";
 import { useChatStore } from "@/hooks/use-chat-store";
 import { useState } from "react";
@@ -26,7 +26,9 @@ export default function CourseDetailPage() {
   const router = useRouter();
   const { chats } = useChatStore();
   const { toast } = useToast();
-  const courseId = decodeURIComponent(params.courseId as string);
+  // Access params property directly - useParams() returns the params object in client components
+  const courseIdParam = params?.courseId;
+  const courseId = courseIdParam ? decodeURIComponent(courseIdParam as string) : '';
   const [showSyllabus, setShowSyllabus] = useState(false);
   const [showFullPageChat, setShowFullPageChat] = useState(false);
 
@@ -96,7 +98,7 @@ export default function CourseDetailPage() {
               </h1>
               <p className="text-lg text-gray-600 dark:text-gray-300">
                 {course.courseData?.courseName || 'Course'} 
-                {course.courseData?.instructorName && ` • ${course.courseData.instructorName}`}
+                {course.courseData?.professor && ` • ${course.courseData.professor}`}
                 {' • Fall 2025 • Section A'}
               </p>
             </div>
@@ -149,11 +151,11 @@ export default function CourseDetailPage() {
                           </div>
                           <div>
                             <p className="font-semibold text-gray-600 dark:text-gray-400">Instructor:</p>
-                            <p className="text-gray-900 dark:text-gray-100">{course.courseData?.instructorName || 'TBA'}</p>
+                            <p className="text-gray-900 dark:text-gray-100">{course.courseData?.professor || 'TBA'}</p>
                           </div>
                           <div>
                             <p className="font-semibold text-gray-600 dark:text-gray-400">Credits:</p>
-                            <p className="text-gray-900 dark:text-gray-100">{course.courseData?.credits || '3'}</p>
+                            <p className="text-gray-900 dark:text-gray-100">3</p>
                           </div>
                         </div>
                       </CardContent>
@@ -166,7 +168,7 @@ export default function CourseDetailPage() {
                       </CardHeader>
                       <CardContent>
                         <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                          {course.courseData?.description || 
+                          {course.courseData?.courseName || 
                             'This course covers fundamental concepts and applications. Students will develop critical thinking skills and practical knowledge through hands-on learning experiences.'}
                         </p>
                       </CardContent>

@@ -20,7 +20,7 @@ import {
 import { useNotifications, Notification } from "@/hooks/use-notifications";
 import { auth } from "@/lib/firebase/client-simple";
 import { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import {
@@ -56,7 +56,6 @@ const getNotificationIcon = (type: Notification['type'], priority: Notification[
 };
 
 export default function Notifications() {
-  const { toast } = useToast();
   const [user, setUser] = useState(auth.currentUser);
   const {
     notifications,
@@ -84,32 +83,28 @@ export default function Notifications() {
 
   const handleMarkAsRead = async (notificationId: string) => {
     await markAsRead(notificationId);
-    toast({
-      title: "Notification marked as read",
+    toast.success("Notification marked as read", {
       description: "The notification has been marked as read.",
     });
   };
 
   const handleMarkAllAsRead = async () => {
     await markAllAsRead();
-    toast({
-      title: "All notifications marked as read",
+    toast.success("All notifications marked as read", {
       description: "All notifications have been marked as read.",
     });
   };
 
   const handleDeleteNotification = async (notificationId: string) => {
     await deleteNotification(notificationId);
-    toast({
-      title: "Notification deleted",
+    toast.success("Notification deleted", {
       description: "The notification has been deleted.",
     });
   };
 
   const handleClearAll = async () => {
     await clearAllNotifications();
-    toast({
-      title: "All notifications cleared",
+    toast.success("All notifications cleared", {
       description: "All notifications have been cleared.",
     });
   };

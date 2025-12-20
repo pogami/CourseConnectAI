@@ -135,7 +135,7 @@ export default function SharedChatPage() {
       </div>
 
       {/* Header */}
-      <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-950/60">
+      <header className="sticky top-0 z-40 w-full border-b border-transparent dark:border-border/40 bg-transparent dark:bg-gray-950/80">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
             <div className="w-9 h-9 relative transition-transform group-hover:scale-110 duration-300">
@@ -146,8 +146,8 @@ export default function SharedChatPage() {
             </span>
           </Link>
           
-          <div className="flex-1 text-center px-4 hidden sm:block">
-            <span className="text-sm text-muted-foreground">
+          <div className="flex-1 text-center px-4 hidden sm:block bg-transparent">
+            <span className="text-sm text-muted-foreground bg-transparent">
               Get instant AI help, analyze your syllabus, and ace every course
             </span>
           </div>
@@ -206,7 +206,25 @@ export default function SharedChatPage() {
 
           {/* Messages */}
           <div className="space-y-8">
-            {chat.messages.map((msg, index) => (
+            {chat.messages.map((msg, index) => {
+              // Improve old welcome messages if they contain the old text
+              let messageText = msg.text;
+              if (msg.sender === 'bot' && msg.text.includes('all-in-one AI assistant for ALL your courses')) {
+                messageText = msg.text
+                  .replace(/I'm your all-in-one AI assistant for ALL your courses\./g, "I'm your AI study assistant, here to help you succeed across all your courses.")
+                  .replace(/I have access to all (\d+) of your course (syllabus|syllabi), so I can help with any of your classes!/g, (match, count, word) => {
+                    const num = parseInt(count);
+                    return num === 1 
+                      ? "I have access to your course syllabus, so I can provide personalized help for your classes!"
+                      : `I have access to all ${num} of your course syllabi, so I can provide personalized help for your classes!`;
+                  })
+                  .replace(/I can help with:/g, "I can help you with:")
+                  .replace(/• Any question from any of your classes/g, "• Questions from any of your classes")
+                  .replace(/• Study strategies and explanations/g, "• Study strategies and concept explanations")
+                  .replace(/Just ask me anything about any of your classes! 🚀/g, "What would you like to work on today? 🚀");
+              }
+              
+              return (
               <motion.div 
                 key={index}
                 initial={{ opacity: 0, y: 20 }}
@@ -252,7 +270,7 @@ export default function SharedChatPage() {
                     ) : (
                       <div className="text-[15px] leading-relaxed text-gray-800 dark:text-gray-200">
                         <BotResponse 
-                          content={msg.text}
+                          content={messageText}
                           className="text-[15px] ai-response leading-relaxed max-w-full overflow-hidden"
                         />
                       </div>
@@ -260,7 +278,8 @@ export default function SharedChatPage() {
                   </div>
                 </div>
               </motion.div>
-            ))}
+            );
+            })}
           </div>
         </div>
       </main>
@@ -273,7 +292,7 @@ export default function SharedChatPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
-            className="fixed top-0 left-0 right-0 z-40 border-b border-border/40 bg-white dark:bg-gray-950"
+            className="fixed top-0 left-0 right-0 z-40 border-b border-transparent dark:border-border/40 bg-transparent dark:bg-gray-950"
           >
             <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -285,8 +304,8 @@ export default function SharedChatPage() {
                 </span>
               </div>
               
-              <div className="flex-1 text-center px-4 hidden sm:block">
-                <span className="text-sm text-muted-foreground">
+              <div className="flex-1 text-center px-4 hidden sm:block bg-transparent">
+                <span className="text-sm text-muted-foreground bg-transparent">
                   Get instant AI help, analyze your syllabus, and ace every course
                 </span>
               </div>

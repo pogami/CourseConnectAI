@@ -88,7 +88,14 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
             console.error('Guest data migration failed:', error);
           });
 
+          // Set flag to prevent dashboard from redirecting to login
+          sessionStorage.setItem('justLoggedIn', 'true');
+          
+          // Clear the redirect URL
+          sessionStorage.removeItem('googleSignInRedirect');
+          
           // Redirect to dashboard
+          console.log('✅ Google sign-in successful, redirecting to dashboard...');
           router.push('/dashboard');
         }
       } catch (error) {
@@ -343,19 +350,63 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
       });
 
       try {
-        // Use redirect instead of popup - redirects to Google's login page
-        console.log('🔐 Attempting Google sign-in with redirect...');
+        // Use popup instead of redirect for better UX - user stays on page
+        console.log('🔐 Attempting Google sign-in with popup...');
         console.log('🔐 Auth domain:', auth?.config?.authDomain || 'not set');
-        console.log('🔐 Current URL:', window.location.href);
         
-        // signInWithRedirect will redirect the entire page to Google
-        // This should NOT open a popup - it redirects the current window
-        await signInWithRedirect(auth, provider);
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
         
-        // This line should not execute because the page will redirect
-        // But if it does, there was an error
-        console.warn('⚠️ signInWithRedirect completed without redirecting - this should not happen');
+        console.log('✅ Google sign-in successful:', user.email);
+        
+        // Check if user exists in Firestore
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const isNewUser = !userDoc.exists();
+
+        if (isNewUser) {
+          await setDoc(doc(db, "users", user.uid), {
+            displayName: user.displayName || "Google User",
+            email: user.email,
+            profilePicture: user.photoURL || null,
+            graduationYear: "",
+            school: "",
+            major: "",
+            provider: "google",
+            createdAt: new Date().toISOString()
+          });
+
+          // Store flags to show onboarding for new users
+          localStorage.setItem('showOnboarding', 'true');
+          sessionStorage.setItem('justSignedUp', 'true');
+        } else {
+          // Existing user - update profile picture if needed
+          const userData = userDoc.data();
+          if (user.photoURL && (!userData.profilePicture || userData.profilePicture !== user.photoURL)) {
+            await setDoc(doc(db, "users", user.uid), {
+              profilePicture: user.photoURL
+            }, { merge: true });
+          }
+        }
+
+        // Migrate guest data
+        migrateGuestData(user.uid).catch(error => {
+          console.error('Guest data migration failed:', error);
+        });
+
+        // Clear guest data
+        localStorage.removeItem('guestUser');
+        localStorage.removeItem('guest-notifications');
+        localStorage.removeItem('guest-onboarding-completed');
+
         setIsSubmittingGoogle(false);
+        
+        // Redirect to dashboard
+        toast({
+          title: "Signed In!",
+          description: "Welcome back.",
+        });
+        
+        router.push('/dashboard');
       } catch (error: any) {
         console.error('Google Sign-in Error:', error);
         setIsSubmittingGoogle(false);
@@ -463,6 +514,8 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
       try {
         localStorage.setItem('guestUser', JSON.stringify(guestUser));
         console.log("Stored guest user in localStorage");
+        // Dispatch custom event to notify other components
+        window.dispatchEvent(new CustomEvent('guestNameUpdated'));
       } catch (storageError) {
         console.error("Failed to store guest user in localStorage:", storageError);
         throw new Error("Failed to save guest session. Please check your browser settings.");

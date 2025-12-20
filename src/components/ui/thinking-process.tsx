@@ -28,11 +28,11 @@ export function ThinkingProcess({
 
   return (
     <div className="my-2 flex items-center">
-      <div className="flex">
+      <div className="inline-block">
         {text.split("").map((char, i) => (
           <motion.span
             key={i}
-            className="text-sm font-medium text-gray-500 dark:text-gray-400 tracking-[0.16em]"
+            className="text-sm font-medium text-gray-500 dark:text-gray-400 tracking-normal inline-block"
             initial={{ opacity: 0.2 }}
             animate={{ opacity: [0.2, 1, 0.2] }}
             transition={{ 
@@ -42,7 +42,7 @@ export function ThinkingProcess({
               ease: "easeInOut"
             }}
           >
-            {char}
+            {char === " " ? "\u00A0" : char}
           </motion.span>
         ))}
       </div>

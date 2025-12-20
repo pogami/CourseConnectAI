@@ -3,11 +3,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import Link from "next/link";
 import {
   Chatting01Icon,
-  Upload01Icon,
+  FolderUploadIcon,
   BookOpen01Icon,
   UserGroupIcon,
   AnalyticsUpIcon,
@@ -27,7 +27,7 @@ import { useChatStore } from "@/hooks/use-chat-store";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import { auth } from '@/lib/firebase/client-simple';
 import { NotificationService } from '@/lib/notification-service';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client-simple';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useState, useEffect } from "react";
@@ -38,10 +38,14 @@ import { StudyFocusSuggestions } from "@/components/study-focus-suggestions";
 import { ChatSummariesDashboard } from "@/components/chat-summaries-dashboard";
 import { DailyBriefing } from "@/components/dashboard/daily-briefing";
 import { DashboardAgenda } from "@/components/dashboard/dashboard-agenda";
-import { NextBestStepStrip } from "@/components/next-best-step-strip";
 import dynamic from "next/dynamic";
 
 
+
+const HugeiconsIcon = ({ icon: Icon, ...props }: { icon: any; className?: string }) => {
+  if (!Icon) return null;
+  return <Icon {...props} />;
+};
 
 export default function DashboardPage() {
   const { chats, trialActivated, trialDaysLeft, updateTrialDaysLeft, setIsDemoMode } = useChatStore();
@@ -190,8 +194,8 @@ export default function DashboardPage() {
                     id: `guest-notification-${Date.now()}`,
                     title: `📅 Upcoming Exam`,
                     description: `${courseCode}: ${exam.name} in ${daysUntil} day${daysUntil > 1 ? 's' : ''}`,
-                    type: 'exam',
-                    priority: daysUntil <= 2 ? 'high' : 'medium',
+                    type: 'exam' as const,
+                    priority: (daysUntil <= 2 ? 'high' : 'medium') as 'high' | 'medium',
                     classId: chat.id,
                     actionUrl: '/dashboard',
                     isRead: false,
@@ -304,7 +308,6 @@ export default function DashboardPage() {
   
   // Get real-time dashboard stats
   const { stats, isLoading: statsLoading, refreshStats } = useDashboardStats(user);
-  const { toast } = useToast();
   const showTopicsReview = process.env.NEXT_PUBLIC_SHOW_TOPICS_REVIEW === 'true';
   
   // Create welcome notifications for new users
@@ -321,6 +324,9 @@ export default function DashboardPage() {
             if (userData.hasWelcomeNotifications) {
               return; // Already created welcome notifications
             }
+          } else {
+            // Seed the user doc if it doesn't exist to avoid update errors
+            await setDoc(userDocRef, { hasWelcomeNotifications: false }, { merge: true });
           }
           
           console.log('🔔 Creating welcome notifications for new user:', user.uid);
@@ -350,9 +356,7 @@ export default function DashboardPage() {
           }, user.uid);
           
           // Mark that welcome notifications have been created
-          await updateDoc(userDocRef, {
-            hasWelcomeNotifications: true
-          });
+          await setDoc(userDocRef, { hasWelcomeNotifications: true }, { merge: true });
           
           console.log('🔔 Welcome notifications created successfully');
         } catch (error) {
@@ -394,11 +398,11 @@ export default function DashboardPage() {
           
           // Auto-detect if user is working on assignment
           const hasRecentActivity = recentMessages.some(msg => 
-            msg.content?.toLowerCase().includes(assignment.name?.toLowerCase() || '') ||
-            msg.content?.toLowerCase().includes('homework') ||
-            msg.content?.toLowerCase().includes('assignment') ||
-            msg.content?.toLowerCase().includes('problem') ||
-            msg.content?.toLowerCase().includes('question')
+            msg.text?.toLowerCase().includes(assignment.name?.toLowerCase() || '') ||
+            msg.text?.toLowerCase().includes('homework') ||
+            msg.text?.toLowerCase().includes('assignment') ||
+            msg.text?.toLowerCase().includes('problem') ||
+            msg.text?.toLowerCase().includes('question')
           );
           
           // Auto-update status if user is active but hasn't manually set it
@@ -538,14 +542,25 @@ export default function DashboardPage() {
     }
   }, [trialActivated, updateTrialDaysLeft]);
 
+  // Test toast notification on mount (one time only)
+  useEffect(() => {
+    const hasShownTestToast = sessionStorage.getItem('test-toast-shown');
+    if (!hasShownTestToast) {
+      setTimeout(() => {
+        toast.success("🎉 Toast Notifications Enabled!", {
+          description: "You'll see notifications when you complete tasks and other actions.",
+          duration: 5000,
+        });
+        sessionStorage.setItem('test-toast-shown', 'true');
+      }, 1000);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-transparent">
       <div className="space-y-8">
         {/* Daily Briefing - Personalized morning update */}
         <DailyBriefing user={user} stats={stats} />
-
-        {/* Next Best Step - lightweight, always-visible strip driven by real course data */}
-        <NextBestStepStrip />
 
         {/* Stats - Standard Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -838,7 +853,7 @@ export default function DashboardPage() {
               <div className="relative z-10 max-w-lg mx-auto">
                 <div className="flex items-center justify-center mb-6">
                   <div className="p-6 rounded-3xl bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 dark:from-cyan-600 dark:via-blue-600 dark:to-indigo-600 w-24 h-24 flex items-center justify-center shadow-2xl">
-                    <Upload01Icon className="h-12 w-12 text-white" />
+                    <HugeiconsIcon icon={FolderUploadIcon} className="h-12 w-12 text-white" />
                   </div>
                 </div>
                 <h3 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white mb-4 text-center leading-tight">
@@ -864,7 +879,7 @@ export default function DashboardPage() {
                 <div className="flex justify-center">
                   <Button asChild size="lg" className="bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:via-blue-700 hover:to-indigo-700 text-white shadow-xl shadow-cyan-500/30 dark:shadow-cyan-900/50 font-bold text-base px-8 py-6 rounded-2xl">
                     <Link href="/dashboard/upload">
-                      <Upload01Icon className="h-5 w-5 mr-2" />
+                      <HugeiconsIcon icon={FolderUploadIcon} className="h-5 w-5 mr-2" />
                       Upload Syllabus
                     </Link>
                   </Button>
@@ -913,7 +928,7 @@ export default function DashboardPage() {
                 <p className="text-gray-600 dark:text-gray-400 mb-6">Upload a syllabus to find and join study groups</p>
                 <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Link href="/dashboard/upload">
-                    <Upload01Icon className="mr-2 h-4 w-4" />
+                    <HugeiconsIcon icon={FolderUploadIcon} className="mr-2 h-4 w-4" />
                     Upload Syllabus
                   </Link>
                 </Button>

@@ -1,11 +1,12 @@
 import { Metadata } from 'next';
+import { use } from 'react';
 import { generateCourseMeta, CourseData } from '@/lib/open-graph';
 import CoursePageContent from './course-page-content';
 
 interface CoursePageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Mock course data - replace with actual data fetching
@@ -25,13 +26,17 @@ async function getCourseData(courseId: string): Promise<CourseData> {
   };
 }
 
-export async function generateMetadata({ params }: CoursePageProps): Promise<Metadata> {
-  const course = await getCourseData(params.id);
+export async function generateMetadata(props: CoursePageProps): Promise<Metadata> {
+  const params = await props.params;
+  const { id } = params;
+  const course = await getCourseData(id);
   return generateCourseMeta(course);
 }
 
-export default async function CoursePage({ params }: CoursePageProps) {
-  const course = await getCourseData(params.id);
+export default async function CoursePage(props: CoursePageProps) {
+  const params = await props.params;
+  const { id } = params;
+  const course = await getCourseData(id);
   
   return <CoursePageContent course={course} />;
 }

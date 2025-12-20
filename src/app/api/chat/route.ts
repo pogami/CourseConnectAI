@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { provideStudyAssistanceWithFallback } from '@/ai/services/dual-ai-service';
+import { extractUserNameFromMessages, extractUserNameFromMessage } from '@/lib/extract-user-name';
 import { filterContent, generateFilterResponse } from '@/lib/content-filter';
 import { createAIResponseNotification } from '@/lib/notifications/server';
+import { db } from '@/lib/firebase/server';
 
 export const runtime = 'nodejs';
 
@@ -25,9 +27,11 @@ export async function POST(request: NextRequest) {
       hasAIMention = false, 
       allSyllabi,
       userId,
+      userName,
       chatId,
       chatTitle,
-      isSearchRequest = false
+      isSearchRequest = false,
+      documentContext
     } = await request.json();
     
     if (!question) {
@@ -45,6 +49,26 @@ export async function POST(request: NextRequest) {
 
     // Clean @ mentions from the question if present
     const cleanedQuestion = question.replace(/@ai\s*/gi, '').trim();
+    
+    // Extract user name from conversation history or current message as fallback
+    let extractedName: string | null = null;
+    try {
+      if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+        const messages = conversationHistory.map((msg: any) => ({
+          sender: msg.role === 'user' ? 'user' : 'bot',
+          text: msg.content || ''
+        }));
+        extractedName = extractUserNameFromMessages(messages);
+      }
+      if (!extractedName) {
+        extractedName = extractUserNameFromMessage(cleanedQuestion);
+      }
+    } catch (error) {
+      console.warn('Error extracting user name:', error);
+    }
+    
+    // Use extracted name if found, otherwise use provided userName
+    const finalUserName = extractedName || userName;
 
     // Check if it's a general academic question (not CourseConnect support)
     const isGeneralQuestion = /^(what is|how do|explain|solve|calculate|define|tell me about|help me with).*(math|science|homework|biology|chemistry|physics|history|english|literature|essay|assignment|quiz|test|exam)/i.test(cleanedQuestion);
@@ -149,6 +173,11 @@ export async function POST(request: NextRequest) {
       syllabiContext += `\nYou can help with ANY of these courses! The student can ask about any topic, assignment, or exam from any of their classes.\n\n`;
     }
 
+    // Detect frustration and emotional state
+    const { detectFrustration, generateEmpatheticPrefix } = await import('@/lib/emotional-intelligence');
+    const frustration = detectFrustration(cleanedQuestion, conversationHistory);
+    const empatheticPrefix = generateEmpatheticPrefix(frustration);
+
     // Simple prompt - AI service will handle search and insert results if needed
     const prompt = `You're CourseConnect AI - an all-in-one academic assistant${allSyllabi && allSyllabi.length > 0 ? ` with full access to the student's course syllabi` : ''}.
 
@@ -166,6 +195,14 @@ Style rules:
 - Provide clear, detailed explanations
 - If you know about their courses, reference them naturally
 - Be encouraging and supportive
+
+${frustration.isFrustrated ? `🚨 EMOTIONAL INTELLIGENCE - FRUSTRATION DETECTED:
+The student is showing signs of frustration (${frustration.level} level). Reasons: ${frustration.reasons.join(', ')}.
+${frustration.suggestedApproach === 'analogy' ? 'IMPORTANT: Use a real-world analogy or sports example instead of formulas/math. Step away from technical language and make it relatable.' : ''}
+${frustration.suggestedApproach === 'step-by-step' ? 'IMPORTANT: Break this down into very small, clear steps. Go slowly and check understanding at each step.' : ''}
+${frustration.suggestedApproach === 'example' ? 'IMPORTANT: Use concrete examples to illustrate the concept. Show, do not just tell.' : ''}
+${frustration.suggestedApproach === 'break' ? 'IMPORTANT: Break this into the smallest possible pieces. Tackle one tiny piece at a time.' : ''}
+Start your response with empathy and understanding. Acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.` : ''}
 
 If the user's question is mathematical or an equation, strictly follow these rules:
 - Do NOT ask for confirmation. Provide the solution immediately.
@@ -194,13 +231,51 @@ CourseConnect AI:`;
       if (syllabiContext) {
         enrichedContext = `${context || 'General Chat'}${syllabiContext}`;
       }
+
+      // Add document context if available
+      let fileContext: any = undefined;
+      if (documentContext && documentContext.combinedText) {
+        const documentNames = documentContext.documents?.map((d: any) => d.fileName).join(', ') || 'uploaded documents';
+        enrichedContext = `${enrichedContext}\n\n📄 User has uploaded documents: ${documentNames}`;
+        
+        fileContext = {
+          fileName: documentNames,
+          fileType: 'multiple',
+          fileContent: documentContext.combinedText.substring(0, 100000) // Limit to avoid token limits
+        };
+        
+        console.log('📄 Including document context in AI call:', {
+          documentCount: documentContext.documents?.length || 0,
+          textLength: documentContext.combinedText.length
+        });
+      }
       
+      // Fetch learning profile if userId is available
+      let learningProfile: any = undefined;
+      if (userId) {
+        try {
+          const userDoc = await db.collection('users').doc(userId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData?.learningProfile) {
+              learningProfile = userData.learningProfile;
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to fetch learning profile:', error);
+        }
+      }
+
       // Let AI service handle search directly (simpler approach)
       aiResult = await provideStudyAssistanceWithFallback({
         question: cleanedQuestion,
         context: enrichedContext,
         conversationHistory: conversationHistory || [],
-        isSearchRequest: isSearchRequest
+        isSearchRequest: isSearchRequest,
+        userName: finalUserName || undefined,
+        userId: userId || undefined,
+        fileContext: fileContext, // Include document context so AI can reference uploaded documents
+        learningProfile: learningProfile // Include learning profile for personalization
       });
       
       // Ensure we have a valid answer
@@ -231,6 +306,9 @@ CourseConnect AI:`;
       }
       selectedModel = 'fallback';
     }
+
+    // Note: Frustration guidance is already included in the prompt, so no need to prepend
+    // The AI will naturally incorporate empathetic responses based on the prompt instructions
 
     // Final sanitation: limit emoji usage just in case a provider ignores style rules
     const sanitizeEmojis = (text: string): string => {

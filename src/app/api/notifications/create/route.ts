@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+// @ts-expect-error - db is exported as any but can be Firestore
 import { db } from '@/lib/firebase/admin';
+import type { Firestore } from 'firebase-admin/firestore';
+
+// Type assertion for db since it can be Firestore or mock
+const typedDb: Firestore | null = db as Firestore | null;
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,7 +41,13 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    const docRef = await db.collection('notifications').add(notificationData);
+    if (!typedDb || typeof typedDb.collection !== 'function') {
+      return NextResponse.json(
+        { error: 'Firebase Admin SDK not configured' },
+        { status: 503 }
+      );
+    }
+    const docRef = await typedDb.collection('notifications').add(notificationData);
 
     // Send push notification if user has push notifications enabled
     try {

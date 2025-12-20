@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
-// import { Toaster as Sonner } from "@/components/ui/sonner"
+import { Toaster as Sonner } from "@/components/ui/sonner"
+import { Toaster } from "@/components/ui/toaster"
 import { StudyBreakProvider } from "@/components/study-break-provider"
 import { PageTransitionBar } from "@/components/ui/page-transition-bar"
 import { MobileDetectionPopup } from "@/components/mobile-detection-popup"
@@ -146,7 +147,8 @@ export default function RootLayout({
             {children}
           </StudyBreakProvider>
           <MobileDetectionPopup />
-          {/* <Sonner /> */}
+          <Sonner />
+          <Toaster />
           <Analytics />
         </Providers>
       </body>

@@ -54,30 +54,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = () => {
     const newTheme: Theme = theme === 'light' ? 'dark' : 'light';
     
-    // Use View Transitions if supported and motion isn't reduced
-    if (
-      typeof window !== 'undefined' &&
-      typeof document !== 'undefined' &&
-      'startViewTransition' in document &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      (document as any).startViewTransition(() => {
-        setThemeState(newTheme);
-        try {
-          localStorage.setItem('theme', newTheme);
-        } catch (error) {
-          console.warn('Error saving theme:', error);
-        }
-      });
-    } else {
-      setThemeState(newTheme);
-      try {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('theme', newTheme);
-        }
-      } catch (error) {
-        console.warn('Error saving theme:', error);
+    // Disable View Transitions for instant theme switching (no flash)
+    setThemeState(newTheme);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('theme', newTheme);
       }
+    } catch (error) {
+      console.warn('Error saving theme:', error);
     }
   };
 
@@ -102,7 +86,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    // Return default values during SSR or when not wrapped in provider
+    // This prevents crashes during server-side rendering
+    return {
+      theme: 'light' as Theme,
+      toggleTheme: () => {
+        if (typeof window !== 'undefined') {
+          console.warn('ThemeProvider not found. Theme toggle will not work.');
+        }
+      },
+      setTheme: () => {
+        if (typeof window !== 'undefined') {
+          console.warn('ThemeProvider not found. Theme set will not work.');
+        }
+      }
+    };
   }
   return context;
 }

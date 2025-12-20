@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, X, Loader2, Bot, GraduationCap, BookUser, PencilLine, BrainCircuit, Save, TrendingUp, Target } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 // Removed direct import of generateFlashcards - now using API route
 import { Flashcard } from "@/ai/schemas/flashcard-schemas";
 import { Input } from "@/components/ui/input";
@@ -41,34 +41,11 @@ export default function FlashcardGenerator() {
     const [quizSummaryCard, setQuizSummaryCard] = useState(0); // Current card in quiz summary
     const [answerType, setAnswerType] = useState<'text' | 'mcq'>('text'); // Track answer input type
     const [mcqOptions, setMcqOptions] = useState<string[]>([]); // Store MCQ options
-    const { toast } = useToast();
 
-    // Function to generate realistic MCQ options using AI
-    const generateOptionsForFlashcard = async (answer: string, question: string = ''): Promise<string[]> => {
-        try {
-            // Call API to generate realistic distractors
-            const response = await fetch('/api/flashcards/generate-options', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    question,
-                    correctAnswer: answer,
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.options && data.options.length >= 4) {
-                    return data.options;
-                }
-            }
-        } catch (error) {
-            console.error('Error generating options:', error);
-        }
-
-        // Fallback: Generate simple but realistic options
+    // Function to generate realistic MCQ options - returns immediately with fallback, enhances in background
+    const generateOptionsForFlashcard = async (answer: string, question: string = '', enhanceInBackground: boolean = false): Promise<string[]> => {
+        // Generate fallback options immediately (synchronous)
+        const generateFallbackOptions = (): string[] => {
         const answerLower = answer.toLowerCase().trim();
         const questionLower = question.toLowerCase();
         const options: string[] = [answer]; // Start with correct answer
@@ -155,6 +132,37 @@ export default function FlashcardGenerator() {
         }
         
         return finalOptions;
+        };
+
+        // Return fallback options immediately
+        const fallbackOptions = generateFallbackOptions();
+
+        // Optionally enhance with API call in background (non-blocking)
+        if (enhanceInBackground) {
+            fetch('/api/flashcards/generate-options', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    question,
+                    correctAnswer: answer,
+                })
+            })
+            .then(response => response.ok ? response.json() : null)
+            .then(data => {
+                if (data?.options && data.options.length >= 4) {
+                    // Update options if API call succeeds
+                    setMcqOptions(data.options);
+                }
+            })
+            .catch(error => {
+                console.error('Error enhancing options:', error);
+                // Keep fallback options if API fails
+            });
+        }
+
+        return fallbackOptions;
     };
     
     // Debug flip state changes
@@ -170,13 +178,17 @@ export default function FlashcardGenerator() {
         }
     }, [flashcards]);
 
-    // Generate MCQ options when card changes in MCQ mode
+    // Generate MCQ options when card changes in MCQ mode - returns immediately
     useEffect(() => {
         if (isQuizMode && answerType === 'mcq' && flashcards.length > 0 && flashcards[currentCard]) {
             const currentFlashcard = flashcards[currentCard];
-            generateOptionsForFlashcard(currentFlashcard.answer, currentFlashcard.question)
+            // Generate options immediately (synchronous fallback), enhance in background
+            generateOptionsForFlashcard(currentFlashcard.answer, currentFlashcard.question, true)
                 .then(options => setMcqOptions(options))
-                .catch(error => console.error('Error generating options:', error));
+                .catch(error => {
+                    console.error('Error generating options:', error);
+                    // Fallback options are already generated synchronously, so this shouldn't happen
+                });
         } else if (!isQuizMode || answerType !== 'mcq') {
             setMcqOptions([]);
         }
@@ -274,10 +286,9 @@ export default function FlashcardGenerator() {
             );
             
             if (validMessages.length < 3) {
-                toast({
-                    variant: "default",
-                    title: "Not Enough Chat History",
+                toast.info("Not Enough Chat History", {
                     description: "You need at least 3 messages in this chat to generate flashcards. Try chatting more first!",
+                    duration: 5000,
                 });
                 setIsGenerating(false);
                 return;
@@ -289,6 +300,28 @@ export default function FlashcardGenerator() {
 
             console.log('Generating flashcards for:', chat.name, 'with', validMessages.length, 'messages');
 
+            // Build syllabus data string for better context
+            const syllabusDataParts: string[] = [];
+            if (chat.courseData?.courseCode) {
+                syllabusDataParts.push(`Course Code: ${chat.courseData.courseCode}`);
+            }
+            if (chat.courseData?.topics && chat.courseData.topics.length > 0) {
+                syllabusDataParts.push(`Course Topics: ${chat.courseData.topics.join(', ')}`);
+            }
+            if (chat.courseData?.assignments && chat.courseData.assignments.length > 0) {
+                const assignmentNames = chat.courseData.assignments.map((a: any) => a.name).filter(Boolean);
+                if (assignmentNames.length > 0) {
+                    syllabusDataParts.push(`Assignments: ${assignmentNames.join(', ')}`);
+                }
+            }
+            if (chat.courseData?.exams && chat.courseData.exams.length > 0) {
+                const examNames = chat.courseData.exams.map((e: any) => e.name).filter(Boolean);
+                if (examNames.length > 0) {
+                    syllabusDataParts.push(`Exams: ${examNames.join(', ')}`);
+                }
+            }
+            const syllabusData = syllabusDataParts.length > 0 ? syllabusDataParts.join('\n') : undefined;
+
             const response = await fetch('/api/flashcards/generate', {
                 method: 'POST',
                 headers: {
@@ -297,6 +330,7 @@ export default function FlashcardGenerator() {
                 body: JSON.stringify({
                     className: chat.courseData?.courseName || chat.name,
                     chatHistory,
+                    syllabusData,
                 })
             });
 
@@ -309,25 +343,23 @@ export default function FlashcardGenerator() {
             console.log('Flashcard generation result:', result);
 
             if (!result.flashcards || result.flashcards.length === 0) {
-                toast({
-                    variant: "default",
-                    title: "Not Enough Context",
+                toast.info("Not Enough Context", {
                     description: "There wasn't enough chat history to generate flashcards. Try again after more discussion!",
+                    duration: 5000,
                 });
             } else {
                 setFlashcards(result.flashcards);
-                toast({
-                    title: "Flashcards Generated!",
+                toast.success("Flashcards Generated!", {
                     description: `Created ${result.flashcards.length} flashcards for ${chat.name}.`,
+                    duration: 5000,
                 });
             }
 
         } catch (aiError: any) {
             console.error("AI Error:", aiError);
-            toast({
-                variant: "destructive",
-                title: "AI Generation Failed",
+            toast.error("AI Generation Failed", {
                 description: aiError.message || "The AI could not generate flashcards. Please try again.",
+                duration: 5000,
             });
         } finally {
             setIsGenerating(false);
@@ -362,16 +394,15 @@ export default function FlashcardGenerator() {
 
             const result = await response.json();
             setFlashcards(result.flashcards);
-            toast({
-                title: "Flashcards Generated!",
+            toast.success("Flashcards Generated!", {
                 description: `Created ${result.flashcards.length} flashcards for you to study.`,
+                duration: 5000,
             });
         } catch (aiError) {
             console.error("AI Error:", aiError);
-            toast({
-                variant: "destructive",
-                title: "AI Generation Failed",
+            toast.error("AI Generation Failed", {
                 description: "The AI could not generate flashcards. Please try again with a different topic.",
+                duration: 5000,
             });
         } finally {
             setIsGenerating(false);
@@ -401,9 +432,9 @@ export default function FlashcardGenerator() {
 
             await addDoc(collection(db, 'flashcardSets'), flashcardSetData);
             
-            toast({
-                title: "Flashcards Saved!",
+            toast.success("Flashcards Saved!", {
                 description: "Your flashcard set has been saved to your collection.",
+                duration: 5000,
             });
 
             // Notify parent component of flashcard save event
@@ -413,10 +444,9 @@ export default function FlashcardGenerator() {
 
         } catch (error) {
             console.error('Error saving flashcards:', error);
-            toast({
-                variant: "destructive",
-                title: "Save Failed",
+            toast.error("Save Failed", {
                 description: "Could not save flashcards. Please try again.",
+                duration: 5000,
             });
         } finally {
             setIsSaving(false);
@@ -441,16 +471,34 @@ export default function FlashcardGenerator() {
         
         try {
             const currentFlashcard = flashcards[currentCard];
+            
+            // Try to find the set ID for these flashcards
+            let setId = '';
+            const cleanTitle = topic || 'Generated Set';
+            try {
+                const q = query(
+                    collection(db, 'flashcardSets'),
+                    where('userId', '==', user.uid),
+                    where('title', '==', cleanTitle)
+                );
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    setId = snap.docs[0].id;
+                }
+            } catch (e) {
+                console.warn('Could not find setId for study session');
+            }
+
             const studySessionData = {
                 userId: user.uid,
-                flashcardSetId: '', // We'll need to get this from the current set
-                setTitle: `Flashcards: ${topic || 'Generated Set'}`, // Changed from flashcardSetTitle to setTitle
+                flashcardSetId: setId,
+                setTitle: cleanTitle, 
                 question: currentFlashcard.question,
                 userAnswer: userAnswer,
                 correctAnswer: currentFlashcard.answer,
                 isCorrect: wasCorrect,
                 timestamp: new Date().toISOString(),
-                difficulty: 'Medium', // Could be calculated based on success rate
+                difficulty: 'Medium',
                 topic: topic || 'General'
             };
             
@@ -569,11 +617,17 @@ export default function FlashcardGenerator() {
         trackStudySession(isAnswerCorrect);
         
         // Show toast with animation
-        toast({
-            title: isAnswerCorrect ? "🎉 Correct!" : "❌ Not quite right",
-            description: isAnswerCorrect ? "Great job! Keep it up!" : "Don't worry, keep studying!",
-            className: isAnswerCorrect ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"
-        });
+        if (isAnswerCorrect) {
+            toast.success("🎉 Correct!", {
+                description: "Great job! Keep it up!",
+                duration: 3000,
+            });
+        } else {
+            toast.error("❌ Not quite right", {
+                description: "Don't worry, keep studying!",
+                duration: 3000,
+            });
+        }
     };
 
     const nextQuestion = () => {
@@ -764,11 +818,9 @@ export default function FlashcardGenerator() {
                                 onClick={() => {
                                     // Prevent switching to quiz mode if user has seen the answer
                                     if (!isQuizMode && hasSeenAnswer) {
-                                        toast({
-                                            title: "❌ Not Allowed!",
+                                        toast.error("❌ Not Allowed!", {
                                             description: "You can't switch to quiz mode after seeing the answer. That would be cheating!",
-                                            variant: "destructive",
-                                            duration: 5000
+                                            duration: 5000,
                                         });
                                         return;
                                     }
@@ -847,12 +899,14 @@ export default function FlashcardGenerator() {
                                         variant={answerType === 'mcq' ? 'default' : 'outline'}
                                         onClick={async () => {
                                             setAnswerType('mcq');
-                                            // Generate MCQ options when switching to MCQ
+                                            // Generate MCQ options when switching to MCQ - returns immediately
                                             if (flashcards.length > 0 && flashcards[currentCard]) {
                                                 const currentFlashcard = flashcards[currentCard];
                                                 const correctAnswer = currentFlashcard.answer;
-                                                const options = await generateOptionsForFlashcard(correctAnswer, currentFlashcard.question);
-                                                setMcqOptions(options);
+                                                // Generate immediately, enhance in background
+                                                generateOptionsForFlashcard(correctAnswer, currentFlashcard.question, true)
+                                                    .then(options => setMcqOptions(options))
+                                                    .catch(error => console.error('Error generating options:', error));
                                             }
                                         }}
                                         className="text-xs"
@@ -1124,16 +1178,13 @@ export default function FlashcardGenerator() {
         <div className="space-y-6">
             {showQuizSummary ? null : (
                 <Card className="group transform transition-all hover:shadow-lg hover:-translate-y-0.5 border-0 bg-gradient-to-br from-background/80 to-background/60 backdrop-blur-sm">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 group-hover:text-primary transition-colors">
-                            <div className="p-1 rounded bg-primary/10 group-hover:bg-primary/15 transition-colors">
-                                <GraduationCap className="size-5 text-primary" />
+                    <CardHeader className="py-3">
+                        <CardTitle className="flex items-center gap-2 group-hover:text-primary transition-colors text-base">
+                            <div className="p-0.5 rounded bg-primary/10 group-hover:bg-primary/15 transition-colors">
+                                <GraduationCap className="size-4 text-primary" />
                             </div>
                             Flashcard Generator
                         </CardTitle>
-                        <CardDescription className="text-muted-foreground">
-                            Generate study flashcards from your class chats or by topic.
-                        </CardDescription>
                     </CardHeader>
             <CardContent>
                  <Tabs defaultValue="classes" className="w-full">

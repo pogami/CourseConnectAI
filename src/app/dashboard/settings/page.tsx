@@ -17,7 +17,20 @@ import {
   Lock,
   Eye,
   EyeOff,
-  X
+  X,
+  Brain,
+  CheckCircle,
+  RefreshCw,
+  Shield,
+  Smartphone,
+  Monitor,
+  Tablet,
+  Globe,
+  MapPin,
+  LogOut,
+  GraduationCap,
+  BookOpen,
+  Target
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -27,6 +40,7 @@ import { doc, getDoc, deleteDoc, collection, getDocs, query, where, updateDoc, s
 import { db } from "@/lib/firebase/client-simple";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function SettingsPage() {
@@ -44,14 +58,24 @@ export default function SettingsPage() {
   const [isClearingFiles, setIsClearingFiles] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [deviceInfo, setDeviceInfo] = useState<{
+    type: 'mobile' | 'tablet' | 'desktop';
+    browser: string;
+    platform: string;
+    location: string | null;
+  } | null>(null);
   const autoSyncUnsubscribesRef = useRef<Array<() => void>>([]);
 
   const [settings, setSettings] = useState({
     data: {
       autoSync: true,
       analytics: true,
+    },
+    security: {
+      newDeviceAlerts: false
     }
   });
+
 
   // Load user settings from Firestore
   useEffect(() => {
@@ -77,6 +101,117 @@ export default function SettingsPage() {
     loadUserSettings();
   }, [user]);
 
+  // Detect device type and location
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const detectDevice = () => {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const platform = navigator.platform;
+      
+      // Detect device type
+      let deviceType: 'mobile' | 'tablet' | 'desktop' = 'desktop';
+      
+      if (/tablet|ipad|playbook|silk/i.test(userAgent)) {
+        deviceType = 'tablet';
+      } else if (/mobile|iphone|ipod|android|blackberry|opera|mini|windows\sce|palm|smartphone|iemobile/i.test(userAgent)) {
+        deviceType = 'mobile';
+      }
+      
+      // Detect browser
+      let browser = 'Unknown';
+      if (userAgent.includes('chrome') && !userAgent.includes('edg')) {
+        browser = 'Chrome';
+      } else if (userAgent.includes('firefox')) {
+        browser = 'Firefox';
+      } else if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
+        browser = 'Safari';
+      } else if (userAgent.includes('edg')) {
+        browser = 'Edge';
+      } else if (userAgent.includes('opera') || userAgent.includes('opr')) {
+        browser = 'Opera';
+      }
+      
+      setDeviceInfo({
+        type: deviceType,
+        browser,
+        platform: platform || 'Unknown',
+        location: null
+      });
+    };
+
+    const getLocation = async () => {
+      try {
+        // Try to get location from browser geolocation
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                // Use reverse geocoding to get city/country
+                const response = await fetch(
+                  `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`
+                );
+                if (response.ok) {
+                  const data = await response.json();
+                  const locationStr = data.city && data.countryName 
+                    ? `${data.city}, ${data.countryName}`
+                    : data.countryName || data.principalSubdivision || 'Unknown Location';
+                  
+                  setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
+                }
+              } catch (err) {
+                console.warn('Could not fetch location details:', err);
+              }
+            },
+            () => {
+              // User denied or error - try IP-based location as fallback
+              fetch('https://ipapi.co/json/')
+                .then(res => res.json())
+                .then(data => {
+                  const locationStr = data.city && data.country_name
+                    ? `${data.city}, ${data.country_name}`
+                    : data.country_name || 'Unknown Location';
+                  setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
+                })
+                .catch(() => {
+                  // Fallback to timezone-based location
+                  try {
+                    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                    const locationStr = tz.replace(/_/g, ' ').split('/').pop() || 'Unknown Location';
+                    setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
+                  } catch {}
+                });
+            },
+            { timeout: 5000 }
+          );
+        } else {
+          // Fallback to IP-based location
+          fetch('https://ipapi.co/json/')
+            .then(res => res.json())
+            .then(data => {
+              const locationStr = data.city && data.country_name
+                ? `${data.city}, ${data.country_name}`
+                : data.country_name || 'Unknown Location';
+              setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
+            })
+            .catch(() => {
+              // Final fallback to timezone
+              try {
+                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const locationStr = tz.replace(/_/g, ' ').split('/').pop() || 'Unknown Location';
+                setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
+              } catch {}
+            });
+        }
+      } catch (err) {
+        console.warn('Error getting location:', err);
+      }
+    };
+
+    detectDevice();
+    getLocation();
+  }, []);
+
   const handleSettingChange = (category: string, setting: string, value: boolean) => {
     setSettings(prev => ({
       ...prev,
@@ -91,6 +226,7 @@ export default function SettingsPage() {
       description: `${setting} has been ${value ? 'enabled' : 'disabled'}.`,
     });
   };
+
 
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) {
@@ -896,69 +1032,97 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* User Info */}
-        <Card className="border-0 bg-gradient-to-br from-card to-card/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="size-5 text-primary" />
-              Account Information
-            </CardTitle>
-            <CardDescription>
-              Your basic account details and contact information
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Display Name</Label>
-                <div className="p-3 rounded-lg bg-muted/30 border">
-                  <span className="text-sm">
-                    {(() => {
-                      const isGuest = user?.isGuest || user?.isAnonymous;
-                      if (isGuest) {
-                        return user?.displayName || 'Guest User';
-                      }
-                      return user?.displayName || 'Not set';
-                    })()}
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Email Address</Label>
-                <div className="p-3 rounded-lg bg-muted/30 border flex items-center justify-between">
-                  <span className="text-sm text-foreground dark:text-foreground">
-                    {(() => {
-                      const isGuest = user?.isGuest || user?.isAnonymous || !user?.email;
-                      if (isGuest) {
-                        return showEmail ? (
-                          <span className="text-muted-foreground italic">No email address (Guest account)</span>
-                        ) : (
-                          '••••••••@•••••.com'
-                        );
-                      }
-                      return showEmail ? user?.email : '••••••••@•••••.com';
-                    })()}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowEmail(!showEmail)}
-                    className="hover:bg-transparent h-8 w-8 p-0"
-                  >
-                    {showEmail ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </Button>
-                </div>
-              </div>
+        {/* Account Information */}
+        <section>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <User className="w-5 h-5 text-primary" />
             </div>
-            <Separator />
-            <div className="flex gap-3">
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Lock className="size-4 mr-2" />
-                    Change Password
-                  </Button>
-                </DialogTrigger>
+            <div>
+              <h2 className="text-xl font-semibold">Account Information</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Your basic account details and contact information</p>
+            </div>
+          </div>
+          <Card className="border shadow-lg bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden">
+            <CardContent className="p-8 space-y-8">
+              {/* Account Details */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Account Details</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-3 group">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-primary" />
+                      <Label className="text-sm font-semibold text-foreground cursor-pointer">
+                        Display Name
+                      </Label>
+                    </div>
+                    <div className="p-4 rounded-lg bg-gradient-to-br from-muted/50 to-muted/30 border-2 border-border/50 shadow-inner">
+                      <span className="text-base font-semibold">
+                        {(() => {
+                          const isGuest = user?.isGuest || user?.isAnonymous;
+                          if (isGuest) {
+                            return user?.displayName || 'Guest User';
+                          }
+                          return user?.displayName || 'Not set';
+                        })()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Your display name as shown to others</p>
+                  </div>
+                  <div className="space-y-3 group">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-primary" />
+                      <Label className="text-sm font-semibold text-foreground cursor-pointer">
+                        Email Address
+                      </Label>
+                    </div>
+                    <div className="p-4 rounded-lg bg-gradient-to-br from-muted/50 to-muted/30 border-2 border-border/50 shadow-inner flex items-center justify-between gap-3">
+                      <span className="text-base font-semibold text-foreground truncate flex-1">
+                        {(() => {
+                          const isGuest = user?.isGuest || user?.isAnonymous || !user?.email;
+                          if (isGuest) {
+                            return showEmail ? (
+                              <span className="text-muted-foreground italic">No email address (Guest account)</span>
+                            ) : (
+                              '••••••••@•••••.com'
+                            );
+                          }
+                          return showEmail ? user?.email : '••••••••@•••••.com';
+                        })()}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowEmail(!showEmail)}
+                        className="hover:bg-muted/80 h-9 w-9 p-0 flex-shrink-0 rounded-lg transition-colors"
+                      >
+                        {showEmail ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Your account email address</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Actions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Security</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                </div>
+                <div className="flex gap-3">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="gap-2 h-11 px-6 font-semibold shadow-sm hover:shadow-md transition-all border-2">
+                        <Lock className="size-4" />
+                        Change Password
+                      </Button>
+                    </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Change Password</DialogTitle>
@@ -1060,157 +1224,235 @@ export default function SettingsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
-          </CardContent>
-        </Card>
-
-
-
-        {/* Data Management */}
-        <Card className="border-0 bg-gradient-to-br from-card/50 to-card/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="size-5 text-primary" />
-              Data Management
-            </CardTitle>
-            <CardDescription>
-              Manage your data and account information
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">Auto Sync</Label>
-                  <p className="text-xs text-muted-foreground">Automatically sync your data across devices</p>
-                  <p className={`text-xs italic mt-1 ${settings.data.autoSync ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {settings.data.autoSync ? '✓ Active - syncing data in real-time' : '○ Disabled - manual sync only'}
-                  </p>
                 </div>
-                <Switch
-                  checked={settings.data.autoSync}
-                  onCheckedChange={(checked) => handleAutoSyncChange(checked)}
-                />
               </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">Analytics</Label>
-                  <p className="text-xs text-muted-foreground">Help improve CourseConnect by sharing usage data</p>
-                  <p className={`text-xs italic mt-1 ${settings.data.analytics ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {settings.data.analytics ? '✓ Enabled - helps us improve the platform' : '○ Disabled - no data collected'}
-                  </p>
-                  <div className="text-xs text-muted-foreground mt-2 space-y-1">
-                    <p><strong>Privacy Protection:</strong></p>
-                    <p>• No Personal Info: We don't collect your name, email, or personal details</p>
-                    <p>• Anonymous: Your user ID is just a random string</p>
-                    <p>• Aggregated: We look at patterns, not individual users</p>
-                    <p>• Optional: You can turn it off anytime</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={settings.data.analytics}
-                  onCheckedChange={(checked) => handleAnalyticsChange(checked)}
-                />
-              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+{/* Security & Activity */}
+        <section>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Shield className="w-5 h-5 text-primary" />
             </div>
-            <Separator />
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button onClick={handleExportData} variant="outline" className="flex-1">
-                <Download className="size-4 mr-2" />
-                Export My Data
-              </Button>
-              <Dialog open={showDeleteAccountDialog} onOpenChange={(open) => {
-                // Prevent closing if deletion is in progress
-                if (!isDeletingAccount) {
-                  setShowDeleteAccountDialog(open);
-                }
-              }}>
-                <DialogTrigger asChild>
-                  <div className="delete-account-btn flex-1 rounded-md px-4 py-2 cursor-pointer flex items-center justify-center hover:opacity-90 transition-opacity">
-                    <Trash2 className="size-4 mr-2" />
-                    Delete Account
+            <div>
+              <h2 className="text-xl font-semibold">Security & Activity</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Manage your account security and active sessions</p>
+            </div>
+          </div>
+          <Card className="border shadow-lg bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden">
+            <CardContent className="p-8 space-y-8">
+              {/* Security Settings */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Security Settings</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-br from-muted/30 to-muted/10 border-2 border-border/50">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-primary" />
+                      <Label className="text-sm font-semibold text-foreground cursor-pointer">
+                        New Device Alerts
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-6">Receive email alerts when a new device signs in</p>
                   </div>
-                </DialogTrigger>
-                <DialogContent onInteractOutside={(e) => {
-                  // Prevent closing by clicking outside if deletion is in progress
-                  if (isDeletingAccount) {
-                    e.preventDefault();
-                  }
-                }} onEscapeKeyDown={(e) => {
-                  // Prevent closing with Escape key if deletion is in progress
-                  if (isDeletingAccount) {
-                    e.preventDefault();
-                  }
-                }}>
-                  <DialogHeader>
-                    {!isDeletingAccount && (
-                      <button
-                        onClick={() => setShowDeleteAccountDialog(false)}
-                        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10"
-                      >
-                        <X className="h-4 w-4" />
-                        <span className="sr-only">Close</span>
-                      </button>
-                    )}
-                    <DialogTitle className="text-red-600 flex items-center gap-2">
-                      {isDeletingAccount && (
-                        <div className="h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
-                      )}
-                      Delete Account
-                    </DialogTitle>
-                    <DialogDescription>
-                      {isDeletingAccount
-                        ? "Deleting your account and all data. Please wait..."
-                        : "This action cannot be undone. This will permanently delete your account and remove all your data from our servers."}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                      <h4 className="font-medium text-red-800 dark:text-red-200 mb-2">What will be deleted:</h4>
-                      <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
-                        <li>• All your chat conversations and messages</li>
-                        <li>• All uploaded files and syllabi</li>
-                        <li>• All notifications and settings</li>
-                        <li>• Your user profile and account data</li>
-                        <li>• Your login credentials and authentication</li>
-                      </ul>
+                  <Switch
+                    checked={settings.security?.newDeviceAlerts ?? false}
+                    onCheckedChange={(checked) => handleSettingChange('security', 'newDeviceAlerts', checked)}
+                  />
+                </div>
+              </div>
+
+              {/* Active Sessions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Active Sessions</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                </div>
+                <div className="rounded-xl border-2 border-border/50 bg-gradient-to-br from-muted/30 to-muted/10 overflow-hidden shadow-sm">
+                  <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                    <div className="flex items-center gap-5 flex-1 w-full">
+                      <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center flex-shrink-0 ring-2 ring-primary/20 shadow-md">
+                        {deviceInfo ? (
+                          deviceInfo.type === 'mobile' ? (
+                            <Smartphone className="h-7 w-7 text-primary" />
+                          ) : deviceInfo.type === 'tablet' ? (
+                            <Tablet className="h-7 w-7 text-primary" />
+                          ) : (
+                            <Monitor className="h-7 w-7 text-primary" />
+                          )
+                        ) : (
+                          <Smartphone className="h-7 w-7 text-primary" />
+                        )}
+                      </div>
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="font-bold text-base">
+                            {deviceInfo ? (
+                              <>
+                                {deviceInfo.browser} on {deviceInfo.platform}
+                              </>
+                            ) : (
+                              'Current Session'
+                            )}
+                          </span>
+                          <Badge variant="secondary" className="bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30 px-3 py-1 text-xs font-bold uppercase tracking-wider shadow-sm">
+                            Active Now
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-4 w-4" />
+                            <span className="font-medium">
+                              {deviceInfo ? (
+                                <>
+                                  {deviceInfo.type.charAt(0).toUpperCase() + deviceInfo.type.slice(1)} • {deviceInfo.browser}
+                                </>
+                              ) : (
+                                typeof window !== 'undefined' ? navigator.userAgent : 'Unknown Device'
+                              )}
+                            </span>
+                          </div>
+                          {deviceInfo?.location && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              <span className="font-medium">{deviceInfo.location}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <Label htmlFor="deleteConfirm">Type "DELETE" to confirm</Label>
-                      <Input
-                        id="deleteConfirm"
-                        value={deleteConfirm}
-                        onChange={(e) => setDeleteConfirm(e.target.value)}
-                        placeholder="Type DELETE to confirm"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 sm:pl-0">
+                      <div className="text-sm text-muted-foreground text-right hidden sm:block">
+                        <p className="font-semibold">IP: Current Device</p>
+                        <p>Last active: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
                       <Button
-                        onClick={handleDeleteAccount}
-                        disabled={isDeletingAccount || deleteConfirm !== "DELETE"}
-                        variant="destructive"
-                        className="flex-1"
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 border-2 border-destructive/30 gap-2 h-10 font-semibold shadow-sm hover:shadow-md transition-all"
+                        onClick={() => {
+                          toast({
+                            title: "Session Revoked",
+                            description: "This session has been logged out. Please sign in again to continue.",
+                          });
+                        }}
                       >
-                        {isDeletingAccount ? "Deleting..." : "Permanently Delete Account"}
+                        <LogOut className="h-4 w-4" />
+                        Revoke
                       </Button>
                     </div>
                   </div>
-                </DialogContent>
-              </Dialog>
-              <style jsx>{`
-                .delete-account-btn {
-                  background-color: #ef4444 !important;
-                  color: white !important;
-                  border: 1px solid #ef4444 !important;
-                }
-                .delete-account-btn * {
-                  color: white !important;
-                }
-              `}</style>
-            </div>
-          </CardContent>
-        </Card>
+                  {/* Mobile only details */}
+                  <div className="px-5 pb-5 sm:hidden flex justify-between text-sm text-muted-foreground border-t-2 border-border/50 pt-4 bg-muted/30">
+                    <span className="font-medium">IP: Current Device</span>
+                    <span className="font-medium">Active: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Actions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Account Actions</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button onClick={handleExportData} variant="outline" className="flex-1 gap-2 h-11 font-semibold shadow-sm hover:shadow-md transition-all border-2">
+                    <Download className="size-4" />
+                    Export My Data
+                  </Button>
+                  <Dialog open={showDeleteAccountDialog} onOpenChange={(open) => {
+                    // Prevent closing if deletion is in progress
+                    if (!isDeletingAccount) {
+                      setShowDeleteAccountDialog(open);
+                    }
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="destructive" 
+                        className="flex-1 gap-2 h-11 font-semibold shadow-sm hover:shadow-md transition-all border-2"
+                      >
+                        <Trash2 className="size-4" />
+                        Delete Account
+                      </Button>
+                    </DialogTrigger>
+                  <DialogContent onInteractOutside={(e) => {
+                    // Prevent closing by clicking outside if deletion is in progress
+                    if (isDeletingAccount) {
+                      e.preventDefault();
+                    }
+                  }} onEscapeKeyDown={(e) => {
+                    // Prevent closing with Escape key if deletion is in progress
+                    if (isDeletingAccount) {
+                      e.preventDefault();
+                    }
+                  }}>
+                    <DialogHeader>
+                      {!isDeletingAccount && (
+                        <button
+                          onClick={() => setShowDeleteAccountDialog(false)}
+                          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10"
+                        >
+                          <X className="h-4 w-4" />
+                          <span className="sr-only">Close</span>
+                        </button>
+                      )}
+                      <DialogTitle>
+                        Delete Account
+                      </DialogTitle>
+                      <DialogDescription>
+                        {isDeletingAccount
+                          ? "Deleting your account and all data. Please wait..."
+                          : "This action cannot be undone. This will permanently delete your account and remove all your data from our servers."}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                        <h4 className="font-medium text-red-800 dark:text-red-200 mb-2">What will be deleted:</h4>
+                        <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
+                          <li>• All your chat conversations and messages</li>
+                          <li>• All uploaded files and syllabi</li>
+                          <li>• All notifications and settings</li>
+                          <li>• Your user profile and account data</li>
+                          <li>• Your login credentials and authentication</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <Label htmlFor="deleteConfirm">Type "DELETE" to confirm</Label>
+                        <Input
+                          id="deleteConfirm"
+                          value={deleteConfirm}
+                          onChange={(e) => setDeleteConfirm(e.target.value)}
+                          placeholder="Type DELETE to confirm"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleDeleteAccount}
+                          disabled={isDeletingAccount || deleteConfirm !== "DELETE"}
+                          variant="destructive"
+                          className="flex-1"
+                        >
+                          {isDeletingAccount ? "Deleting..." : "Permanently Delete Account"}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
       </div>
     </div>
   );

@@ -33,7 +33,7 @@ Return only the search terms, one per line, no explanations.`;
 
     if (ollamaResponse.ok) {
       const result = await ollamaResponse.json();
-      const searchTerms = result.response.split('\n').filter(term => term.trim());
+      const searchTerms = result.response.split('\n').filter((term: string) => term.trim());
       
       console.log('🔍 Enhanced search terms:', searchTerms);
       

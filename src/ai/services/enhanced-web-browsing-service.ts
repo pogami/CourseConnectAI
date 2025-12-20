@@ -34,55 +34,8 @@ export function shouldAutoSearch(question: string, aiResponse: string): AutoSear
   // Disable automatic search - only search when explicitly requested via @search or search button
   return {
     shouldSearch: false,
-    searchQuery: null,
-    reason: 'Automatic search disabled - use @search or search button'
-  };
-  
-  // Check for specific topics that benefit from web search
-  const searchableTopics = [
-    'weather', 'stock', 'price', 'news', 'event', 'sports', 'movie',
-    'celebrity', 'company', 'product', 'technology', 'science',
-    'politics', 'economy', 'cryptocurrency', 'bitcoin'
-  ];
-  
-  const hasSearchableTopic = searchableTopics.some(topic => 
-    lowerQuestion.includes(topic)
-  );
-  
-  // Determine if we should search
-  let shouldSearch = false;
-  let confidence = 0;
-  let searchQuery = question;
-  
-  // Only search if there's clear uncertainty AND it's about current information
-  // DuckDuckGo has no rate limits, so we can be more generous
-  if (hasUncertainty && needsCurrentInfo) {
-    shouldSearch = true;
-    confidence = 0.9;
-  } else if (needsCurrentInfo && hasSearchableTopic) {
-    shouldSearch = true;
-    confidence = 0.8;
-  } else if (hasUncertainty && hasSearchableTopic) {
-    shouldSearch = true;
-    confidence = 0.7;
-  }
-  
-  // Extract specific search terms from the question
-  if (shouldSearch) {
-    // Try to extract the main topic
-    const words = question.split(' ').filter(word => 
-      word.length > 3 && !['what', 'how', 'when', 'where', 'why', 'who'].includes(word.toLowerCase())
-    );
-    
-    if (words.length > 0) {
-      searchQuery = words.slice(0, 5).join(' '); // Take first 5 meaningful words
-    }
-  }
-  
-  return {
-    shouldSearch,
-    searchQuery,
-    confidence
+    searchQuery: undefined,
+    confidence: 0
   };
 }
 
@@ -145,7 +98,7 @@ export async function browseWithPuppeteer(url: string, options: {
     if (options.waitForContent) {
       await page.waitForSelector('body', { timeout: 5000 });
       // Wait a bit more for dynamic content
-      await page.waitForTimeout(2000);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
     
     // Extract title

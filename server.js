@@ -1,3 +1,11 @@
+const path = require('path');
+// Ensure a working localStorage in Node/SSR
+require('./localstorage-polyfill');
+// Ensure Buffer is available globally
+if (typeof global.Buffer === 'undefined') {
+  global.Buffer = require('buffer').Buffer;
+}
+
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
@@ -18,6 +26,21 @@ function getPortFromArgs() {
   return null;
 }
 
+// Provide a real backing file for Next's node localStorage shim to avoid warnings
+if (!process.env.NEXT_PRIVATE_LOCAL_STORAGE_FILE) {
+  process.env.NEXT_PRIVATE_LOCAL_STORAGE_FILE = '/tmp/next-localstorage';
+}
+
+// Ensure worker processes spawned by Next also preload the polyfill
+const polyfillPath = path.join(__dirname, 'localstorage-polyfill.js');
+if (!process.execArgv.includes('--require') || !process.execArgv.includes(polyfillPath)) {
+  process.execArgv.push('--require', polyfillPath);
+}
+const existingNodeOptions = process.env.NODE_OPTIONS || '';
+if (!existingNodeOptions.includes(polyfillPath)) {
+  process.env.NODE_OPTIONS = `${existingNodeOptions} --require ${polyfillPath}`.trim();
+}
+
 const port = process.env.PORT || getPortFromArgs() || 9002;
 const useTurbopack = process.argv.includes('--turbopack') || process.env.TURBOPACK === 'true';
 
@@ -27,8 +50,28 @@ const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
-    const parsedUrl = parse(req.url, true);
-    handle(req, res, parsedUrl);
+    try {
+      const parsedUrl = parse(req.url, true);
+      handle(req, res, parsedUrl).catch((err) => {
+        console.error('Error handling request:', err);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('Internal Server Error');
+        }
+      });
+    } catch (err) {
+      console.error('Error parsing request:', err);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'text/plain');
+        res.end('Internal Server Error');
+      }
+    }
+  });
+
+  server.on('error', (err) => {
+    console.error('Server error:', err);
   });
 
   server.listen(port, hostname, (err) => {
@@ -36,4 +79,7 @@ app.prepare().then(() => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> Server running on port ${port}`);
   });
+}).catch((err) => {
+  console.error('Failed to prepare Next.js app:', err);
+  process.exit(1);
 });

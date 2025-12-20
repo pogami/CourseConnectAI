@@ -16,7 +16,7 @@ export function ClientThemeToggle() {
     const initialTheme = savedTheme || systemTheme;
     setTheme(initialTheme);
     
-    // Apply theme to document - remove both classes first, then add the correct one
+    // Apply theme to document - remove all classes first, then add the correct one
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(initialTheme);
@@ -24,28 +24,13 @@ export function ClientThemeToggle() {
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
     
-    // Use View Transition API if supported
-    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
-      (document as any).startViewTransition(() => {
-        setTheme(newTheme);
-        localStorage.setItem('theme', newTheme);
-        
-        // Apply theme to document
-        const root = document.documentElement;
-        root.classList.remove('light', 'dark');
-        root.classList.add(newTheme);
-      });
-    } else {
-      // Fallback for browsers that don't support View Transition API
-      setTheme(newTheme);
-      localStorage.setItem('theme', newTheme);
-      
-      // Apply theme to document
-      const root = document.documentElement;
-      root.classList.remove('light', 'dark');
-      root.classList.add(newTheme);
-    }
+    // Apply theme to document
+    const root = document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(newTheme);
   };
 
   if (!isClient) {
@@ -57,7 +42,6 @@ export function ClientThemeToggle() {
       variant="ghost"
       size="sm"
       onClick={toggleTheme}
-      className="transition-all duration-300 hover:scale-105 hover:bg-transparent hover:text-current"
       aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
     >
       {theme === 'light' ? (

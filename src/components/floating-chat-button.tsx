@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Send, Upload, Mic, AtSign, GraduationCap } from 'lucide-react';
+import { AtSign, GraduationCap } from 'lucide-react';
+import { SentIcon, ImageUploadIcon, Mic01Icon, MicOff01Icon } from 'hugeicons-react';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/hooks/use-chat-store';
 import { auth } from '@/lib/firebase/client-simple';
@@ -244,6 +245,15 @@ export function FloatingChatButton() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle Ctrl+A / Cmd+A to select all text
+    if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (textareaRef.current) {
+        textareaRef.current.select();
+      }
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -334,7 +344,7 @@ export function FloatingChatButton() {
           onClick={handleFileUpload}
           title={selectedFile ? `Selected: ${selectedFile.name}` : "Upload file"}
         >
-          <Upload className="h-5 w-5" />
+          <ImageUploadIcon className="h-5 w-5" />
         </div>
         
         {/* Show selected file name */}
@@ -465,7 +475,11 @@ export function FloatingChatButton() {
           )}
           title={isVoiceActive ? "Stop recording" : "Start voice input"}
         >
-          <Mic className="h-5 w-5" />
+          {isVoiceActive ? (
+            <MicOff01Icon className="h-5 w-5" />
+          ) : (
+            <Mic01Icon className="h-5 w-5" />
+          )}
         </div>
 
         {/* Send Button (minimal, no gradient circle) */}
@@ -479,7 +493,7 @@ export function FloatingChatButton() {
           )}
           aria-label="Send"
         >
-          <Send className="h-5 w-5" />
+          <SentIcon className="h-5 w-5" />
         </div>
       </div>
     </div>

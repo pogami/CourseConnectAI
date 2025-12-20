@@ -10,6 +10,8 @@ export function MobileDetectionPopup() {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return; // stop SSR crash
+    
     // Check if user is on mobile
     const checkMobile = () => {
       const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -29,11 +31,13 @@ export function MobileDetectionPopup() {
   }, []);
 
   const handleDismiss = () => {
+    if (typeof window === "undefined") return; // stop SSR crash
     setIsOpen(false);
     localStorage.setItem('mobile-popup-dismissed', 'true');
   };
 
   const handleContinue = () => {
+    if (typeof window === "undefined") return; // stop SSR crash
     setIsOpen(false);
     localStorage.setItem('mobile-popup-dismissed', 'true');
   };

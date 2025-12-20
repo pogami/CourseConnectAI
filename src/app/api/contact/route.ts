@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
     await resend.emails.send({
       from: 'CourseConnect AI <noreply@courseconnectai.com>',
       to: recipientEmail,
-      replyTo: email,
+      reply_to: email,
       subject: `Contact Form: ${subjectText}`,
       html: emailHtml,
     });

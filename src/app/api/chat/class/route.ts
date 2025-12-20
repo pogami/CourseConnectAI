@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { provideStudyAssistanceWithFallback } from '@/ai/services/dual-ai-service';
+import { extractUserNameFromMessages, extractUserNameFromMessage } from '@/lib/extract-user-name';
 import { filterContent, generateFilterResponse } from '@/lib/content-filter';
 import { createAIResponseNotification } from '@/lib/notifications/server';
 import {
@@ -34,7 +35,8 @@ export async function POST(request: NextRequest) {
       courseData,
       chatId,
       metadata,
-      userId 
+      userId,
+      userName
     } = await request.json();
     
     if (!question) {
@@ -44,6 +46,26 @@ export async function POST(request: NextRequest) {
     // Clean @ mentions from the question if present
     const cleanedQuestion = question.replace(/@ai\s*/gi, '').trim();
     const lowerQuestion = cleanedQuestion.toLowerCase();
+    
+    // Extract user name from conversation history or current message as fallback
+    let extractedName: string | null = null;
+    try {
+      if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+        const messages = conversationHistory.map((msg: any) => ({
+          sender: msg.role === 'user' ? 'user' : 'bot',
+          text: msg.content || ''
+        }));
+        extractedName = extractUserNameFromMessages(messages);
+      }
+      if (!extractedName) {
+        extractedName = extractUserNameFromMessage(cleanedQuestion);
+      }
+    } catch (error) {
+      console.warn('Error extracting user name:', error);
+    }
+    
+    // Use extracted name if found, otherwise use provided userName
+    const finalUserName = extractedName || userName;
 
     // Content filtering for safety
     const filterResult = filterContent(cleanedQuestion);
@@ -346,7 +368,12 @@ IMPORTANT:
         }).join('\n')}\n\n`
       : '';
 
-    // Create course-aware prompt
+    // Detect frustration and emotional state
+    const { detectFrustration, generateEmpatheticPrefix } = await import('@/lib/emotional-intelligence');
+    const frustration = detectFrustration(cleanedQuestion, conversationHistory);
+    const empatheticPrefix = generateEmpatheticPrefix(frustration);
+
+    // Create course-aware prompt with emotional intelligence
     const prompt = `You are CourseConnect AI, an enthusiastic and knowledgeable academic tutor for this specific course.
 
 🚨 CRITICAL INSTRUCTIONS - READ THIS FIRST:
@@ -368,6 +395,14 @@ Your personality and approach:
 - Be encouraging and positive - help them build confidence
 - Get straight to the point, no fluff or formal structure
 - Vary your approach: sometimes explain deeply, sometimes ask questions, sometimes test understanding
+
+${frustration.isFrustrated ? `🚨 EMOTIONAL INTELLIGENCE - FRUSTRATION DETECTED:
+The student is showing signs of frustration (${frustration.level} level). Reasons: ${frustration.reasons.join(', ')}.
+${frustration.suggestedApproach === 'analogy' ? 'IMPORTANT: Use a real-world analogy or sports example instead of formulas/math. Step away from technical language and make it relatable.' : ''}
+${frustration.suggestedApproach === 'step-by-step' ? 'IMPORTANT: Break this down into very small, clear steps. Go slowly and check understanding at each step.' : ''}
+${frustration.suggestedApproach === 'example' ? 'IMPORTANT: Use concrete examples to illustrate the concept. Show, do not just tell.' : ''}
+${frustration.suggestedApproach === 'break' ? 'IMPORTANT: Break this into the smallest possible pieces. Tackle one tiny piece at a time.' : ''}
+Start your response with empathy and understanding. Acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.` : ''}
 
 Response guidelines:
 - For "what is this course" questions: Give an enthusiastic overview using SPECIFIC details from the syllabus (course topics, professor, assignments, exams). Show that you know the actual course!
@@ -441,7 +476,7 @@ CourseConnect AI:`;
               messages: [
                 {
                   role: 'system',
-                  content: 'You are CourseConnect AI, a supportive and engaging academic tutor. Be conversational and genuinely helpful like a caring tutor. Adapt your response style based on the student\'s input: sometimes explain deeply, sometimes ask questions, sometimes test understanding. Use course context to provide relevant examples. Be encouraging and positive. Avoid generic responses - just start helping immediately. Vary your endings: sometimes ask questions, sometimes offer to continue, sometimes test understanding, sometimes just explain more.'
+                  content: `You are CourseConnect AI, a supportive and engaging academic tutor. ${finalUserName ? `You are talking to ${finalUserName}. Always remember their name and use it naturally in your responses when appropriate.` : ''} Be conversational and genuinely helpful like a caring tutor. Adapt your response style based on the student's input: sometimes explain deeply, sometimes ask questions, sometimes test understanding. Use course context to provide relevant examples. Be encouraging and positive. Avoid generic responses - just start helping immediately. Vary your endings: sometimes ask questions, sometimes offer to continue, sometimes test understanding, sometimes just explain more.${finalUserName ? ` If the student asks "who am I" or "what's my name", tell them their name is ${finalUserName}.` : ''}`
                 },
                 {
                   role: 'user',
@@ -591,6 +626,14 @@ What would you like to dive into? What's challenging you right now?`;
         selectedModel = 'fallback';
       }
     }
+
+    // Prepend empathetic prefix if frustration detected
+    if (frustration.isFrustrated && empatheticPrefix) {
+      aiResponse = empatheticPrefix + aiResponse;
+    }
+
+    // Note: Frustration guidance is already included in the prompt, so no need to prepend
+    // The AI will naturally incorporate empathetic responses based on the prompt instructions
 
     // Final sanitation: limit emoji usage
     const sanitizeEmojis = (text: string): string => {

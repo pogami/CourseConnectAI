@@ -8,13 +8,13 @@ import {
   Cancel01Icon,
   Home01Icon,
   Chatting01Icon,
-  Upload01Icon,
+  FolderUploadIcon,
   BookOpen01Icon,
   UserGroupIcon,
   Settings01Icon,
-  Logout01Icon,
   Notification01Icon
 } from "hugeicons-react";
+import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -38,9 +38,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
   const navigationItems = [
     { name: "Dashboard", href: "/dashboard", icon: Home01Icon },
     { name: "Class Chat", href: "/dashboard/chat", icon: Chatting01Icon },
-    { name: "Syllabus Upload", href: "/dashboard/upload", icon: Upload01Icon },
-    { name: "Classes", href: "/dashboard/classes", icon: BookOpen01Icon },
-    { name: "Study Groups", href: "/dashboard/groups", icon: UserGroupIcon },
+    { name: "Syllabus Upload", href: "/dashboard/upload", icon: FolderUploadIcon },
     { name: "Notifications", href: "/dashboard/notifications", icon: Notification01Icon },
   ];
 
@@ -214,7 +212,7 @@ export function MobileNavigation({ user, className }: MobileNavigationProps) {
                   handleLogout();
                 }}
               >
-                <Logout01Icon className="h-4 w-4 mr-2" />
+                <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
               </Button>
             </div>

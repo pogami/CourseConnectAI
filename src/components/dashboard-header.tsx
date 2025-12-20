@@ -25,11 +25,12 @@ import { Skeleton } from "./ui/skeleton";
 import { 
   UserIcon, 
   Settings01Icon, 
-  Logout01Icon, 
+  Logout02Icon, 
   Notification01Icon, 
   Shield01Icon, 
   BookOpen01Icon 
 } from "hugeicons-react";
+import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useChatStore } from "@/hooks/use-chat-store";
 import { NotificationBell } from "@/components/notification-bell";
@@ -155,6 +156,23 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
           return;
         }
         
+        // Also check if user is guest even if not marked as such (for anonymous auth)
+        if (guestData && !user.displayName && !user.email) {
+          try {
+            const parsed = JSON.parse(guestData);
+            if (parsed.displayName) {
+              setIsGuest(true);
+              user.displayName = parsed.displayName;
+              if (parsed.profilePicture) {
+                setUserProfilePicture(parsed.profilePicture);
+              }
+              return;
+            }
+          } catch (error) {
+            console.error("Error parsing guest data:", error);
+          }
+        }
+        
         // For authenticated users, check Firebase document
         try {
           const userDocRef = doc(db, "users", user.uid);
@@ -172,9 +190,19 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
           } else if (user.photoURL) {
             // User document doesn't exist yet, use auth photoURL
             setUserProfilePicture(user.photoURL);
+            // If no Firebase doc and no email/displayName, might still be guest
+            if (!user.email && !user.displayName && guestData) {
+              setIsGuest(true);
+            }
           }
         } catch (error) {
           console.error("Error checking guest status:", error);
+        }
+      } else {
+        // No user - check if we have guest data
+        const guestData = localStorage.getItem('guestUser');
+        if (guestData) {
+          setIsGuest(true);
         }
       }
     };
@@ -197,6 +225,51 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
       window.removeEventListener('profilePictureChanged', handleProfilePictureChange as EventListener);
     };
   }, []);
+
+  // Listen for guest name updates in localStorage
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'guestUser') {
+        // Re-check guest status when guestUser changes
+        const guestData = e.newValue;
+        if (guestData) {
+          try {
+            const parsed = JSON.parse(guestData);
+            if (parsed.displayName && user && (user.isGuest || user.isAnonymous)) {
+              setIsGuest(true);
+              user.displayName = parsed.displayName;
+            }
+          } catch (error) {
+            console.error('Error parsing guest data from storage event:', error);
+          }
+        }
+      }
+    };
+
+    // Also listen for custom events (for same-tab updates)
+    const handleCustomStorageChange = () => {
+      const guestData = localStorage.getItem('guestUser');
+      if (guestData && user && (user.isGuest || user.isAnonymous)) {
+        try {
+          const parsed = JSON.parse(guestData);
+          if (parsed.displayName) {
+            setIsGuest(true);
+            user.displayName = parsed.displayName;
+          }
+        } catch (error) {
+          console.error('Error parsing guest data:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('guestNameUpdated', handleCustomStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('guestNameUpdated', handleCustomStorageChange);
+    };
+  }, [user]);
 
   // Removed realtime database presence tracking
   useEffect(() => {
@@ -457,7 +530,7 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
                 onClick={handleLogout} 
                 className="group px-3 sm:px-4 py-2 sm:py-3 rounded-lg hover:bg-destructive/15 hover:shadow-md hover:scale-[1.01] hover:ring-2 hover:ring-destructive/20 transition-all text-destructive focus:text-destructive"
               >
-                <Logout01Icon className="size-4 mr-2 sm:mr-3 flex-shrink-0" />
+                <LogOut className="size-4 mr-2 sm:mr-3 text-destructive flex-shrink-0" />
                 <span className="text-sm sm:text-base">Logout</span>
               </DropdownMenuItem>
             </>

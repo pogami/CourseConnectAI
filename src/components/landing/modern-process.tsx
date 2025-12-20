@@ -3,7 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-  Upload01Icon,
+  FolderUploadIcon,
   Calendar01Icon,
   Chatting01Icon,
   Target01Icon,
@@ -15,7 +15,7 @@ const processSteps = [
     description:
       'Stop digging through syllabi. Drag your syllabus once, and we instantly extract every deadline, reading, and grading policy for you.',
     tag: 'Syllabus Intelligence',
-    icon: Upload01Icon,
+    icon: FolderUploadIcon,
     color: 'blue',
   },
   {

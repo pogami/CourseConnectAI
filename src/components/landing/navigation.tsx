@@ -49,50 +49,10 @@ export function Navigation() {
             /* Scrolled state - Floating capsule header */
             <motion.div 
               className="flex items-center bg-white/10 dark:bg-gray-900/10 backdrop-blur-3xl shadow-2xl border border-white/20 dark:border-white/10 rounded-full px-8 py-4 gap-10 relative overflow-hidden mx-auto"
-              animate={{
-                background: [
-                  "linear-gradient(45deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08), rgba(255,255,255,0.15))",
-                  "linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.08), rgba(255,255,255,0.2))",
-                  "linear-gradient(225deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08), rgba(255,255,255,0.15))",
-                  "linear-gradient(315deg, rgba(255,255,255,0.2), rgba(255,255,255,0.08), rgba(255,255,255,0.2))",
-                  "linear-gradient(45deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08), rgba(255,255,255,0.15))"
-                ]
-              }}
-              transition={{
-                duration: 8,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
             >
-              {/* Liquid glass shimmer overlay */}
-              <motion.div 
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full pointer-events-none"
-                animate={{
-                  x: ["-100%", "100%"],
-                  opacity: [0, 0.6, 0]
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                  delay: 1
-                }}
-              />
-              
-              {/* Liquid glass ripple effect */}
-              <motion.div 
-                className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent rounded-full pointer-events-none"
-                animate={{
-                  scale: [0.8, 1.2, 0.8],
-                  opacity: [0.3, 0.6, 0.3]
-                }}
-                transition={{
-                  duration: 4,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                  delay: 0.5
-                }}
-              />
               {/* Logo */}
               <Link href="/" className="relative z-10 flex items-center gap-2 hover:opacity-80 transition-opacity duration-200">
                 <CCLogo className="h-8 w-auto" />

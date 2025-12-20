@@ -4,7 +4,7 @@ import { generateFlashcards } from '@/ai/flows/generate-flashcards';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { className, chatHistory, topic, context } = body;
+    const { className, chatHistory, syllabusData, topic, context } = body;
 
     // Validate input
     if (!className && !topic && !context) {
@@ -14,12 +14,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Generating flashcards with:', { className, topic, hasChatHistory: !!chatHistory, hasContext: !!context });
+    console.log('Generating flashcards with:', { className, topic, hasChatHistory: !!chatHistory, hasSyllabusData: !!syllabusData, hasContext: !!context });
 
     // Call the AI flow
     const result = await generateFlashcards({
       className,
       chatHistory,
+      syllabusData,
       topic,
       context
     });

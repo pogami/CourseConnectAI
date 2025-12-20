@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, Sparkles, CheckCircle, Zap, MessageSquare, Target, ArrowRight, FileCog } from "lucide-react";
+import { FolderUploadIcon, AiMagicIcon, Chatting01Icon, FlashIcon, Target01Icon, ConnectIcon } from "hugeicons-react";
 import InteractiveSyllabusDemo from "@/components/interactive-syllabus-demo";
 import { HowItWorksSlideshow } from "@/components/how-it-works-slideshow";
 import { motion } from "framer-motion";
@@ -31,22 +32,34 @@ const steps = [
     id: 1,
     title: "Upload Syllabus",
     description: "Drag & drop PDF, DOCX, or TXT",
-    icon: <Upload className="size-5 text-white" />,
-    color: "bg-blue-500"
+    icon: <FolderUploadIcon size={24} />,
+    color: "bg-gradient-to-br from-blue-500 to-blue-600",
+    glowColor: "from-blue-500/20"
   },
   {
     id: 2,
     title: "AI Processing",
     description: "We map assignments & schedule",
-    icon: <FileCog className="size-5 text-white" />,
-    color: "bg-purple-500"
+    icon: <AiMagicIcon size={24} />,
+    color: "bg-gradient-to-br from-purple-500 to-purple-600",
+    glowColor: "from-purple-500/20"
   },
   {
     id: 3,
     title: "Start Studying",
     description: "Chat with your course instantly",
-    icon: <MessageSquare className="size-5 text-white" />,
-    color: "bg-green-500"
+    icon: <Chatting01Icon size={24} />,
+    color: "bg-gradient-to-br from-green-500 to-green-600",
+    glowColor: "from-green-500/20"
+  },
+  {
+    id: 4,
+    title: "Connect & Study Together",
+    description: "Find classmates automatically",
+    icon: <ConnectIcon size={24} />,
+    color: "bg-gradient-to-br from-orange-500 to-orange-600",
+    glowColor: "from-orange-500/20",
+    comingSoon: true
   }
 ];
 
@@ -83,109 +96,133 @@ export default function EnhancedSyllabusUploadPage() {
           </div>
           
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">
-            <span className="block text-foreground">Transform Your Syllabus</span>
+            <span className="block text-foreground">Upload Your Syllabus</span>
             <span className="block mt-2 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-              Into an Interactive Tutor
+              Get an AI That Knows Your Course
             </span>
           </h1>
           
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Upload your course documents and let our AI instantly create a personalized study companion with deadlines, topics, and exam prep.
+            Our AI extracts deadlines, assignments, and course details, then creates a dedicated chat that understands your specific class. Ask questions, get homework help, and study smarter.
           </p>
         </motion.div>
 
-        {/* Main Content Grid */}
-        <div className="grid lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Column: Upload Area */}
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="lg:col-span-7 space-y-6"
-          >
-            <div className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/50 to-purple-600/50 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
-              <div className="relative bg-card rounded-xl border shadow-sm overflow-hidden">
-                <InteractiveSyllabusDemo redirectToSignup={false} />
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Right Column: How it works & Info */}
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="lg:col-span-5 space-y-6"
-          >
-            {/* How It Works Card */}
-            <Card className="border bg-card/50 backdrop-blur-xl shadow-xl overflow-hidden relative group/card hover:shadow-2xl transition-all duration-500 border-primary/10">
-              {/* Decorative background elements */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-500/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
-              
-              <CardContent className="p-6 sm:p-8 relative">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="h-8 w-1.5 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full" />
-                  <div>
-                    <h3 className="text-xl font-bold tracking-tight">How It Works</h3>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Simple 3-Step Process</p>
-                  </div>
+        {/* How It Works Section - Top */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="max-w-6xl mx-auto"
+        >
+          <Card className="border bg-card/50 backdrop-blur-xl shadow-xl overflow-hidden relative group/card hover:shadow-2xl transition-all duration-500 border-primary/10">
+            {/* Decorative background elements */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-500/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+            
+            <CardContent className="p-6 sm:p-8 relative">
+              <div className="flex items-center gap-3 mb-10">
+                <div className="h-10 w-1.5 bg-gradient-to-b from-blue-500 via-purple-500 via-green-500 to-orange-500 rounded-full shadow-lg" />
+                <div>
+                  <h3 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                    How It Works
+                  </h3>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-0.5">
+                      Simple Process
+                    </p>
                 </div>
+              </div>
 
-                <div className="space-y-8 relative">
-                  {/* Connecting Line with Gradient */}
-                  <div className="absolute left-[19px] top-4 bottom-8 w-0.5 bg-gradient-to-b from-blue-500 via-purple-500 to-green-500/50 opacity-30" />
-                  
-                  {steps.map((step, index) => (
-                    <div key={step.id} className="flex gap-6 relative group">
-                      {/* Step Indicator */}
-                      <div className="relative z-10">
-                        <div className={`w-10 h-10 rounded-xl ${step.color} flex items-center justify-center shadow-lg transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 ring-4 ring-background`}>
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+                {steps.map((step, index) => (
+                  <motion.div 
+                    key={step.id} 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.3 + index * 0.1 }}
+                    className="flex flex-col items-center text-center relative group"
+                  >
+                    {/* Step Indicator */}
+                    <div className="relative z-10 flex-shrink-0 mb-4">
+                      <div className={`w-16 h-16 rounded-2xl ${step.color} flex items-center justify-center shadow-xl transform transition-all duration-300 group-hover:scale-110 group-hover:shadow-2xl ring-4 ring-background relative overflow-hidden`}>
+                        {/* Glow effect */}
+                        <div className={`absolute inset-0 bg-gradient-to-br ${step.glowColor} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+                        <div className="relative z-10 text-white">
                           {step.icon}
                         </div>
                       </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 pt-1">
-                        <h4 className="font-bold text-base text-foreground group-hover:text-primary transition-colors duration-300">
-                          {step.title}
-                        </h4>
-                        <p className="text-sm text-muted-foreground mt-1 leading-relaxed group-hover:text-muted-foreground/80">
-                          {step.description}
-                        </p>
+                      {/* Step number badge */}
+                      <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-background border-2 border-gray-300 dark:border-gray-700 flex items-center justify-center shadow-sm">
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                          {step.id}
+                        </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    
+                    {/* Content */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-2">
+                        <h4 className="font-bold text-lg text-foreground group-hover:text-primary transition-colors duration-300">
+                          {step.title}
+                        </h4>
+                        {step.comingSoon && (
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full border border-orange-200 dark:border-orange-800">
+                            Coming Soon
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed group-hover:text-foreground/70 transition-colors duration-300">
+                        {step.description}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-            {/* Value Props */}
-            <div className="grid gap-4">
-              <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex gap-4 items-start">
-                <div className="p-2 rounded-lg bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
-                  <Zap className="size-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-sm mb-1">Instant Analysis</h4>
-                  <p className="text-xs text-muted-foreground">We detect meeting times, grading policies, and assignment milestones instantly.</p>
-                </div>
-              </div>
-              
-              <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-4 items-start">
-                <div className="p-2 rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400">
-                  <Target className="size-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-sm mb-1">Study Assistance</h4>
-                  <p className="text-xs text-muted-foreground">Generate summaries, practice questions, and study plans directly from your syllabus.</p>
-                </div>
-              </div>
+        {/* Upload Area - Middle */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.6 }}
+          className="max-w-3xl mx-auto"
+        >
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/50 to-purple-600/50 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
+            <div className="relative bg-card rounded-xl border shadow-sm overflow-hidden">
+              <InteractiveSyllabusDemo redirectToSignup={false} />
             </div>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
+
+        {/* Value Props - Bottom */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.8 }}
+          className="max-w-4xl mx-auto grid md:grid-cols-2 gap-4 mt-8"
+        >
+          <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex gap-4 items-start">
+            <div className="p-2 rounded-lg bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
+              <FlashIcon size={20} />
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm mb-1">Instant Analysis</h4>
+              <p className="text-xs text-muted-foreground">We detect meeting times, grading policies, and assignment milestones instantly.</p>
+            </div>
+          </div>
+          
+          <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-4 items-start">
+            <div className="p-2 rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400">
+              <Target01Icon size={20} />
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm mb-1">Study Assistance</h4>
+              <p className="text-xs text-muted-foreground">Chat with AI that knows your course. Get homework help, explanations, and study guidance based on your syllabus.</p>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Slideshow */}
         {showSlideshow && (

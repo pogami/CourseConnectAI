@@ -41,7 +41,7 @@ const contactMethods = [
     description: "Get help with syllabus upload, AI chats, billing, or technical issues",
     action: "courseconnect.noreply@gmail.com",
     link: "mailto:courseconnect.noreply@gmail.com",
-    gradient: "from-blue-500 to-cyan-500",
+    gradient: "from-sky-500 to-sky-400",
     delay: 0.1
   },
   {
@@ -50,7 +50,7 @@ const contactMethods = [
     description: "Browse FAQs and guides to find answers quickly",
     action: "View FAQs",
     link: "#faq",
-    gradient: "from-purple-500 to-pink-500",
+    gradient: "from-sky-500 to-sky-400",
     delay: 0.2
   }
 ];
@@ -134,13 +134,13 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 font-sans selection:bg-blue-500/30">
+      <div className="min-h-screen bg-white dark:bg-gray-950 font-sans selection:bg-sky-500/30">
       <Navigation />
       
       {/* Otherworldly Background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-500/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/10 rounded-full blur-[120px] animate-pulse delay-1000" />
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-sky-500/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-sky-500/10 rounded-full blur-[120px] animate-pulse delay-1000" />
         <div className="absolute top-[40%] left-[40%] w-[20%] h-[20%] bg-pink-500/10 rounded-full blur-[100px] animate-float" />
         <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.02] dark:opacity-[0.05]" />
       </div>
@@ -158,7 +158,7 @@ export default function ContactPage() {
               className="text-5xl md:text-7xl font-bold text-gray-900 dark:text-white mb-6 tracking-tight"
             >
               Let's start a <br className="hidden md:block" />
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent animate-gradient-x">
+              <span className="bg-gradient-to-r from-sky-600 to-sky-500 bg-clip-text text-transparent">
                 conversation
               </span>
             </motion.h1>
@@ -192,20 +192,20 @@ export default function ContactPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.4 + (idx * 0.1) }}
-                    className="group block p-6 rounded-2xl bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-2 border-gray-200/50 dark:border-gray-800/50 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1"
+                    className="group block p-6 rounded-2xl bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-2 border-gray-200/50 dark:border-gray-800/50 hover:border-sky-500/50 dark:hover:border-sky-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-sky-500/10 hover:-translate-y-1"
                   >
                     <div className="flex items-start gap-4">
                       <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center bg-gradient-to-br text-white shadow-lg flex-shrink-0 group-hover:scale-110 transition-transform", method.gradient)}>
                         <method.icon className="w-7 h-7" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
                           {method.title}
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-2">
                           {method.description}
                         </p>
-                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400 group-hover:underline">
+                        <span className="text-sm font-medium text-sky-600 dark:text-sky-400 group-hover:underline">
                           {method.action} →
                         </span>
                       </div>
@@ -215,7 +215,7 @@ export default function ContactPage() {
               </div>
 
               {/* Quick Tips Section */}
-              <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-2xl p-6 border border-blue-200/50 dark:border-blue-800/50">
+              <div className="bg-gradient-to-br from-sky-50 to-sky-50 dark:from-sky-950/20 dark:to-sky-950/20 rounded-2xl p-6 border border-sky-200/50 dark:border-sky-800/50">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                   Quick Tips
                 </h3>
@@ -238,13 +238,13 @@ export default function ContactPage() {
               {/* FAQ Section */}
               <div id="faq" className="bg-white/30 dark:bg-gray-900/30 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800/50">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                  <HelpCircle className="w-5 h-5 text-purple-500" />
+                  <HelpCircle className="w-5 h-5 text-sky-500" />
                   Common Questions
                 </h3>
                 <Accordion type="single" collapsible className="w-full">
                   {faqs.map((faq, index) => (
                     <AccordionItem key={index} value={`item-${index}`} className="border-b border-gray-200/50 dark:border-gray-700/50 last:border-0">
-                      <AccordionTrigger className="text-left hover:no-underline hover:text-blue-600 dark:hover:text-blue-400 transition-colors py-3 text-gray-900 dark:text-gray-200 font-medium">
+                      <AccordionTrigger className="text-left hover:no-underline hover:text-sky-600 dark:hover:text-sky-400 transition-colors py-3 text-gray-900 dark:text-gray-200 font-medium">
                         {faq.question}
                       </AccordionTrigger>
                       <AccordionContent className="text-gray-600 dark:text-gray-400 leading-relaxed pb-3 pt-1">
@@ -264,7 +264,7 @@ export default function ContactPage() {
               className="lg:col-span-7"
             >
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-[2.5rem] blur-2xl opacity-20 dark:opacity-40 animate-pulse" />
+                <div className="absolute inset-0 bg-sky-500 rounded-[2.5rem] blur-2xl opacity-20 dark:opacity-40 animate-pulse" />
                 <div className="relative bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl rounded-[2.5rem] p-8 md:p-12 border border-white/50 dark:border-gray-700/50 shadow-2xl">
                   {messageSent ? (
                     <motion.div
@@ -316,7 +316,7 @@ export default function ContactPage() {
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8 }}
                         onClick={() => setMessageSent(false)}
-                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105"
+                        className="px-6 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105"
                       >
                         Send Another Message
                       </motion.button>
@@ -337,7 +337,7 @@ export default function ContactPage() {
                           placeholder="Jane Doe"
                           value={formData.name}
                           onChange={(e) => handleInputChange("name", e.target.value)}
-                          className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 h-12 rounded-xl transition-all"
+                          className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-sky-500 dark:focus:border-sky-500 h-12 rounded-xl transition-all"
                           required
                         />
                       </div>
@@ -349,7 +349,7 @@ export default function ContactPage() {
                           placeholder="jane@university.edu"
                           value={formData.email}
                           onChange={(e) => handleInputChange("email", e.target.value)}
-                          className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 h-12 rounded-xl transition-all"
+                          className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-sky-500 dark:focus:border-sky-500 h-12 rounded-xl transition-all"
                           required
                         />
                       </div>
@@ -359,7 +359,7 @@ export default function ContactPage() {
                        <div className="space-y-2">
                         <Label htmlFor="category" className="text-gray-700 dark:text-gray-300">Topic</Label>
                         <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
-                          <SelectTrigger className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 h-12 rounded-xl transition-all">
+                          <SelectTrigger className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-sky-500 dark:focus:border-sky-500 h-12 rounded-xl transition-all">
                             <SelectValue placeholder="Select a topic" />
                           </SelectTrigger>
                           <SelectContent>
@@ -378,7 +378,7 @@ export default function ContactPage() {
                           placeholder="Brief summary"
                           value={formData.subject}
                           onChange={(e) => handleInputChange("subject", e.target.value)}
-                          className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 h-12 rounded-xl transition-all"
+                          className="bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-sky-500 dark:focus:border-sky-500 h-12 rounded-xl transition-all"
                           required
                         />
                       </div>
@@ -389,7 +389,7 @@ export default function ContactPage() {
                       <Textarea
                         id="message"
                         placeholder="Tell us how we can help..."
-                        className="min-h-[150px] bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 rounded-xl resize-none transition-all p-4"
+                        className="min-h-[150px] bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-sky-500 dark:focus:border-sky-500 rounded-xl resize-none transition-all p-4"
                         value={formData.message}
                         onChange={(e) => handleInputChange("message", e.target.value)}
                         required
@@ -399,7 +399,7 @@ export default function ContactPage() {
                     <Button 
                       type="submit" 
                       size="lg" 
-                      className="w-full h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] transition-all duration-300 text-lg font-semibold tracking-wide"
+                      className="w-full h-14 bg-sky-600 hover:bg-sky-700 text-white rounded-xl shadow-lg hover:shadow-sky-500/25 hover:scale-[1.02] transition-all duration-300 text-lg font-semibold tracking-wide"
                       disabled={isSubmitting}
                     >
                       {isSubmitting ? (

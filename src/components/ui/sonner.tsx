@@ -15,11 +15,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      position="bottom-right"
+      position="top-right"
       richColors={false}
       closeButton
       expand={true}
-      gap={0}
+      gap={8}
       duration={10000}
       toastOptions={{
         duration: 10000,

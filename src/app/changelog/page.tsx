@@ -14,7 +14,7 @@ import {
   MagicWand01Icon,
   Rocket01Icon,
   Search01Icon,
-  Bell01Icon,
+  Notification01Icon,
   Mail01Icon,
   CheckmarkCircle01Icon,
   AlertCircleIcon
@@ -54,6 +54,81 @@ interface Update {
 }
 
 const updates: Update[] = [
+  {
+    id: "dec-7-2025-docs",
+    date: "December 7, 2025",
+    version: "1.3.1",
+    title: "Smarter Document Analysis",
+    description: "Get editor-quality feedback on your documents with personalized, actionable advice tailored to your work.",
+    impact: "Upload any document—your essays, assignments, cover letters, or reports—and receive detailed feedback that speaks directly to you. The AI identifies your strengths, suggests specific improvements, and helps you polish your writing like a professional editor would.",
+    type: "minor",
+    items: [
+      {
+        category: "improvement",
+        icon: <Book01Icon className="w-5 h-5" />,
+        title: "Professional Document Analysis",
+        description: "Get detailed, editor-quality feedback on your documents. The AI now provides comprehensive analysis with clear strengths, specific suggestions for improvement, and actionable insights—just like a professional reviewer would.",
+        tags: ["Documents", "AI", "Feedback"]
+      },
+      {
+        category: "fix",
+        icon: <Chatting01Icon className="w-5 h-5" />,
+        title: "Personalized Document Feedback",
+        description: "The AI now speaks directly to you when reviewing your work. Instead of talking about you in third person, it uses 'you' and 'your'—making feedback feel more personal and helpful, like a mentor reviewing your cover letter or essay.",
+        tags: ["Documents", "AI", "UX"]
+      }
+    ]
+  },
+  {
+    id: "dec-7-2025-viz",
+    date: "December 7, 2025",
+    version: "1.3.1",
+    title: "Improved Charts & Diagrams",
+    description: "More reliable visualizations that work smoothly and don't break your layout.",
+    impact: "Charts and diagrams now parse correctly, scroll when they're wide, and the AI will fix them if something goes wrong—so you can focus on learning, not fighting with broken visuals.",
+    type: "patch",
+    items: [
+      {
+        category: "improvement",
+        icon: <ChartBarLineIcon className="w-5 h-5" />,
+        title: "Reliable Charts & Diagrams",
+        description: "Fixed parsing errors for graphs and charts. Wide diagrams now scroll horizontally instead of breaking your layout. If a diagram is wrong or empty, the AI will acknowledge the mistake and recreate it correctly.",
+        tags: ["Visualizations", "Charts", "UX"]
+      }
+    ]
+  },
+  {
+    id: "dec-7-2025-security",
+    date: "December 7, 2025",
+    version: "1.3.1",
+    title: "Enhanced Security & Settings",
+    description: "Better visibility into your account security and active sessions, plus improved settings organization.",
+    impact: "You can now see exactly which devices are signed into your account and get alerts if someone new accesses it—giving you peace of mind about your account security.",
+    type: "minor",
+    items: [
+      {
+        category: "improvement",
+        icon: <Shield01Icon className="w-5 h-5" />,
+        title: "Security & Activity Dashboard",
+        description: "New Security & Activity section shows your active session with device type, browser, location, and last active time. Keep track of where and when you're signed in.",
+        tags: ["Security", "Settings", "Privacy"]
+      },
+      {
+        category: "feature",
+        icon: <Notification01Icon className="w-5 h-5" />,
+        title: "New Device Alerts",
+        description: "Enable email alerts to get notified whenever a new device signs into your account. Stay informed about account access and catch any unauthorized logins quickly.",
+        tags: ["Security", "Notifications"]
+      },
+      {
+        category: "improvement",
+        icon: <Shield01Icon className="w-5 h-5" />,
+        title: "Streamlined Settings Page",
+        description: "Settings page reorganized for better clarity. Account information, security controls, and account actions are now easier to find and manage.",
+        tags: ["Settings", "UX"]
+      }
+    ]
+  },
   {
     id: "dec-2-2025",
     date: "December 2, 2025",
@@ -574,7 +649,7 @@ export default function ChangelogPage() {
                 Latest release spotlight
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                A quick snapshot of {latestRelease.title} (v{latestRelease.version}).
+                Here's what's new in {latestRelease.title} (v{latestRelease.version}).
               </p>
             </div>
             <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-slate-950/80 shadow-sm p-5 sm:p-6">

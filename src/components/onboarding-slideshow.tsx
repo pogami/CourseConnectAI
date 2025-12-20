@@ -7,7 +7,7 @@ import { ArrowRight01Icon } from "hugeicons-react";
 import {
   ArrowLeft01Icon,
   Cancel01Icon,
-  Upload01Icon,
+  FolderUploadIcon,
   CommandIcon,
   CheckmarkCircle01Icon,
   Chatting01Icon,
@@ -58,7 +58,7 @@ const slides: OnboardingSlide[] = [
     id: "upload",
     title: "Upload & Organize",
     description: "Upload your course documents and let AI extract all the important information automatically.",
-    icon: <Upload01Icon className="size-8" />,
+    icon: <FolderUploadIcon className="size-8" />,
     actions: [
       "Drag and drop PDF, DOCX, or image files of your syllabus",
       "AI automatically extracts course name, professor, topics, and deadlines",

@@ -115,7 +115,7 @@ Question: ${question}${conversationContext}`;
 
   } catch (error) {
     console.error('In-depth analysis error:', error);
-    console.error('Error details:', error.message);
+    console.error('Error details:', error instanceof Error ? error.message : String(error));
     return NextResponse.json({ 
       analysis: "I apologize, but I'm having trouble generating detailed analysis right now. Please try again or ask a simpler version of your question.",
       provider: 'fallback'

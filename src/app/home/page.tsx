@@ -12,8 +12,6 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { useChatStore } from "@/hooks/use-chat-store";
-import { Hero } from "@/components/hero";
-import { FeaturesSection } from "@/components/landing/features-section";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SiteFooter } from "@/components/site-footer";
 import { useState, useEffect } from "react";
@@ -21,7 +19,6 @@ import { Menu } from "lucide-react";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { MobileButton } from "@/components/ui/mobile-button";
 import { CourseConnectLogo } from "@/components/icons/courseconnect-logo";
-import { MobileAppSection } from "@/components/landing/mobile-app-section-lite";
 import { LiveActivityWidget } from "@/components/live-activity-widget";
 import { GradientStar } from "@/components/icons/gradient-star";
 // import { AIBot } from "@/components/ai-bot";
@@ -117,7 +114,6 @@ export default function LandingPage() {
                 </div>
             </header>
             <main className="flex-1">
-                <Hero />
                 <Tabs defaultValue="features" className="w-full">
                     <div className="container max-w-6xl mx-auto px-3 sm:px-6">
                         <TabsList className="grid w-full grid-cols-3 mb-6 sm:mb-8 h-12 sm:h-11 min-h-[48px] sm:min-h-[44px] bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-200/20 dark:border-purple-800/20">
@@ -903,9 +899,8 @@ export default function LandingPage() {
                     </div>
                         </div>
                         
-                {/* Dedicated Mobile Section */}
+                {/* Dedicated Mobile Section Removed */}
                 <div className="py-12 sm:py-16 lg:py-20">
-                    <MobileAppSection />
                 </div>
 
             </main>
@@ -924,7 +919,7 @@ export default function LandingPage() {
                             Choose the plan that works best for you. Start free and upgrade as you need more features.
                         </p>
                     </div>
-                        <FeaturesSection />
+                    {/* FeaturesSection Removed */}
                 </div>
             </section>
             

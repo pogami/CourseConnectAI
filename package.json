@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
+    "dev": "PORT=9004 node server.js",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
@@ -86,13 +86,14 @@
     "form-data": "^4.0.4",
     "framer-motion": "^12.23.24",
     "genkit": "^1.14.1",
+    "html2canvas": "^1.4.1",
     "hugeicons-react": "^0.3.0",
     "input-otp": "^1.4.2",
     "katex": "^0.16.25",
     "lucide-react": "^0.475.0",
     "mammoth": "^1.11.0",
     "natural": "^8.1.0",
-    "next": "15.3.3",
+    "next": "^15.5.7",
     "next-themes": "^0.4.6",
     "nodemailer": "^7.0.6",
     "ollama": "^0.6.0",
@@ -138,6 +139,7 @@
     "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/katex": "^0.16.7",
     "@types/node": "^20",
     "@types/react": "^18",

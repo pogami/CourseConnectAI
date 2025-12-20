@@ -382,63 +382,20 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           setProcessingStep('Reading DOCX content...');
           setProgress(20);
 
-          // Use server-side DOCX processing
-          console.log('Processing DOCX via server-side API...', { fileName: file.name, fileSize: file.size });
+          // Use client-side DOCX processing with mammoth
+          console.log('Processing DOCX via client-side extraction...', { fileName: file.name, fileSize: file.size });
 
-          const formData = new FormData();
-          if (file) {
-            formData.append('file', file);
-          } else {
-            throw new Error("No file selected");
-          }
-
-          // Add timeout to prevent hanging (30 seconds for DOCX)
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => {
-            controller.abort();
-          }, 30000); // 30 seconds timeout
-
-          try {
-            const response = await fetch('/api/docx-extract', {
-              method: 'POST',
-              body: formData,
-              signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}));
-              throw new Error(errorData.error || `Server error: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-              // Handle DOCX processing limitations gracefully
-              if (result.alternatives) {
-                const alternativesText = result.alternatives.map((alt: string, i: number) => `${i + 1}. ${alt}`).join('\n');
-                const errorMessage = `${result.error}\n\nAlternatives:\n${alternativesText}${result.note ? `\n\n${result.note}` : ''}`;
-                throw new Error(errorMessage);
-              } else {
-                throw new Error(result.error || 'DOCX processing failed');
-              }
-            }
-
-            text = result.text;
-            console.log('✅ DOCX extraction successful via server-side API:', {
-              textLength: text.length,
-              fileName: result.metadata?.fileName
-            });
-            setProgress(50);
-
-          } catch (fetchError: any) {
-            clearTimeout(timeoutId);
-            if (fetchError.name === 'AbortError') {
-              throw new Error('DOCX processing timed out. The file may be too large or corrupted. Please try converting to TXT format.');
-            }
-            throw fetchError;
-          }
+          const mammoth = await import('mammoth');
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          
+          text = result.value.trim();
+          
+          console.log('✅ DOCX extraction successful:', {
+            textLength: text.length,
+            fileName: file.name
+          });
+          setProgress(50);
 
         } catch (docxError: any) {
           console.error('❌ DOCX extraction error:', docxError);
@@ -455,81 +412,49 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
         }
       } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         try {
-          setProcessingStep('Preparing PDF for parsing...');
+          setProcessingStep('Reading PDF content...');
           setProgress(20);
 
-          // Send PDF to server-side API route (pdf parsing runs on server only)
-          console.log('Sending PDF to server for parsing...', { fileName: file.name, fileSize: file.size });
+          // Use server-side API for PDF extraction
+          console.log('Processing PDF via API...', { fileName: file.name, fileSize: file.size });
 
           const formData = new FormData();
-          if (file) {
-            formData.append('file', file);
-          } else {
-            throw new Error("No file selected");
-          }
+          formData.append('file', file);
 
           setProgress(30);
-          setProcessingStep('Course Connect is parsing PDF...');
+          setProcessingStep('Extracting text from PDF...');
 
-          const response = await fetch('/api/parse-pdf', {
+          const response = await fetch('/api/extract-text', {
             method: 'POST',
             body: formData,
           });
 
           if (!response.ok) {
-            // Try to get error details from response
-            let errorData: any = {};
-            const contentType = response.headers.get('content-type');
-
-            if (contentType && contentType.includes('application/json')) {
-              try {
-                errorData = await response.json();
-              } catch (e) {
-                console.error('Failed to parse error JSON:', e);
-              }
-            } else {
-              // If not JSON, it's likely a 404 or HTML error page
-              throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
-            }
-
-            console.error('❌ Server Error Response:', {
-              status: response.status,
-              statusText: response.statusText,
-              error: errorData.error,
-              details: errorData.details,
-              stack: errorData.stack,
-              fullError: errorData
-            });
-
-            // Check if the API returned helpful alternatives
-            if (errorData.alternatives && Array.isArray(errorData.alternatives)) {
-              throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
-            }
-
-            const errorMessage = errorData.error || errorData.details || `Server error: ${response.status}`;
-            throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server error: ${response.status}`);
           }
 
           const result = await response.json();
 
           if (!result.success || !result.text) {
-            throw new Error('PDFs can be tricky - try uploading a DOCX instead and we\'ll handle the rest!');
+            throw new Error(result.error || 'Failed to extract text from PDF');
           }
 
           text = result.text;
 
-          console.log('PDF extraction successful (server-side parser):', {
+          console.log('✅ PDF extraction successful:', {
             textLength: text.length,
-            fileName: file.name
+            fileName: file.name,
+            metadata: result.metadata
           });
           setProgress(50);
 
         } catch (pdfError: any) {
-          console.error('PDF extraction error:', pdfError);
+          console.error('❌ PDF extraction error:', pdfError);
           const errorMsg = pdfError.message || 'Failed to extract text from PDF';
           
           // Check if it's already our friendly message
-          if (errorMsg.includes('PDFs can be tricky')) {
+          if (errorMsg.includes('PDFs can be tricky') || errorMsg.includes('scanned PDF')) {
             setError(errorMsg);
             throw new Error(errorMsg);
           }
@@ -1175,185 +1100,154 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           )}
 
           {extractedData && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/20 dark:to-green-800/10">
-                    <CheckCircle className="size-8 text-green-600 dark:text-green-400" />
+            <div className="flex flex-col space-y-6 pb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="text-center space-y-3">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="p-2.5 rounded-full bg-green-100 dark:bg-green-900/30">
+                    <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
                   </div>
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
+                    Syllabus Analysis Complete!
+                  </h2>
                 </div>
-                <h3 className="text-xl font-semibold mb-2">Syllabus Analysis Complete!</h3>
-                <p className="text-muted-foreground">
+                <p className="text-base md:text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
                   Here's what our AI extracted from your syllabus:
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Course Information */}
-                <Card className="border-0 bg-gradient-to-br from-blue-50/90 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 backdrop-blur-md">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BookOpen className="size-5 text-blue-600" />
-                      Course Information
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Course Name</p>
-                      <p className={`font-medium ${redirectToSignup ? 'blur-[3px] select-none text-gray-900/40 dark:text-white/40' : ''}`}>
-                        {extractedData.courseName || 'Not found'}
-                      </p>
-                      {!extractedData.courseName && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain a clear course name.
-                        </p>
-                      )}
+              <Card className="border-0 bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 dark:from-gray-900 dark:via-blue-950/20 dark:to-purple-950/10 shadow-xl overflow-hidden relative z-10">
+                {/* Decorative gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-purple-500/5 dark:from-blue-500/10 dark:via-transparent dark:to-purple-500/10 pointer-events-none" />
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+                <CardContent className="p-6 md:p-8 space-y-8 relative z-10">
+                  
+                  {/* Header Section: Course Info */}
+                  <div className="flex flex-col md:flex-row justify-between gap-6 pb-6 border-b border-gray-200 dark:border-gray-800">
+                    <div className="space-y-1">
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {extractedData.courseName || 'Unknown Course'}
+                      </h3>
+                      <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                        <span className="font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-gray-700 dark:text-gray-300">
+                          {extractedData.courseCode || 'CODE'}
+                        </span>
+                        <span>•</span>
+                        <span>{extractedData.semester} {extractedData.year}</span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Course Code</p>
-                      <p className="font-medium">{extractedData.courseCode || 'Not found'}</p>
-                      {!extractedData.courseCode && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain a course code.
-                        </p>
-                      )}
+                    
+                    {/* Quick Stats */}
+                    <div className="flex gap-4">
+                      <div className="text-center px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                        <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                          {extractedData.assignments?.length || 0}
+                        </div>
+                        <div className="text-xs text-blue-600/80 dark:text-blue-400/80 font-medium">Assignments</div>
+                      </div>
+                      <div className="text-center px-4 py-2 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
+                        <div className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                          {extractedData.exams?.length || 0}
+                        </div>
+                        <div className="text-xs text-purple-600/80 dark:text-purple-400/80 font-medium">Exams</div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Professor</p>
-                      <p className={`font-medium ${redirectToSignup ? 'blur-[3px] select-none text-gray-900/40 dark:text-white/40' : ''}`}>
-                        {extractedData.professor || 'Not found'}
-                      </p>
-                      {!extractedData.professor && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain professor information.
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">University</p>
-                      <p className="font-medium">{extractedData.university || 'Not found'}</p>
-                      {!extractedData.university && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain university information.
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Semester & Year</p>
-                      <p className={`font-medium ${redirectToSignup ? 'blur-[3px] select-none text-gray-900/40 dark:text-white/40' : ''}`}>
-                        {extractedData.semester && extractedData.year
-                          ? `${extractedData.semester} ${extractedData.year}`
-                          : 'Not found'
-                        }
-                      </p>
-                      {(!extractedData.semester || !extractedData.year) && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain semester/year details.
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Class Time</p>
-                      <p className={`font-medium ${redirectToSignup ? 'blur-[2px] select-none text-gray-900/40 dark:text-white/40' : ''}`}>
-                        {extractedData.classTime || 'Not found'}
-                      </p>
-                      {!extractedData.classTime && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain class meeting times.
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* Academic Details */}
-                <Card className="border-0 bg-gradient-to-br from-purple-50/90 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/10 backdrop-blur-md">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Calendar className="size-5 text-purple-600" />
-                      Academic Details
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Topics Found</p>
-                      <p className="font-medium">{extractedData.topics?.length || 0} topics</p>
-                      {extractedData.topics && extractedData.topics.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {extractedData.topics.slice(0, 3).map((topic, index) => (
-                            <Badge key={index} variant="secondary" className={`text-xs ${redirectToSignup ? 'blur-[2px] select-none text-gray-900/40 dark:text-white/40' : ''}`}>
-                              {topic}
-                            </Badge>
-                          ))}
-                          {extractedData.topics.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{extractedData.topics.length - 3} more
-                            </Badge>
-                          )}
+                  {/* Details Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left Column: Key Details */}
+                    <div className="space-y-6">
+                      <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                        <User className="w-4 h-4" /> Key Details
+                      </h4>
+                      
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <User className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Professor</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{extractedData.professor || 'Not specified'}</p>
+                          </div>
                         </div>
-                      )}
-                      {(!extractedData.topics || extractedData.topics.length === 0) && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain topic details.
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Assignments</p>
-                      <p className="font-medium">{extractedData.assignments?.length || 0} assignments</p>
-                      {extractedData.assignments && extractedData.assignments.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {extractedData.assignments.slice(0, 3).map((assignment, index) => (
-                            <Badge key={index} variant="outline" className={`text-xs ${redirectToSignup ? 'blur-[2px] select-none text-gray-900/40 dark:text-white/40' : ''}`}>
-                              {assignment.name}
-                            </Badge>
-                          ))}
-                          {extractedData.assignments.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{extractedData.assignments.length - 3} more
-                            </Badge>
-                          )}
+                        
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <GraduationCap className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">University</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{extractedData.university || 'Not specified'}</p>
+                          </div>
                         </div>
-                      )}
-                      {(!extractedData.assignments || extractedData.assignments.length === 0) && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain assignment details.
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Exams</p>
-                      <p className="font-medium">{extractedData.exams?.length || 0} exams</p>
-                      {extractedData.exams && extractedData.exams.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {extractedData.exams.slice(0, 2).map((exam, index) => (
-                            <div key={index} className={`text-xs ${redirectToSignup ? 'blur-[2px] select-none text-gray-900/40 dark:text-white/40' : ''}`}>
-                              <span className="font-medium">{exam.name}</span>
-                              {exam.date && (
-                                <span className="text-muted-foreground ml-2">
-                                  - {formatDate(exam.date)}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                          {extractedData.exams.length > 2 && (
-                            <div className="relative group">
-                              <div className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                                +{extractedData.exams.length - 2} more exams
-                              </div>
-                            </div>
-                          )}
+
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <Clock className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Class Time</p>
+                            <p className={`text-sm text-gray-500 dark:text-gray-400 ${redirectToSignup ? 'blur-[2px] select-none' : ''}`}>
+                              {extractedData.classTime || 'Not specified'}
+                            </p>
+                          </div>
                         </div>
-                      )}
-                      {(!extractedData.exams || extractedData.exams.length === 0) && (
-                        <p className="text-xs text-muted-foreground">
-                          This syllabus may not contain exam information.
-                        </p>
-                      )}
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
+
+                    {/* Right Column: Topics & Deadlines */}
+                    <div className="space-y-6">
+                      <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" /> Topics & Deadlines
+                      </h4>
+
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 mb-2">Course Topics</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {extractedData.topics && extractedData.topics.length > 0 ? (
+                              <>
+                                {extractedData.topics.slice(0, 4).map((topic, i) => (
+                                  <span key={i} className={`px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 ${redirectToSignup ? 'blur-[2px] select-none' : ''}`}>
+                                    {topic}
+                                  </span>
+                                ))}
+                                {extractedData.topics.length > 4 && (
+                                  <span className="px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-800/50 text-xs text-gray-500">
+                                    +{extractedData.topics.length - 4} more
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">No topics extracted</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 mb-2">Upcoming Deadlines</p>
+                          <div className="space-y-2">
+                            {[...(extractedData.exams || []), ...(extractedData.assignments || [])]
+                              .slice(0, 3)
+                              .map((item, i) => (
+                                <div key={i} className={`flex items-center justify-between p-2 rounded bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 ${redirectToSignup ? 'blur-[2px] select-none' : ''}`}>
+                                  <span className="text-xs font-medium truncate max-w-[180px]">{item.name}</span>
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                                    {'date' in item ? formatDate(item.date as string) : 'dueDate' in item ? formatDate(item.dueDate as string) : 'TBD'}
+                                  </span>
+                                </div>
+                              ))}
+                            {(!extractedData.exams?.length && !extractedData.assignments?.length) && (
+                              <span className="text-xs text-gray-400 italic">No deadlines found</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
               {redirectToSignup && (
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg mx-auto mt-8">

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+// @ts-expect-error - db is exported as any but can be Firestore
 import { db } from '@/lib/firebase/admin';
+import type { Firestore } from 'firebase-admin/firestore';
+
+// Type assertion for db since it can be Firestore or mock
+const typedDb: Firestore | null = db as Firestore | null;
 
 export const runtime = 'nodejs';
 
@@ -25,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if Admin SDK is properly configured
-    if (!db || typeof db.collection !== 'function') {
+    if (!typedDb || typeof typedDb.collection !== 'function') {
       return NextResponse.json(
         { 
           error: 'Firebase Admin SDK not configured',
@@ -38,8 +43,8 @@ export async function GET(request: NextRequest) {
 
     // Use Admin SDK to bypass security rules
     try {
-      const usersSnapshot = await db.collection('users').get();
-      const users = usersSnapshot.docs.map(doc => ({
+      const usersSnapshot = await typedDb.collection('users').get();
+      const users = usersSnapshot.docs.map((doc: any) => ({
         uid: doc.id,
         ...doc.data()
       }));
@@ -85,11 +90,18 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    if (!typedDb || typeof typedDb.collection !== 'function') {
+      return NextResponse.json(
+        { error: 'Firebase Admin SDK not configured' },
+        { status: 503 }
+      );
+    }
+
     if (action === 'ban') {
-      await db.collection('users').doc(uid).update({ banned: true });
+      await typedDb.collection('users').doc(uid).update({ banned: true });
       return NextResponse.json({ success: true, message: 'User banned' });
     } else if (action === 'unban') {
-      await db.collection('users').doc(uid).update({ banned: false });
+      await typedDb.collection('users').doc(uid).update({ banned: false });
       return NextResponse.json({ success: true, message: 'User unbanned' });
     } else {
       return NextResponse.json(
@@ -124,7 +136,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await db.collection('users').doc(uid).delete();
+    if (!typedDb || typeof typedDb.collection !== 'function') {
+      return NextResponse.json(
+        { error: 'Firebase Admin SDK not configured' },
+        { status: 503 }
+      );
+    }
+    await typedDb.collection('users').doc(uid).delete();
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error: any) {
     console.error('Failed to delete user:', error);

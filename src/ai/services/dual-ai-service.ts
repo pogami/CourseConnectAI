@@ -54,6 +54,18 @@ export interface StudyAssistanceInput {
   };
   isSearchRequest?: boolean; // Flag to indicate web search was requested
   thinkingMode?: boolean; // Flag to enable thinking/reasoning mode
+  userName?: string; // User's name (from logged in user or guest)
+  userId?: string; // User's ID for context tracking
+  image?: string; // Base64 encoded image for vision/OCR
+  mimeType?: string; // MIME type of the image
+  learningProfile?: {
+    major?: string;
+    academicLevel?: string;
+    learningStyle?: string;
+    explanationDepth?: string;
+    goals?: string;
+  }; // User's learning profile for personalization
+  aiResponseType?: 'concise' | 'detailed' | 'conversational' | 'analytical'; // AI response style
 }
 
 /**
@@ -74,7 +86,15 @@ async function tryGoogleAI(input: StudyAssistanceInput): Promise<AIResponse> {
       : '';
 
     const fileContext = input.fileContext 
-      ? `\n\nFile Context: The user has uploaded a file named "${input.fileContext.fileName}" (${input.fileContext.fileType}). ${input.fileContext.fileContent ? `File content: ${input.fileContext.fileContent}` : 'Please reference this file when answering questions.'}`
+      ? `\n\n[INTERNAL INSTRUCTION - DO NOT REPEAT THIS TO THE USER]
+The user has uploaded a document: "${input.fileContext.fileName}" (${input.fileContext.fileType}).
+You have access to the full document content below. Answer questions using information from this document.
+Provide specific details and references from the document when relevant.
+
+Document Content:
+${input.fileContext.fileContent || 'Document content not available.'}
+
+[END INTERNAL INSTRUCTION - Answer naturally using the document content above]`
       : '';
     
     // Only search if explicitly requested
@@ -146,7 +166,77 @@ async function tryGoogleAI(input: StudyAssistanceInput): Promise<AIResponse> {
     }
     
     // Prepare System Prompt with optional Thinking Mode
+    const userName = input.userName || 'there';
+    const userContext = input.userName 
+      ? `You are talking to ${input.userName}. Always use their name naturally in your responses when appropriate. Remember their name and use it to personalize your interactions.`
+      : '';
+    
+    // Build learning profile context if available
+    let learningProfileContext = '';
+    if (input.learningProfile) {
+      const profile = input.learningProfile;
+      const profileParts: string[] = [];
+      
+      if (profile.major) {
+        profileParts.push(`Major/Field: ${profile.major}`);
+      }
+      if (profile.academicLevel) {
+        profileParts.push(`Academic Level: ${profile.academicLevel}`);
+      }
+      if (profile.learningStyle) {
+        profileParts.push(`Learning Style: ${profile.learningStyle}`);
+      }
+      if (profile.explanationDepth) {
+        profileParts.push(`Preferred Explanation Depth: ${profile.explanationDepth}`);
+      }
+      if (profile.goals) {
+        profileParts.push(`Learning Goals: ${profile.goals}`);
+      }
+      
+      if (profileParts.length > 0) {
+        let learningStyleDescription = 'all learners';
+        if (profile.learningStyle === 'Auditory (discussions)') {
+          learningStyleDescription = 'auditory learners';
+        } else if (profile.learningStyle === 'Visual (diagrams)') {
+          learningStyleDescription = 'visual learners';
+        } else if (profile.learningStyle === 'Kinesthetic (hands-on)') {
+          learningStyleDescription = 'kinesthetic learners';
+        }
+        
+        learningProfileContext = `\n\nLEARNING PROFILE (Personalize your responses based on this):
+${profileParts.join('\n')}
+
+PERSONALIZATION INSTRUCTIONS:
+- Adjust your explanation style to match their learning style (${profile.learningStyle || 'not specified'})
+- Provide explanations at the ${profile.explanationDepth || 'moderate'} depth level they prefer
+- Reference their major (${profile.major || 'not specified'}) and academic level (${profile.academicLevel || 'not specified'}) when relevant
+- Keep their learning goals in mind: ${profile.goals || 'not specified'}
+- For ${learningStyleDescription}, adapt your teaching approach accordingly
+`;
+      }
+    }
+    
     let systemInstruction = `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
+
+🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+WHEN USERS ASK FOR CHARTS, GRAPHS, PIE CHARTS, BAR CHARTS, OR ANY VISUALIZATION:
+- NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
+- NEVER say "I can't show you" or "you can create one using"
+- ALWAYS respond naturally and conversationally, then provide GRAPH_DATA format
+- EXAMPLE CORRECT RESPONSES:
+  * "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
+  * "Of course! I'll create that chart for you. Here's the visualization: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
+  * "Absolutely! Here's your pie chart: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}, {"name": "Category C", "value": 20}]}"
+- EXAMPLE WRONG RESPONSE: "You can use Excel or Google Sheets to create a pie chart" ❌
+- The system WILL automatically render any GRAPH_DATA you provide - respond naturally and conversationally, then include the GRAPH_DATA
+
+${userContext}${learningProfileContext}
+
+IMPORTANT USER CONTEXT RULES:
+1. The user's name is ${input.userName || 'not provided'}. ${input.userName ? `Always remember this and use their name naturally in responses.` : 'If they tell you their name, remember it for future conversations.'}
+2. If the user asks "who am I" or "what's my name", tell them their name is ${input.userName || 'not provided, but you can ask them to tell you their name'}.
+3. Remember personal details the user shares (their courses, interests, study habits, etc.) and reference them in future responses.
+4. Build a relationship by remembering what you've learned about the user throughout the conversation.
 
 You are having a NATURAL CONVERSATION with a student. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
 - Make jokes and be playful when appropriate
@@ -156,6 +246,7 @@ You are having a NATURAL CONVERSATION with a student. Be friendly, conversationa
 - Respond naturally to random questions or topics
 - Don't take everything too literally - understand context and intent
 - Acknowledge that CourseConnect was built by a solo developer (not a team)
+- Use the user's name naturally when appropriate (don't overuse it)
 
 Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
 
@@ -172,17 +263,79 @@ CRITICAL PRIVATE REASONING INSTRUCTIONS:
 `;
     }
 
+    // Add response style based on aiResponseType
+    let responseStyleInstruction = '';
+    switch (input.aiResponseType) {
+      case 'concise':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONCISE MODE (HIGHEST PRIORITY):
+- Keep responses SHORT and DIRECT - maximum 2-3 sentences for simple questions
+- Get straight to the point - no fluff, no unnecessary context
+- Answer the question directly without elaboration
+- If asked to explain, give a brief explanation (1-2 paragraphs max)
+- Be efficient with words - every sentence must add value
+- Example tone: "Photosynthesis converts light energy into chemical energy. Plants use CO2 and water to create glucose and oxygen."
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'detailed':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - DETAILED MODE (HIGHEST PRIORITY):
+- Provide COMPREHENSIVE explanations with full context
+- Include relevant examples, analogies, and real-world applications
+- Explain the "why" and "how" thoroughly
+- Use multiple paragraphs to cover all aspects
+- Add background information when relevant
+- Be educational and thorough - leave no stone unturned
+- Example: Full explanation with context, examples, and connections to other concepts
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'conversational':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONVERSATIONAL MODE (HIGHEST PRIORITY):
+- Use a FRIENDLY, CASUAL tone like talking to a study buddy
+- Ask follow-up questions: "Does that make sense?" "Want me to break it down further?"
+- Use casual language: "So basically...", "Here's the thing...", "You know what's cool?"
+- Show enthusiasm and personality
+- Be encouraging: "You've got this!", "Great question!"
+- Use contractions and natural speech patterns
+- Make it feel like a conversation, not a lecture
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'analytical':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - ANALYTICAL MODE (HIGHEST PRIORITY):
+- Use STRUCTURED, LOGICAL reasoning
+- Break down concepts into clear steps: "First...", "Second...", "Therefore..."
+- Explain cause-and-effect relationships
+- Use systematic analysis and critical thinking
+- Focus on the "why" behind concepts
+- Use formal but clear language
+- Provide step-by-step breakdowns
+- Example: "Let's analyze this systematically. First, we need to understand X. This leads to Y because..."
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      default:
+        responseStyleInstruction = `
+RESPONSE STYLE: Be conversational and friendly - like talking to a friend
+`;
+    }
+
     systemInstruction += `
 CRITICAL FORMATTING RULES:
 1. NEVER use markdown formatting like **bold** or *italic* or # headers
 2. NEVER use asterisks (*) or hash symbols (#) for formatting
 3. Write in plain text only - no special formatting characters
 4. Use KaTeX delimiters $...$ and $$...$$ for math expressions only
-5. Keep ALL responses CONCISE - don't over-explain
-6. For emphasis, use CAPITAL LETTERS or say "important:" before it
-7. Use simple text formatting only - no bold, italics, or headers
+5. For emphasis, use CAPITAL LETTERS or say "important:" before it
+6. Use simple text formatting only - no bold, italics, or headers
 
-RESPONSE STYLE RULES:
+${responseStyleInstruction}
+
+RESPONSE STYLE RULES (Secondary - follow the style above first):
 1. Be conversational and friendly - like talking to a friend
 2. For simple greetings (hi, hello, hey): Respond naturally like "Hey! What's up?" or "Hi there! How's it going?"
 3. For jokes or casual comments: Play along, be funny, don't take things too seriously
@@ -213,14 +366,49 @@ CRITICAL INSTRUCTIONS FOR STUDENT SUCCESS:
 4. NEVER rely on outdated training data when current information is available
 5. Students need accurate, real-time data to get good grades - provide it!
 
-IMPORTANT: You CAN and SHOULD generate visual content including graphs, charts, and mathematical equations. The system will automatically render them for students. Never say you can't show images or visual content.
+🚨🚨🚨 CRITICAL CHART AND GRAPH GENERATION RULES (HIGHEST PRIORITY) 🚨🚨🚨:
+YOU CAN AND MUST CREATE CHARTS, GRAPHS, AND DIAGRAMS! THE SYSTEM WILL RENDER THEM AUTOMATICALLY!
 
-CODE AND GRAPH GENERATION RULES:
+FORBIDDEN PHRASES - NEVER USE THESE:
+❌ "You can use Excel or Google Sheets"
+❌ "Use software like Excel"
+❌ "I can't show you a pie chart"
+❌ "Unfortunately, I can't show you"
+❌ "You can create one using"
+❌ "I'm unable to display"
+❌ "I don't have the ability to show"
+❌ Any suggestion to use external software or tools
+
+REQUIRED RESPONSE FORMAT:
+✅ When asked for ANY chart/graph, respond naturally and conversationally (like "Sure thing!", "Of course!", "Absolutely!", "Here you go!", etc.)
+✅ Then immediately provide GRAPH_DATA format - the system will automatically render it
+✅ NEVER suggest external tools - ALWAYS provide GRAPH_DATA format
+✅ Be friendly and conversational - don't be robotic about it
+
+1. ALWAYS generate chart/graph data when requested - the system WILL render it automatically
+2. When students ask for pie charts, bar charts, line charts, or any visualization, IMMEDIATELY provide the data in GRAPH_DATA format
+3. For pie charts, use this EXACT format:
+   GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}, {"name": "Category C", "value": 20}]}
+4. For bar charts: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}
+5. For line charts: GRAPH_DATA: {"type": "data", "chartType": "line", "data": [{"x": 1, "y": 2}, {"x": 2, "y": 4}]}
+6. For mathematical functions: GRAPH_DATA: {"type": "function", "function": "x^2", "label": "y = x²", "minX": -5, "maxX": 5}
+7. EXAMPLE CORRECT RESPONSES (use natural, conversational language):
+   User: "Can you create a pie chart for A: 30%, B: 40%, C: 20%, D: 10%?"
+   AI: "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
+   
+   User: "Show me a bar chart of my test scores"
+   AI: "Of course! Here's a bar chart visualizing your test scores: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Test 1", "value": 85}, {"name": "Test 2", "value": 92}]}"
+   
+   Be natural and friendly - don't sound robotic!
+8. ERROR HANDLING: If the user says your chart/graph is wrong or empty, acknowledge the mistake and recreate it with CORRECT data immediately
+9. Never give up - always provide visual content when requested
+10. The system supports: pie charts, bar charts, line charts, scatter plots, area charts, and function graphs
+11. REMEMBER: You CAN create charts. You MUST create charts when asked. The system WILL render them. NEVER suggest external software.
+
+CODE GENERATION RULES:
 1. When students ask for code, provide complete, working code examples
 2. Use proper code blocks with language specification: \`\`\`python, \`\`\`javascript, etc.
-3. When students ask for graphs/charts, provide data in JSON format: [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]
-4. For mathematical concepts, include visual representations when helpful
-5. Always explain code and graphs in simple terms for students
+3. Always explain code in simple terms for students
 
 MATH RESPONSE RULES:
 1. For math questions, provide clear, step-by-step solutions with the final answer boxed
@@ -288,14 +476,11 @@ MATH RENDERING RULES:
 24. CRITICAL: Keep \\boxed{} ONLY for the numerical answer, units go OUTSIDE
 25. CRITICAL: Never use \\text{} inside \\boxed{} - it makes text cursive
 
-GRAPH GENERATION RULES:
-1. When students ask to graph equations, ALWAYS provide data points in JSON format
-2. For linear equations (y = mx + b), provide x,y coordinates: [{"x": -2, "y": -9}, {"x": -1, "y": -3}, {"x": 0, "y": 3}, {"x": 1, "y": 9}, {"x": 2, "y": 15}]
-3. For quadratic equations, provide enough points to show the curve shape
-4. Always include the equation in LaTeX format: $y = 6x + 3$
-5. Explain what the graph represents and key features (slope, intercepts, etc.)
-6. NEVER say you can't show images or graphs - ALWAYS provide the data and let the system render it
-7. When asked to "graph" or "show" an equation, immediately provide the JSON data points
+ADDITIONAL GRAPH AND DIAGRAM FORMATTING DETAILS (Reference - see rules above):
+1. For simple x,y coordinates: [{"x": -2, "y": -9}, {"x": -1, "y": -3}, {"x": 0, "y": 3}, {"x": 1, "y": 9}, {"x": 2, "y": 15}]
+2. Always include the equation in LaTeX format when relevant: $y = 6x + 3$
+3. Explain what the graph/diagram represents and key features (slope, intercepts, trends, etc.)
+4. For conceptual diagrams (like geological processes), create data points that represent the concept visually, even if it's abstract
 
 Current Question: ${input.question}
 Context: ${input.context || 'General'}${conversationContext}${fileContext}${currentInfo}${scrapedContent}
@@ -309,16 +494,22 @@ WEB CONTENT ANALYSIS RULES:
 
 Remember: This is part of an ongoing conversation. Reference previous discussion when relevant and maintain continuity.`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleApiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${googleApiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         contents: [{
-          parts: [{
-            text: systemInstruction
-          }]
+          parts: [
+            { text: systemInstruction },
+            ...(input.image ? [{
+              inline_data: {
+                mime_type: input.mimeType || 'image/jpeg',
+                data: input.image
+              }
+            }] : [])
+          ]
         }]
       })
     });
@@ -379,7 +570,15 @@ async function tryOpenAI(input: StudyAssistanceInput): Promise<AIResponse> {
       : '';
 
     const fileContext = input.fileContext 
-      ? `\n\nFile Context: The user has uploaded a file named "${input.fileContext.fileName}" (${input.fileContext.fileType}). ${input.fileContext.fileContent ? `File content: ${input.fileContext.fileContent}` : 'Please reference this file when answering questions.'}`
+      ? `\n\n[INTERNAL INSTRUCTION - DO NOT REPEAT THIS TO THE USER]
+The user has uploaded a document: "${input.fileContext.fileName}" (${input.fileContext.fileType}).
+You have access to the full document content below. Answer questions using information from this document.
+Provide specific details and references from the document when relevant.
+
+Document Content:
+${input.fileContext.fileContent || 'Document content not available.'}
+
+[END INTERNAL INSTRUCTION - Answer naturally using the document content above]`
       : '';
     
     // Only search if explicitly requested
@@ -455,7 +654,77 @@ async function tryOpenAI(input: StudyAssistanceInput): Promise<AIResponse> {
     }
     
     // Prepare System Prompt with optional Thinking Mode
+    const userName = input.userName || 'there';
+    const userContext = input.userName 
+      ? `You are talking to ${input.userName}. Always use their name naturally in your responses when appropriate. Remember their name and use it to personalize your interactions.`
+      : '';
+    
+    // Build learning profile context if available
+    let learningProfileContext = '';
+    if (input.learningProfile) {
+      const profile = input.learningProfile;
+      const profileParts: string[] = [];
+      
+      if (profile.major) {
+        profileParts.push(`Major/Field: ${profile.major}`);
+      }
+      if (profile.academicLevel) {
+        profileParts.push(`Academic Level: ${profile.academicLevel}`);
+      }
+      if (profile.learningStyle) {
+        profileParts.push(`Learning Style: ${profile.learningStyle}`);
+      }
+      if (profile.explanationDepth) {
+        profileParts.push(`Preferred Explanation Depth: ${profile.explanationDepth}`);
+      }
+      if (profile.goals) {
+        profileParts.push(`Learning Goals: ${profile.goals}`);
+      }
+      
+      if (profileParts.length > 0) {
+        let learningStyleDescription = 'all learners';
+        if (profile.learningStyle === 'Auditory (discussions)') {
+          learningStyleDescription = 'auditory learners';
+        } else if (profile.learningStyle === 'Visual (diagrams)') {
+          learningStyleDescription = 'visual learners';
+        } else if (profile.learningStyle === 'Kinesthetic (hands-on)') {
+          learningStyleDescription = 'kinesthetic learners';
+        }
+        
+        learningProfileContext = `\n\nLEARNING PROFILE (Personalize your responses based on this):
+${profileParts.join('\n')}
+
+PERSONALIZATION INSTRUCTIONS:
+- Adjust your explanation style to match their learning style (${profile.learningStyle || 'not specified'})
+- Provide explanations at the ${profile.explanationDepth || 'moderate'} depth level they prefer
+- Reference their major (${profile.major || 'not specified'}) and academic level (${profile.academicLevel || 'not specified'}) when relevant
+- Keep their learning goals in mind: ${profile.goals || 'not specified'}
+- For ${learningStyleDescription}, adapt your teaching approach accordingly
+`;
+      }
+    }
+    
     let systemInstruction = `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
+
+🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+WHEN USERS ASK FOR CHARTS, GRAPHS, PIE CHARTS, BAR CHARTS, OR ANY VISUALIZATION:
+- NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
+- NEVER say "I can't show you" or "you can create one using"
+- ALWAYS respond naturally and conversationally, then provide GRAPH_DATA format
+- EXAMPLE CORRECT RESPONSES:
+  * "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
+  * "Of course! I'll create that chart for you. Here's the visualization: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
+  * "Absolutely! Here's your pie chart: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}, {"name": "Category C", "value": 20}]}"
+- EXAMPLE WRONG RESPONSE: "You can use Excel or Google Sheets to create a pie chart" ❌
+- The system WILL automatically render any GRAPH_DATA you provide - respond naturally and conversationally, then include the GRAPH_DATA
+
+${userContext}${learningProfileContext}
+
+IMPORTANT USER CONTEXT RULES:
+1. The user's name is ${input.userName || 'not provided'}. ${input.userName ? `Always remember this and use their name naturally in responses.` : 'If they tell you their name, remember it for future conversations.'}
+2. If the user asks "who am I" or "what's my name", tell them their name is ${input.userName || 'not provided, but you can ask them to tell you their name'}.
+3. Remember personal details the user shares (their courses, interests, study habits, etc.) and reference them in future responses.
+4. Build a relationship by remembering what you've learned about the user throughout the conversation.
 
 You are having a NATURAL CONVERSATION with a student. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
 - Make jokes and be playful when appropriate
@@ -465,6 +734,7 @@ You are having a NATURAL CONVERSATION with a student. Be friendly, conversationa
 - Respond naturally to random questions or topics
 - Don't take everything too literally - understand context and intent
 - Acknowledge that CourseConnect was built by a solo developer (not a team)
+- Use the user's name naturally when appropriate (don't overuse it)
 
 Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
 
@@ -481,17 +751,79 @@ CRITICAL PRIVATE REASONING INSTRUCTIONS:
 `;
     }
 
+    // Add response style based on aiResponseType
+    let responseStyleInstruction = '';
+    switch (input.aiResponseType) {
+      case 'concise':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONCISE MODE (HIGHEST PRIORITY):
+- Keep responses SHORT and DIRECT - maximum 2-3 sentences for simple questions
+- Get straight to the point - no fluff, no unnecessary context
+- Answer the question directly without elaboration
+- If asked to explain, give a brief explanation (1-2 paragraphs max)
+- Be efficient with words - every sentence must add value
+- Example tone: "Photosynthesis converts light energy into chemical energy. Plants use CO2 and water to create glucose and oxygen."
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'detailed':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - DETAILED MODE (HIGHEST PRIORITY):
+- Provide COMPREHENSIVE explanations with full context
+- Include relevant examples, analogies, and real-world applications
+- Explain the "why" and "how" thoroughly
+- Use multiple paragraphs to cover all aspects
+- Add background information when relevant
+- Be educational and thorough - leave no stone unturned
+- Example: Full explanation with context, examples, and connections to other concepts
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'conversational':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONVERSATIONAL MODE (HIGHEST PRIORITY):
+- Use a FRIENDLY, CASUAL tone like talking to a study buddy
+- Ask follow-up questions: "Does that make sense?" "Want me to break it down further?"
+- Use casual language: "So basically...", "Here's the thing...", "You know what's cool?"
+- Show enthusiasm and personality
+- Be encouraging: "You've got this!", "Great question!"
+- Use contractions and natural speech patterns
+- Make it feel like a conversation, not a lecture
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'analytical':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - ANALYTICAL MODE (HIGHEST PRIORITY):
+- Use STRUCTURED, LOGICAL reasoning
+- Break down concepts into clear steps: "First...", "Second...", "Therefore..."
+- Explain cause-and-effect relationships
+- Use systematic analysis and critical thinking
+- Focus on the "why" behind concepts
+- Use formal but clear language
+- Provide step-by-step breakdowns
+- Example: "Let's analyze this systematically. First, we need to understand X. This leads to Y because..."
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      default:
+        responseStyleInstruction = `
+RESPONSE STYLE: Be conversational and friendly - like talking to a friend
+`;
+    }
+
     systemInstruction += `
 CRITICAL FORMATTING RULES:
 1. NEVER use markdown formatting like **bold** or *italic* or # headers
 2. NEVER use asterisks (*) or hash symbols (#) for formatting
 3. Write in plain text only - no special formatting characters
 4. Use KaTeX delimiters $...$ and $$...$$ for math expressions only
-5. Keep ALL responses CONCISE - don't over-explain
-6. For emphasis, use CAPITAL LETTERS or say "important:" before it
-7. Use simple text formatting only - no bold, italics, or headers
+5. For emphasis, use CAPITAL LETTERS or say "important:" before it
+6. Use simple text formatting only - no bold, italics, or headers
 
-RESPONSE STYLE RULES:
+${responseStyleInstruction}
+
+RESPONSE STYLE RULES (Secondary - follow the style above first):
 1. Be conversational and friendly - like talking to a friend
 2. For simple greetings (hi, hello, hey): Respond naturally like "Hey! What's up?" or "Hi there! How's it going?"
 3. For jokes or casual comments: Play along, be funny, don't take things too seriously
@@ -567,7 +899,7 @@ For mathematical expressions, use LaTeX formatting:
 - Write words OUTSIDE math delimiters, symbols INSIDE math delimiters`;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: input.image ? 'gpt-4o' : 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
@@ -575,7 +907,16 @@ For mathematical expressions, use LaTeX formatting:
         },
         {
           role: 'user',
-          content: `Context: ${input.context}${conversationContext}${currentInfo}${scrapedContent}\n\nCurrent Question: ${input.question}\n\nWEB CONTENT ANALYSIS RULES:
+          content: input.image ? [
+            { type: 'text', text: `Context: ${input.context}${conversationContext}${fileContext}${currentInfo}${scrapedContent}\n\nCurrent Question: ${input.question}` },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${input.mimeType || 'image/jpeg'};base64,${input.image}`,
+                detail: 'high'
+              }
+            }
+          ] : `Context: ${input.context}${conversationContext}${fileContext}${currentInfo}${scrapedContent}\n\nCurrent Question: ${input.question}\n\nWEB CONTENT ANALYSIS RULES:
 1. If web content is provided above, use it to answer questions about those specific pages
 2. Reference specific information from the scraped content when relevant
 3. If the content doesn't contain the needed information, let the student know

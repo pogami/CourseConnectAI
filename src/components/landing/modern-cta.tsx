@@ -9,11 +9,11 @@ import Link from 'next/link';
 export function CTASection() {
   return (
     <section className="py-32 relative overflow-hidden bg-white dark:bg-gray-950">
-      {/* Background Effects */}
+      {/* Background Effects - Flowing gradient to match FAQ */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[600px] bg-gradient-to-b from-blue-500/10 via-purple-500/10 to-transparent rounded-full blur-3xl -translate-y-1/2" />
-        <div className="absolute bottom-0 right-1/2 translate-x-1/2 w-[800px] h-[800px] bg-gradient-to-t from-gray-50/80 dark:from-gray-900/60 to-transparent blur-[180px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(96,165,250,0.08),_transparent_60%)] dark:bg-[radial-gradient(circle_at_top,_rgba(79,70,229,0.15),_transparent_55%)]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-50/30 to-gray-50/50 dark:via-gray-900/30 dark:to-gray-900/50" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[600px] bg-gradient-to-b from-blue-500/5 via-purple-500/5 to-transparent rounded-full blur-3xl -translate-y-1/2" />
+        <div className="absolute bottom-0 right-1/2 translate-x-1/2 w-[800px] h-[800px] bg-gradient-to-t from-gray-50/40 dark:from-gray-900/40 to-transparent blur-[180px]" />
       </div>
       
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
@@ -24,39 +24,22 @@ export function CTASection() {
           transition={{ duration: 0.6 }}
           className="space-y-8"
         >
-          <h2 className="text-5xl md:text-6xl lg:text-7xl font-black text-gray-900 dark:text-white tracking-tight leading-tight">
-            Ready to{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-indigo-600">
-              ace your classes?
-            </span>
+          <h2 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white mb-8 tracking-tighter leading-[0.95]">
+            Don't just study. <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Outperform.</span>
           </h2>
           
-          <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Upload your syllabus, see every deadline in one dashboard, and get AI help that actually knows your course.
+          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed font-medium">
+            Join the growing community of students using AI to streamline their workflow and focus on what actually matters. Build your academic edge today.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
+          <div className="flex flex-col items-center justify-center gap-6">
             <Button
-              asChild
               size="lg"
-              className="h-14 px-8 text-lg font-semibold rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-14 py-9 text-2xl font-black rounded-[2rem] shadow-[0_20px_50px_rgba(37,99,235,0.2)] dark:shadow-[0_20px_50px_rgba(37,99,235,0.4)] transition-all duration-300 hover:scale-105 active:scale-95"
+              onClick={() => window.location.href = '/signup'}
             >
-              <Link href="#upload">
-                <Upload className="mr-2 h-5 w-5" />
-                Upload Your Syllabus
-              </Link>
-            </Button>
-            
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="h-14 px-8 text-lg font-semibold rounded-full border-2 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-900 transition-all duration-300 hover:scale-105"
-            >
-              <Link href="/signup">
-                Get Started Free
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
+              Get Started Free
             </Button>
           </div>
 

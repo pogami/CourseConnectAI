@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import { useChatStore } from '@/hooks/use-chat-store';
 import { auth } from '@/lib/firebase/client-simple';
 import BotResponse from '@/components/bot-response';
-import { motion } from 'framer-motion';
 
 interface StudySuggestion {
   title: string;
@@ -148,8 +147,8 @@ export function StudyFocusSuggestions() {
           
           // Only update if suggestions actually changed
           setSuggestions(prev => {
-            const prevHash = prev.map(s => `${s.title}:${s.course}`).sort().join('|');
-            const newHash = studySuggestions.map(s => `${s.title}:${s.course}`).sort().join('|');
+            const prevHash = prev.map((s: StudySuggestion) => `${s.title}:${s.course}`).sort().join('|');
+            const newHash = studySuggestions.map((s: StudySuggestion) => `${s.title}:${s.course}`).sort().join('|');
             if (prevHash === newHash) {
               return prev; // No change, return previous state
             }
@@ -174,18 +173,18 @@ export function StudyFocusSuggestions() {
     return () => clearTimeout(timer);
   }, [chats, user, currentMessageCount, lastMessageCount]);
 
-  // Show loading state with simple skeleton
-  if (isLoading) {
-    return (
-      <div className="space-y-3 animate-pulse">
-        <div className="h-4 w-48 bg-gray-200 dark:bg-gray-800 rounded-full" />
-        <div className="h-3 w-64 bg-gray-200 dark:bg-gray-800 rounded-full" />
-      </div>
-    );
+  // Check if there are any class chats with syllabi uploaded
+  const hasClassChats = Object.values(chats).some((chat: any) => 
+    chat.chatType === 'class' && chat.courseData
+  );
+
+  // Don't show if no class chats with syllabi
+  if (!hasClassChats) {
+    return null;
   }
 
-  // Don't show if empty
-  if (suggestions.length === 0) {
+  // Don't show if empty or still loading - just return null (no skeleton)
+  if (isLoading || suggestions.length === 0) {
     return null;
   }
 
@@ -298,12 +297,7 @@ export function StudyFocusSuggestions() {
             ][idx % 3];
             
             return (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.1 }}
-            >
+            <div key={idx}>
               <Card 
                 className={`relative overflow-hidden border ${styleConfig.border} bg-white dark:bg-gray-900 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group flex flex-col h-full`}
                 onClick={() => {
@@ -359,7 +353,7 @@ export function StudyFocusSuggestions() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
             );
           })}
         </div>

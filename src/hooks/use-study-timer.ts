@@ -13,17 +13,24 @@ interface StudyTimerHook {
 }
 
 export function useStudyTimer(): StudyTimerHook {
-  const [studyTime, setStudyTime] = useState(() => {
-    // Initialize with stored study time or 0
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('studyTime');
-      return stored ? parseFloat(stored) : 0;
-    }
-    return 0;
-  });
+  // FIXED: Don't use lazy initializer - load from localStorage in useEffect instead
+  const [studyTime, setStudyTime] = useState(0);
   const [isStudying, setIsStudying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastActivity, setLastActivity] = useState(Date.now());
+
+  // Load study time from localStorage on mount (client-side only)
+  useEffect(() => {
+    if (typeof window === "undefined") return; // stop SSR crash
+    try {
+      const stored = localStorage.getItem('studyTime');
+      if (stored) {
+        setStudyTime(parseFloat(stored));
+      }
+    } catch (error) {
+      console.warn('Failed to load study time:', error);
+    }
+  }, []);
 
   // Check for user activity
   useEffect(() => {

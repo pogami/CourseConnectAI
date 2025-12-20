@@ -22,7 +22,7 @@ import {
   Bot
 } from "lucide-react";
 import { useChatStore } from "@/hooks/use-chat-store";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { AIResponse } from '@/components/ai-response';
 import { TypingIndicator } from "@/components/typing-indicator";
 
@@ -39,7 +39,6 @@ export function FullPageChat({ isOpen, onClose, courseId, courseTitle }: FullPag
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
   
   const { 
     chats, 
@@ -87,10 +86,8 @@ export function FullPageChat({ isOpen, onClose, courseId, courseTitle }: FullPag
       await sendMessage(messageText, chatId);
     } catch (error) {
       console.error('Error sending message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive",
+      toast.error("Failed to send message", {
+        description: "Please try again.",
       });
     } finally {
       setIsLoading(false);
@@ -109,8 +106,7 @@ export function FullPageChat({ isOpen, onClose, courseId, courseTitle }: FullPag
       await navigator.clipboard.writeText(text);
       setCopiedMessageId(messageId);
       setTimeout(() => setCopiedMessageId(null), 2000);
-      toast({
-        title: "Copied!",
+      toast.success("Copied!", {
         description: "Message copied to clipboard",
       });
     } catch (error) {
@@ -121,16 +117,13 @@ export function FullPageChat({ isOpen, onClose, courseId, courseTitle }: FullPag
   const handleResetChat = async () => {
     try {
       await resetChat(chatId);
-      toast({
-        title: "Chat Reset",
+      toast.success("Chat Reset", {
         description: "Conversation history has been cleared",
       });
     } catch (error) {
       console.error('Error resetting chat:', error);
-      toast({
-        title: "Error",
-        description: "Failed to reset chat. Please try again.",
-        variant: "destructive",
+      toast.error("Failed to reset chat", {
+        description: "Please try again.",
       });
     }
   };

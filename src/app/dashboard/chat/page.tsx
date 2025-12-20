@@ -20,17 +20,18 @@ import {
   Brain01Icon,
   Copy01Icon,
   CheckmarkCircle01Icon,
-  Globe01Icon,
+  Globe02Icon,
   Book01Icon,
   SparklesIcon,
-  ScrollVerticalIcon,
-  BookUserIcon
+  ScrollVerticalIcon
 } from "hugeicons-react";
 import { useChatStore } from "@/hooks/use-chat-store";
 import { useTextExtraction } from "@/hooks/use-text-extraction";
 import { useSmartDocumentAnalysis } from "@/hooks/use-smart-document-analysis";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { FeatureDisabled } from "@/components/feature-disabled";
+import { useSentimentAnalysis } from "@/hooks/use-sentiment-analysis";
+import { cn } from "@/lib/utils";
 import { auth, db } from "@/lib/firebase/client-simple";
 import { doc, getDoc } from "firebase/firestore";
 // Pusher removed - real-time features coming soon
@@ -42,11 +43,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { MobileButton } from "@/components/ui/mobile-button";
 import { MobileInput } from "@/components/ui/mobile-input";
@@ -122,6 +124,20 @@ function isSyllabusQuestion(message: string): boolean {
 export default function ChatPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const [inputValue, setInputValue] = useState("");
+
+    // Handle "content" query parameter from OCR page
+    useEffect(() => {
+        const contentParam = searchParams?.get('content');
+        if (contentParam && !inputValue) {
+            setInputValue(decodeURIComponent(contentParam));
+            // Remove the content param from URL after consuming it
+            const newParams = new URLSearchParams(searchParams?.toString());
+            newParams.delete('content');
+            const newUrl = `${window.location.pathname}${newParams.toString() ? '?' + newParams.toString() : ''}`;
+            window.history.replaceState(null, '', newUrl);
+        }
+    }, [searchParams, inputValue]);
     const { 
         chats, 
         addMessage, 
@@ -142,7 +158,6 @@ export default function ChatPage() {
     const { isFeatureEnabled } = useFeatureFlags();
     const [user, setUser] = useState<any>(null);
     const { createNotification } = useNotifications(user);
-    const [inputValue, setInputValue] = useState("");
     const [deletedMessageIds, setDeletedMessageIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [streamingResponse, setStreamingResponse] = useState("");
@@ -171,7 +186,6 @@ export default function ChatPage() {
     // New chat creation is disabled here (only via Upload Syllabus)
     const [unreadById, setUnreadById] = useState<Record<string, number>>({});
     const [prevLengths, setPrevLengths] = useState<Record<string, number>>({});
-    const { toast } = useToast();
 
     // Thinking process state
     const [thinkingSteps, setThinkingSteps] = useState<string[]>([]);
@@ -262,6 +276,9 @@ export default function ChatPage() {
     const [isUserAway, setIsUserAway] = useState(false);
     const [lastAIMessageTime, setLastAIMessageTime] = useState<number>(0);
     
+    // Sentiment analysis for empathetic UI (Agent Mode)
+    const sentimentAnalysis = useSentimentAnalysis(inputValue);
+    
     useEffect(() => {
         if (typeof document === 'undefined') return;
 
@@ -274,32 +291,33 @@ export default function ChatPage() {
     }, []);
 
     // Monitor AI responses and create notifications when user is away
-    useEffect(() => {
-        const currentChat = chats[currentTab || 'private-general-chat'];
-        if (!currentChat?.messages) return;
-        
-        const aiMessages = currentChat.messages.filter(msg => msg.sender === 'ai');
-        if (aiMessages.length > 0) {
-            const latestAIMessage = aiMessages[aiMessages.length - 1];
-            const messageTime = latestAIMessage.timestamp || Date.now();
-            
-            // If AI responded and user was away, create notification
-            if (messageTime > lastAIMessageTime && isUserAway) {
-                if (isGuest) {
-                  createAIResponseNotification();
-                } else {
-                  // Logged-in: create Firestore notification
-                  createNotification({
-                    title: 'New message from AI',
-                    description: 'Your AI assistant has replied while you were away.',
-                    type: 'message',
-                    priority: 'low',
-                  } as any);
-                }
-                setLastAIMessageTime(messageTime);
-            }
-        }
-    }, [chats, currentTab, isGuest, isUserAway, lastAIMessageTime, createNotification]);
+    // DISABLED: User requested to stop getting notifications for AI responses
+    // useEffect(() => {
+    //     const currentChat = chats[currentTab || 'private-general-chat'];
+    //     if (!currentChat?.messages) return;
+    //     
+    //     const aiMessages = currentChat.messages.filter(msg => msg.sender === 'bot');
+    //     if (aiMessages.length > 0) {
+    //         const latestAIMessage = aiMessages[aiMessages.length - 1];
+    //         const messageTime = latestAIMessage.timestamp || Date.now();
+    //         
+    //         // If AI responded and user was away, create notification
+    //         if (messageTime > lastAIMessageTime && isUserAway) {
+    //             if (isGuest) {
+    //               createAIResponseNotification();
+    //             } else {
+    //               // Logged-in: create Firestore notification
+    //               createNotification({
+    //                 title: 'New message from AI',
+    //                 description: 'Your AI assistant has replied while you were away.',
+    //                 type: 'message',
+    //                 priority: 'low',
+    //               } as any);
+    //             }
+    //             setLastAIMessageTime(messageTime);
+    //         }
+    //     }
+    // }, [chats, currentTab, isGuest, isUserAway, lastAIMessageTime, createNotification]);
 
     // Create study encouragement notifications based on class chats
     useEffect(() => {
@@ -980,7 +998,7 @@ export default function ChatPage() {
         return () => window.removeEventListener('keydown', handler);
     }, [chats, currentTab, setCurrentTab]);
 
-    const handleSendMessage = async (shouldCallAI: boolean = true) => {
+    const handleSendMessage = async (shouldCallAI: boolean = true, aiResponseType: 'concise' | 'detailed' | 'conversational' | 'analytical' = 'concise') => {
         if (!inputValue.trim()) return;
 
         const messageText = inputValue.trim();
@@ -1107,7 +1125,7 @@ export default function ChatPage() {
         }
 
         // Send message via Pusher for real-time broadcasting (this will update other tabs)
-        pusherSendMessage(userMessage);
+        pusherSendMessage();
 
         // Add user message immediately for instant UI response (non-blocking)
         addMessage(currentTab || 'private-general-chat', userMessage).catch(console.error);
@@ -1115,6 +1133,12 @@ export default function ChatPage() {
         // Only get AI response if appropriate
         if (shouldCallAIFinal) {
             let timeoutId: NodeJS.Timeout | null = null;
+            // Declare variables in outer scope so they're accessible in catch blocks
+            let fullResponse = "";
+            let sources: any[] = [];
+            let metadata: any = null;
+            let searchModeEnabledBeforeAPI = false;
+            
             try {
                 // Get AI response via API call with enhanced error handling
                 let aiResponse;
@@ -1127,7 +1151,6 @@ export default function ChatPage() {
                     const effectiveUserId = user?.uid;
                     
                     // Check search mode before API call
-                    let searchModeEnabledBeforeAPI = false;
                     if (typeof document !== 'undefined') {
                         const bodyAttr = document.body.getAttribute('data-search-mode');
                         const storageFlag = typeof window !== 'undefined' ? localStorage.getItem('web-search-enabled') : null;
@@ -1145,7 +1168,8 @@ export default function ChatPage() {
                         userId: effectiveUserId,
                         chatId: currentTab,
                         chatTitle: currentChat?.title,
-                        isSearchRequest: searchModeEnabledBeforeAPI
+                        isSearchRequest: searchModeEnabledBeforeAPI,
+                        aiResponseType: aiResponseType // Add AI response type (auto, agent, manual)
                     };
 
                     // Add course data for class chats (stream endpoint will handle it)
@@ -1168,12 +1192,9 @@ export default function ChatPage() {
                                 courseName: chat.courseData?.courseName || chat.title,
                                 courseCode: chat.courseData?.courseCode,
                                 professor: chat.courseData?.professor,
-                                description: chat.courseData?.description,
                                 topics: chat.courseData?.topics,
                                 exams: chat.courseData?.exams,
-                                assignments: chat.courseData?.assignments,
-                                gradingPolicy: chat.courseData?.gradingPolicy,
-                                officeHours: chat.courseData?.officeHours
+                                assignments: chat.courseData?.assignments
                             }));
                             console.log('General Chat: Including ALL syllabi from', allClassChats.length, 'class chats');
                         }
@@ -1218,33 +1239,36 @@ export default function ChatPage() {
                         throw new Error('No reader available for streaming');
                     }
 
-                    let fullResponse = "";
-                    let sources: any[] = [];
-                    let metadata: any = null;
+                    // Reset variables for this stream
+                    fullResponse = "";
+                    sources = [];
+                    metadata = null;
                     let buffer = "";
 
-                    while (true) {
-                        // Check if aborted before reading
-                        if (abortController.signal.aborted) {
-                            console.log('Stream aborted by user');
-                            break;
-                        }
-                        
-                        const { done, value } = await reader.read();
-
-                        if (done) {
-                            break;
-                        }
-
-                        const chunk = decoder.decode(value, { stream: true });
-                        buffer += chunk;
-                        const lines = buffer.split("\n");
-                        buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-                        for (const line of lines) {
-                            if (!line.trim()) continue;
+                    try {
+                        while (true) {
+                            // Check if aborted before reading
+                            if (abortController.signal.aborted) {
+                                console.log('🛑 Stream aborted by user - closing reader');
+                                reader.cancel().catch(() => {}); // Cancel the reader
+                                break;
+                            }
                             
-                            try {
+                            const { done, value } = await reader.read();
+
+                            if (done) {
+                                break;
+                            }
+
+                            const chunk = decoder.decode(value, { stream: true });
+                            buffer += chunk;
+                            const lines = buffer.split("\n");
+                            buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+                            for (const line of lines) {
+                                if (!line.trim()) continue;
+                                
+                                try {
                                 // Handle SSE format: "data: {...}"
                                 let data;
                                 if (line.startsWith("data: ")) {
@@ -1294,13 +1318,61 @@ export default function ChatPage() {
                                     console.error('Streaming API error:', data.error);
                                     throw new Error(data.error || 'Failed to generate response');
                                 }
-                            } catch (e) {
-                                // Skip invalid JSON lines, but log for debugging
-                                if (line.trim() && !line.startsWith("data: ")) {
-                                    console.warn('Failed to parse streaming line:', line.substring(0, 100));
+                                } catch (e) {
+                                    // Skip invalid JSON lines, but log for debugging
+                                    if (line.trim() && !line.startsWith("data: ")) {
+                                        console.warn('Failed to parse streaming line:', line.substring(0, 100));
+                                    }
                                 }
                             }
                         }
+                    } catch (readError: any) {
+                        // Handle reader cancellation or errors
+                        if (readError?.name === 'AbortError' || abortController.signal.aborted) {
+                            console.log('🛑 Stream reading aborted');
+                            reader.cancel().catch(() => {}); // Ensure reader is cancelled
+                            // If aborted, save what we have and return early
+                            if (fullResponse.trim()) {
+                                const messageId = tempMessageId || generateMessageId();
+                                const aiMessage = {
+                                    id: messageId,
+                                    text: fullResponse,
+                                    sender: 'bot' as const,
+                                    name: 'CourseConnect AI',
+                                    timestamp: Date.now(),
+                                    sources: sources || undefined,
+                                    isSearchRequest: searchModeEnabledBeforeAPI || false
+                                };
+                                await addMessage(currentTab || 'private-general-chat', aiMessage);
+                                
+                                // Clear streaming state
+                                setStreamingResponse("");
+                                setStreamingMessageId(null);
+                                setIsStreamingComplete(false);
+                            }
+                            
+                            // Clear abort controller
+                            if (timeoutId) clearTimeout(timeoutId);
+                            abortControllerRef.current = null;
+                            setIsLoading(false);
+                            return; // Exit early - don't continue processing
+                        } else {
+                            throw readError;
+                        }
+                    } finally {
+                        // Always close the reader when done
+                        try {
+                            reader.releaseLock();
+                        } catch (e) {
+                            // Reader may already be released
+                        }
+                    }
+
+                    // Check if aborted before continuing
+                    if (abortControllerRef.current?.signal.aborted) {
+                        console.log('🛑 Stream was aborted - skipping final processing');
+                        setIsLoading(false);
+                        return;
                     }
 
                     // Disable search mode after successful API call
@@ -1311,26 +1383,29 @@ export default function ChatPage() {
                     
                     // Track conversation metadata for class chats
                     if (isClassChat && metadata && currentTab) {
-                        const currentMetadata = currentChat.metadata || {};
-                        
-                        // Update topics covered
-                        const existingTopics = currentMetadata.topicsCovered || [];
-                        const newTopics = metadata.topicsCovered || [];
-                        const mergedTopics = Array.from(new Set([...existingTopics, ...newTopics]));
-                        
-                        // Update complexity level
-                        const updatedMetadata = {
-                            ...currentMetadata,
-                            topicsCovered: mergedTopics,
-                            questionComplexityLevel: metadata.questionComplexity || currentMetadata.questionComplexityLevel,
-                            // Add struggling topics if confusion detected
-                            strugglingWith: metadata.isConfused && newTopics.length > 0
-                                ? Array.from(new Set([...(currentMetadata.strugglingWith || []), ...newTopics]))
-                                : currentMetadata.strugglingWith
-                        };
-                        
-                        // Update chat metadata in store (this would need to be persisted to Firebase in production)
-                        console.log('Updated conversation metadata:', updatedMetadata);
+                        const currentChat = chats[currentTab];
+                        if (currentChat) {
+                            const currentMetadata = currentChat.metadata || {};
+                            
+                            // Update topics covered
+                            const existingTopics = currentMetadata.topicsCovered || [];
+                            const newTopics = metadata.topicsCovered || [];
+                            const mergedTopics = Array.from(new Set([...existingTopics, ...newTopics]));
+                            
+                            // Update complexity level
+                            const updatedMetadata = {
+                                ...currentMetadata,
+                                topicsCovered: mergedTopics,
+                                questionComplexityLevel: metadata.questionComplexity || currentMetadata.questionComplexityLevel,
+                                // Add struggling topics if confusion detected
+                                strugglingWith: metadata.isConfused && newTopics.length > 0
+                                    ? Array.from(new Set([...(currentMetadata.strugglingWith || []), ...newTopics]))
+                                    : currentMetadata.strugglingWith
+                            };
+                            
+                            // Update chat metadata in store (this would need to be persisted to Firebase in production)
+                            console.log('Updated conversation metadata:', updatedMetadata);
+                        }
                     }
                     
                     // Use exactly what was streamed - fullResponse has been accumulating chunks
@@ -1352,8 +1427,7 @@ export default function ChatPage() {
                         name: 'CourseConnect AI',
                         timestamp: Date.now(),
                         sources: sources || undefined,
-                        isSearchRequest: searchModeEnabledBeforeAPI || false,
-                        thinkingSteps: thinkingSteps // Save thinking steps to message history
+                        isSearchRequest: searchModeEnabledBeforeAPI || false
                     };
 
                     // Add message to chat store first so it appears in the list
@@ -1369,7 +1443,31 @@ export default function ChatPage() {
                     
                     // Update metadata if provided
                     if (metadata && currentTab) {
-                        updateChatMetadata(currentTab, metadata);
+                        const currentChat = chats[currentTab];
+                        if (currentChat) {
+                            const currentMetadata = currentChat.metadata || {};
+                            const updatedMetadata = {
+                                ...currentMetadata,
+                                ...(metadata.topicsCovered && {
+                                    topicsCovered: Array.from(new Set([...(currentMetadata.topicsCovered || []), ...(metadata.topicsCovered || [])]))
+                                }),
+                                ...(metadata.questionComplexity && {
+                                    questionComplexityLevel: metadata.questionComplexity
+                                }),
+                                ...(metadata.strugglingWith && {
+                                    strugglingWith: Array.from(new Set([...(currentMetadata.strugglingWith || []), ...(metadata.strugglingWith || [])]))
+                                })
+                            };
+                            useChatStore.setState((state) => ({
+                                chats: {
+                                    ...state.chats,
+                                    [currentTab]: {
+                                        ...state.chats[currentTab],
+                                        metadata: updatedMetadata
+                                    }
+                                }
+                            }));
+                        }
                     }
                     
                     // Clear abort controller on success
@@ -1399,13 +1497,13 @@ export default function ChatPage() {
                     setStreamingMessageId(null);
                     
                     // Enhanced fallback based on error type
-                    let fallbackMessage = "I'm having some trouble connecting right now, but don't worry! 🤔\n\n**Here's what you can do:**\n\n📚 Review your syllabus and course materials in the sidebar\n📝 Check your upcoming assignments and exam dates\n🔍 Browse through your course topics\n⏰ Try asking me again in a moment\n\nI'll be back up and running soon!";
+                    let fallbackMessage = "I'm having trouble processing your request right now. Please try again in a moment.";
                     
                     if (apiError instanceof Error) {
                         if (apiError.name === 'TimeoutError' || apiError.message.includes('timeout')) {
-                            fallbackMessage = "Hey there! I'm taking a bit longer than usual to respond, but I'm still here to help! I can assist with:\n\n📚 Academic subjects and homework\n💡 Study strategies and tips\n📝 Writing and research\n🧠 Problem-solving\n💬 General questions and conversation\n\nWhat would you like to talk about?";
+                            fallbackMessage = "This is taking longer than usual. Please try again in a moment.";
                         } else if (apiError.message.includes('network') || apiError.message.includes('fetch')) {
-                            fallbackMessage = "Hey! I'm having some network connectivity issues right now, but I'm still here to help! I can assist with:\n\n📚 Academic subjects and homework\n💡 Study strategies and tips\n📝 Writing and research\n🧠 Problem-solving\n💬 General questions and conversation\n\nWhat's on your mind?";
+                            fallbackMessage = "I'm temporarily unavailable. Please try again in a moment.";
                         }
                     }
                     
@@ -1426,7 +1524,7 @@ export default function ChatPage() {
                 console.error('AI Error:', error);
                 const errorMessage = {
                     id: generateMessageId(),
-                    text: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
+                    text: "I'm having trouble processing your request right now. Please try again in a moment.",
                     sender: 'bot' as const,
                     name: 'CourseConnect AI',
                     timestamp: Date.now()
@@ -1497,7 +1595,7 @@ export default function ChatPage() {
         }
 
         // Send message via Pusher for real-time broadcasting (this will update other tabs)
-        pusherSendMessage(userMessage);
+        pusherSendMessage();
 
         // Add user message immediately for instant UI response (non-blocking)
         addMessage(currentTab || 'private-general-chat', userMessage).catch(console.error);
@@ -1556,12 +1654,9 @@ export default function ChatPage() {
                                 courseName: chat.courseData?.courseName || chat.title,
                                 courseCode: chat.courseData?.courseCode,
                                 professor: chat.courseData?.professor,
-                                description: chat.courseData?.description,
                                 topics: chat.courseData?.topics,
                                 exams: chat.courseData?.exams,
-                                assignments: chat.courseData?.assignments,
-                                gradingPolicy: chat.courseData?.gradingPolicy,
-                                officeHours: chat.courseData?.officeHours
+                                assignments: chat.courseData?.assignments
                             }));
                         }
                     }
@@ -1604,7 +1699,7 @@ export default function ChatPage() {
                         const currentMetadata = currentChat?.metadata || {};
                         const updatedMetadata = {
                             ...currentMetadata,
-                            lastTopic: data.metadata.lastTopic || currentMetadata.lastTopic,
+                            topicsCovered: data.metadata.topicsCovered || currentMetadata.topicsCovered,
                             strugglingWith: data.metadata.strugglingWith || currentMetadata.strugglingWith
                         };
                         
@@ -1617,13 +1712,13 @@ export default function ChatPage() {
                     console.warn("API call failed, using enhanced fallback:", apiError);
                     
                     // Enhanced fallback based on error type
-                    let fallbackMessage = "I'm having some trouble connecting right now, but don't worry! 🤔\n\n**Here's what you can do:**\n\n📚 Review your syllabus and course materials in the sidebar\n📝 Check your upcoming assignments and exam dates\n🔍 Browse through your course topics\n⏰ Try asking me again in a moment\n\nI'll be back up and running soon!";
+                    let fallbackMessage = "I'm having trouble processing your request right now. Please try again in a moment.";
                     
                     if (apiError instanceof Error) {
                         if (apiError.name === 'TimeoutError' || apiError.message.includes('timeout')) {
-                            fallbackMessage = "Hey there! I'm taking a bit longer than usual to respond, but I'm still here to help! I can assist with:\n\n📚 Academic subjects and homework\n💡 Study strategies and tips\n📝 Writing and research\n🧠 Problem-solving\n💬 General questions and conversation\n\nWhat would you like to talk about?";
+                            fallbackMessage = "This is taking longer than usual. Please try again in a moment.";
                         } else if (apiError.message.includes('network') || apiError.message.includes('fetch')) {
-                            fallbackMessage = "Hey! I'm having some network connectivity issues right now, but I'm still here to help! I can assist with:\n\n📚 Academic subjects and homework\n💡 Study strategies and tips\n📝 Writing and research\n🧠 Problem-solving\n💬 General questions and conversation\n\nWhat's on your mind?";
+                            fallbackMessage = "I'm temporarily unavailable. Please try again in a moment.";
                         }
                     }
                     
@@ -1680,7 +1775,7 @@ export default function ChatPage() {
                 console.error('AI Error:', error);
                 const errorMessage = {
                     id: generateMessageId(),
-                    text: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
+                    text: "I'm having trouble processing your request right now. Please try again in a moment.",
                     sender: 'bot' as const,
                     name: 'CourseConnect AI',
                     timestamp: Date.now()
@@ -1836,9 +1931,7 @@ export default function ChatPage() {
                         // If image is not related, show error and don't upload
                         if (validationData.isNotRelated) {
                             setIsLoading(false);
-                            toast({
-                                variant: "destructive",
-                                title: "Image Not Related to Course",
+                            toast.error("Image Not Related to Course", {
                                 description: validationData.response,
                                 duration: 5000,
                             });
@@ -1877,7 +1970,7 @@ export default function ChatPage() {
                         await addMessage(currentTab || 'private-general-chat', uploadMessage);
                         
                         // Now do full analysis
-                        const analysisPrompt = userText || 'Solve this problem or explain what is shown. Use LaTeX for all math.';
+                        const analysisPrompt = userText || 'Please analyze this image. Extract any text (OCR), solve problems shown, or explain concepts in detail. Use LaTeX for math.';
                         const analysisResponse = await fetch('/api/chat/vision', {
                             method: 'POST',
                             headers: {
@@ -1910,9 +2003,7 @@ export default function ChatPage() {
                     } catch (error) {
                         console.error('🚨 Image processing error:', error);
                         setIsLoading(false);
-                        toast({
-                            variant: "destructive",
-                            title: "Processing Failed",
+                        toast.error("Processing Failed", {
                             description: "Could not process the image. Please try again.",
                         });
                     }
@@ -1961,7 +2052,7 @@ export default function ChatPage() {
                         console.log('🖼️ Analyzing image...');
 
                         // Use user's text as prompt if provided, otherwise use default
-                        const analysisPrompt = userText || 'Solve this problem or explain what is shown. Use LaTeX for all math.';
+                        const analysisPrompt = userText || 'Please analyze this image. Extract any text (OCR), solve problems shown, or explain concepts in detail. Use LaTeX for math.';
 
                         // Call vision API (no courseData for general chats)
                         const response = await fetch('/api/chat/vision', {
@@ -2017,10 +2108,8 @@ export default function ChatPage() {
 
         } catch (error) {
             console.error('File upload error:', error);
-            toast({
-                title: "Upload failed",
+            toast.error("Upload failed", {
                 description: "There was an error uploading your file. Please try again.",
-                variant: "destructive",
             });
             setIsLoading(false);
         }
@@ -2030,14 +2119,11 @@ export default function ChatPage() {
     const handleExportChat = () => {
         try {
             exportChat(currentTab || 'private-general-chat');
-            toast({
-                title: "Chat Exported",
+            toast.success("Chat Exported", {
                 description: "Chat has been exported and downloaded.",
             });
         } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Export Failed",
+            toast.error("Export Failed", {
                 description: "Could not export the chat. Please try again.",
             });
         }
@@ -2119,9 +2205,7 @@ export default function ChatPage() {
         } catch (error: any) {
             console.error('Error generating summary:', error);
             setChatSummary('Failed to generate summary. Please try again.');
-            toast({
-                variant: "destructive",
-                title: "Summary Failed",
+            toast.error("Summary Failed", {
                 description: "Could not generate chat summary. Please try again.",
             });
         } finally {
@@ -2175,8 +2259,7 @@ export default function ChatPage() {
                 }
             }, 1000);
             
-            toast({
-                title: "Chat Reset",
+            toast.success("Chat Reset", {
                 description: "Chat has been reset to its initial state.",
             });
             
@@ -2189,9 +2272,7 @@ export default function ChatPage() {
         } catch (error) {
             isResettingRef.current = false;
             console.error('❌ Reset chat error:', error);
-            toast({
-                variant: "destructive",
-                title: "Reset Failed",
+            toast.error("Reset Failed", {
                 description: "Could not reset the chat. Please try again.",
             });
         }
@@ -2204,8 +2285,7 @@ export default function ChatPage() {
         try {
             const toDelete = currentTab || 'private-general-chat';
             await deleteChat(toDelete);
-            toast({
-                title: "Chat Deleted",
+            toast.success("Chat Deleted", {
                 description: "Chat has been permanently deleted.",
             });
             // Redirect to another available chat instead of dashboard
@@ -2222,9 +2302,7 @@ export default function ChatPage() {
                 try { localStorage.setItem('cc-active-tab', 'private-general-chat'); } catch {}
             }
         } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Delete Failed",
+            toast.error("Delete Failed", {
                 description: "Could not delete the chat. Please try again.",
             });
         }
@@ -2260,23 +2338,17 @@ export default function ChatPage() {
     return (
         <>
         <div className="min-h-screen flex flex-col">
-            {/* Mobile Header */}
-            <div className="lg:hidden sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border/20">
-                <div className="flex items-center justify-between px-4 py-3">
-                    <h1 className="text-lg font-bold text-primary">Class Chat</h1>
-                    <MobileNavigation user={user} />
-                </div>
-            </div>
-
-            <div className="flex-1 flex flex-col w-full h-full">
-                <div className="mb-6">
+            <div className="flex-1 flex flex-col w-full h-full max-w-full overflow-hidden">
+                <div className="mb-4 px-4 lg:px-0 mt-4 lg:mt-0">
                     <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold mb-2">{currentTab === 'public-general-chat' ? 'Community' : 'Class Chat'}</h1>
-                            <p className="text-muted-foreground">
+                        <div className="max-w-full">
+                            <h1 className="text-2xl lg:text-3xl font-bold mb-1 truncate">
+                                {currentTab === 'public-general-chat' ? 'Community' : (currentTab ? getChatDisplayName(currentTab) : 'Class Chat')}
+                            </h1>
+                            <p className="text-sm lg:text-base text-muted-foreground line-clamp-1 lg:line-clamp-none">
                                 {currentTab === 'public-general-chat' 
-                                    ? 'Connect with classmates and get AI-powered help. Student collaboration features coming soon!'
-                                    : 'Get personalized AI tutoring tailored to your course syllabus. Student collaboration coming soon!'}
+                                    ? 'Connect with classmates and get AI-powered help.'
+                                    : 'Personalized AI tutoring tailored to your syllabus.'}
                             </p>
                         </div>
                         {/* Real-time status indicator */}
@@ -2441,7 +2513,7 @@ export default function ChatPage() {
                                                             {isPrivate ? (
                                                                 <Chatting01Icon className="h-4 w-4" />
                                                             ) : isPublic ? (
-                                                                <Globe01Icon className="h-4 w-4" />
+                                                                <Globe02Icon className="h-4 w-4" />
                                                             ) : (
                                                                 <BookOpen01Icon className="h-4 w-4" />
                                                             )}
@@ -2540,12 +2612,11 @@ export default function ChatPage() {
                                                 className="h-9 px-4 text-xs font-semibold bg-gradient-to-r from-sky-500/10 via-blue-500/10 to-indigo-500/10 hover:from-sky-500/20 hover:via-blue-500/20 hover:to-indigo-500/20 border border-blue-200/70 dark:border-blue-900/60 text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md transition-all duration-200 rounded-full"
                                                 disabled={isGeneratingSummary}
                                             >
-                                                <ScrollVerticalIcon className="h-3.5 w-3.5 mr-1.5 text-blue-600 dark:text-blue-300" />
                                                 {isGeneratingSummary ? 'Generating...' : 'Generate AI Summary'}
                                             </Button>
                                             {currentChat?.chatType === 'class' && (
                                                 <Badge variant="secondary" className="text-xs">
-                                                    <BookUserIcon className="h-3 w-3 mr-1" />
+                                                    <UserGroupIcon className="h-3 w-3 mr-1" />
                                                     Class Chat
                                                 </Badge>
                                             )}
@@ -3002,8 +3073,23 @@ export default function ChatPage() {
                                     </ScrollArea>
                                     
                                     {/* Floating Input Field */}
-                                    <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-auto">
-                                        <div className="relative flex items-center gap-2 px-4 py-2 shadow-lg border bg-white dark:bg-gray-800 backdrop-blur-xl border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-xl transition-all duration-300" style={{ borderRadius: '24px', minHeight: '44px', width: 'fit-content', minWidth: '500px', maxWidth: '800px', height: 'auto' }}>
+                                    <div className="fixed bottom-4 sm:bottom-6 left-0 right-0 z-50 pointer-events-auto px-4 flex justify-center">
+                                        <div 
+                                            id="chat-input"
+                                            className={cn(
+                                                "relative flex items-center gap-2 px-3 py-1.5 shadow-lg border-2 glassmorphism-input transition-all duration-300",
+                                                "w-full max-w-full sm:max-w-[900px] sm:w-auto sm:min-w-[600px]",
+                                                // Sentiment-based purple border for empathetic states (Agent Mode)
+                                                sentimentAnalysis.sentiment !== 'neutral' && sentimentAnalysis.confidence > 0.1
+                                                  ? "!border-purple-500 !dark:border-purple-400 !shadow-[0_0_20px_rgba(168,85,247,0.6)] !dark:shadow-[0_0_20px_rgba(192,132,252,0.6)] ring-4 ring-purple-500/30 dark:ring-purple-400/30"
+                                                  : "border-gray-200/50 dark:border-gray-700/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-xl"
+                                            )}
+                                            style={{ 
+                                                borderRadius: '24px', 
+                                                minHeight: '44px', 
+                                                height: 'auto'
+                                            }}
+                                        >
                                             <div className="w-full">
                                                 <EnhancedChatInput
                                             isClassChat={Boolean(currentTab && chats[currentTab!]?.chatType === 'class')}
@@ -3023,14 +3109,39 @@ export default function ChatPage() {
                                             isSending={isLoading}
                                             onStop={() => {
                                                 // Stop AI response for all chat types (General, Class, Public)
+                                                console.log('🛑 Stop button clicked - aborting AI response');
+                                                
+                                                // Capture current streaming values before clearing
+                                                const currentStreamingResponse = streamingResponse;
+                                                const currentStreamingMessageId = streamingMessageId;
+                                                
                                                 if (abortControllerRef.current) {
                                                     abortControllerRef.current.abort();
                                                     abortControllerRef.current = null;
                                                 }
+                                                
+                                                // Immediately stop loading and clear streaming state
                                                 setIsLoading(false);
                                                 setStreamingResponse("");
                                                 setStreamingMessageId(null);
-                                                console.log('AI response stopped by user');
+                                                
+                                                // If there's a streaming message, finalize it with what we have
+                                                if (currentStreamingResponse && currentStreamingMessageId && currentStreamingResponse.trim()) {
+                                                    const finalMessage = {
+                                                        id: currentStreamingMessageId,
+                                                        text: currentStreamingResponse,
+                                                        sender: 'bot' as const,
+                                                        name: 'CourseConnect AI',
+                                                        timestamp: Date.now(),
+                                                        sources: undefined,
+                                                        isSearchRequest: false
+                                                    };
+                                                    
+                                                    // Add the partial message to chat
+                                                    addMessage(currentTab || 'private-general-chat', finalMessage).catch(console.error);
+                                                }
+                                                
+                                                console.log('✅ AI response stopped successfully');
                                             }}
                                             onFileProcessed={async (payload: any) => {
                                                 // payload: { files: File[], text: string }
@@ -3070,16 +3181,16 @@ export default function ChatPage() {
                                                             try {
                                                                 const base64Image = e.target?.result as string;
                                                                 const base64Data = base64Image.split(',')[1];
-                                                                const analysisPrompt = userText || 'Describe this image and extract relevant info.';
+                                                                const analysisPrompt = userText || 'Please analyze this image. Extract any text (OCR), solve problems shown, or explain concepts in detail. Use LaTeX for math.';
                                                                 await fetch('/api/chat/vision', {
                                                                     method: 'POST',
                                                                     headers: { 'Content-Type': 'application/json' },
                                                                     body: JSON.stringify({ message: analysisPrompt, image: base64Data, mimeType: first.type })
                                                                 }).then(res => res.json()).then(async (data) => {
-                                                                    const aiText = data?.answer || data?.response || 'I analyzed the image.';
+                                                                    const aiText = data?.answer || data?.response || 'I analyzed the image and extracted relevant information.';
                                                                     await addMessage(currentTab || 'private-general-chat', { id: generateMessageId(), text: aiText, sender: 'bot', name: 'CourseConnect AI', timestamp: Date.now() });
                                                                 }).catch(async () => {
-                                                                    await addMessage(currentTab || 'private-general-chat', { id: generateMessageId(), text: 'Failed to analyze the image.', sender: 'bot', name: 'CourseConnect AI', timestamp: Date.now() });
+                                                                    await addMessage(currentTab || 'private-general-chat', { id: generateMessageId(), text: 'Failed to analyze the image. Please try again.', sender: 'bot', name: 'CourseConnect AI', timestamp: Date.now() });
                                                                 }).finally(() => setIsLoading(false));
                                                             } catch {
                                                                 setIsLoading(false);
@@ -3219,7 +3330,6 @@ export default function ChatPage() {
                                             disabled={currentChat?.disabled || false}
                                             className="w-full"
                                             isPublicChat={currentTab === 'public-general-chat'}
-                                            isClassChat={false}
                                             />
                                             </div>
                                         </div>
@@ -3338,8 +3448,7 @@ export default function ChatPage() {
                                 navigator.clipboard.writeText(chatSummary);
                                 setCopiedSummary(true);
                                 setTimeout(() => setCopiedSummary(false), 2000);
-                                toast({
-                                    title: "Copied",
+                                toast.success("Copied", {
                                     description: "Summary copied to clipboard",
                                 });
                             }}

@@ -38,15 +38,6 @@ export function HeroSection() {
       ref={containerRef}
       className="relative overflow-hidden bg-white dark:bg-gray-950 min-h-screen flex items-center"
     >
-      {/* Large Background Text - GTA VI Style */}
-      <motion.div
-        style={{ y: largeTextY, opacity: largeTextOpacity }}
-        className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
-      >
-        <h1 className="text-[20rem] md:text-[30rem] lg:text-[40rem] font-black text-gray-900/5 dark:text-white/5 leading-none tracking-tight whitespace-nowrap">
-          COURSECONNECT
-        </h1>
-      </motion.div>
       
       {/* Background Layers with Parallax - subtle, non-flashy */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -65,7 +56,7 @@ export function HeroSection() {
         className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-40 z-10"
       >
         <div className="text-center max-w-4xl mx-auto">
-          {/* Beta Badge */}
+          {/* Beta Badge with Feedback */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -82,9 +73,9 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-6xl md:text-7xl lg:text-8xl font-black text-gray-900 dark:text-white mb-6 tracking-tight leading-[1.05]"
           >
-            School is hard.{' '}
+            Don't just study.{' '}
             <span className="bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">
-              We make it easy.
+              Outperform.
             </span>
           </motion.h1>
 
@@ -93,9 +84,9 @@ export function HeroSection() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed font-normal"
+            className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed font-medium"
           >
-            The all-in-one AI study companion that turns your syllabus into personalized tutoring, schedule tracking, and instant grades.
+            The all-in-one AI study system that turns your syllabus into personalized tutoring, automated tracking, and your academic edge.
           </motion.p>
 
           {/* CTAs */}
@@ -108,17 +99,17 @@ export function HeroSection() {
             <Button
               size="lg"
               asChild
-              className="h-14 px-8 text-lg font-semibold rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+              className="h-14 px-10 text-lg font-black rounded-full bg-blue-600 text-white hover:bg-blue-500 shadow-[0_20px_40px_rgba(37,99,235,0.25)] transition-all duration-300 hover:scale-105 active:scale-95"
             >
               <Link href="#upload">
-                Upload Syllabus
+                Get Started
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
             <Button
               variant="outline"
               size="lg"
-              className="h-14 px-8 text-lg font-semibold rounded-full border-2 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-900 transition-all duration-300 hover:scale-105"
+              className="h-14 px-10 text-lg font-black rounded-full border-2 border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-900 transition-all duration-300 hover:scale-105 active:scale-95"
               onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
             >
               <Play className="mr-2 h-5 w-5 fill-current" />

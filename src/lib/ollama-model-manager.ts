@@ -134,6 +134,24 @@ export class OllamaModelManager {
   }
   
   /**
+   * Get the best model for mathematical analysis
+   */
+  static getBestMathModel(): string {
+    // For math, prefer models with strong reasoning capabilities
+    // Try larger models first for better mathematical reasoning
+    if (this.isModelAvailable('llama3.1:8b')) {
+      return 'llama3.1:8b';
+    }
+    
+    if (this.isModelAvailable('gemma2:2b')) {
+      return 'gemma2:2b';
+    }
+    
+    // Fallback to general model
+    return this.getBestGeneralModel();
+  }
+  
+  /**
    * Check if a model is available
    */
   static isModelAvailable(modelName: string): boolean {

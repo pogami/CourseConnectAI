@@ -52,9 +52,12 @@ const nextConfig: NextConfig = {
   // Turbopack configuration (replaces webpack config)
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
   },
   // External packages for server components
-  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas', 'pdf-parse'],
+  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas', 'pdf-parse', 'google-auth-library'],
   // Exclude problematic test pages from build
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
   // Webpack configuration for canvas/pdfjs-dist compatibility
@@ -67,6 +70,7 @@ const nextConfig: NextConfig = {
         fs: false,
         path: false,
         os: false,
+        canvas: false,
       };
     } else {
       // Externalize pdfjs-dist on server-side to avoid bundling issues
@@ -77,6 +81,10 @@ const nextConfig: NextConfig = {
         config.externals = [config.externals, 'pdfjs-dist', '@napi-rs/canvas'];
       }
     }
+
+    // Polyfill Buffer
+
+
     return config;
   },
   turbopack: {

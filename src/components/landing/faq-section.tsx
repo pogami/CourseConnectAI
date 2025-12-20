@@ -29,6 +29,10 @@ const faqs = [
   {
     question: "Can I edit the deadlines if the AI misses something?",
     answer: "The AI tries to extract all deadlines automatically, but it's not perfect yet. Right now, you can view the extracted deadlines in your dashboard. We are currently building the feature to let you manually add, edit, or delete deadlines if the syllabus parser misses one."
+  },
+  {
+    question: "Can I connect with other students?",
+    answer: "Yes! Coming soon: Upload your syllabus and we'll automatically connect you with students in the same course at your school or similar courses at other institutions. Form study groups, share notes, and study smarter together. Get started by uploading your syllabus now!"
   }
 ];
 

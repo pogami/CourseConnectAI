@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 
 interface TypingIndicatorProps {
   users: Array<{
@@ -41,7 +42,11 @@ export function TypingIndicator({ users, className = "" }: TypingIndicatorProps)
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className={`flex items-center gap-3 p-3 bg-muted/30 dark:bg-muted/20 rounded-lg border border-border/30 ${className}`}
+      className={cn(
+        "flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-muted/30 dark:bg-muted/20 rounded-lg border border-border/30",
+        "text-xs sm:text-sm",
+        className
+      )}
     >
       {/* Profile pictures */}
       <div className="flex -space-x-2">
@@ -109,7 +114,7 @@ export function TypingIndicator({ users, className = "" }: TypingIndicatorProps)
           />
         </div>
         
-        <span className="text-sm text-muted-foreground font-medium">
+        <span className="text-xs sm:text-sm text-muted-foreground font-medium truncate max-w-[200px] sm:max-w-none">
           {getTypingText()}
         </span>
       </div>

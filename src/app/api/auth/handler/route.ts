@@ -32,15 +32,15 @@ export async function GET(request: NextRequest) {
           return NextResponse.redirect(redirectUrl);
         }
       }
-      // Default: redirect to login page on current origin
-      return NextResponse.redirect(new URL('/login', request.url));
+      // Default: redirect to dashboard (not login) after successful auth
+      return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    // Default: redirect to login page
-    return NextResponse.redirect(new URL('/login', request.url));
+    // Default: redirect to dashboard (Firebase handles the auth, we just need to redirect)
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   } catch (error) {
     console.error('Auth handler error:', error);
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 }
 

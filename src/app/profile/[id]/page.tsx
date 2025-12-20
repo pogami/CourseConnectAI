@@ -3,9 +3,9 @@ import { generateProfileMeta, ProfileData } from '@/lib/open-graph';
 import ProfilePageContent from './profile-page-content';
 
 interface ProfilePageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Mock profile data - replace with actual data fetching
@@ -22,13 +22,17 @@ async function getProfileData(profileId: string): Promise<ProfileData> {
   };
 }
 
-export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
-  const profile = await getProfileData(params.id);
+export async function generateMetadata(props: ProfilePageProps): Promise<Metadata> {
+  const params = await props.params;
+  const { id } = params;
+  const profile = await getProfileData(id);
   return generateProfileMeta(profile);
 }
 
-export default async function ProfilePage({ params }: ProfilePageProps) {
-  const profile = await getProfileData(params.id);
+export default async function ProfilePage(props: ProfilePageProps) {
+  const params = await props.params;
+  const { id } = params;
+  const profile = await getProfileData(id);
   
   return <ProfilePageContent profile={profile} />;
 }

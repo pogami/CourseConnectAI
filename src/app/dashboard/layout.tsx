@@ -9,11 +9,12 @@ import {
   FileAddIcon,
   Chatting01Icon,
   Notification01Icon,
-  GraduationScrollIcon,
-  AlertTriangleIcon,
+  NoteIcon,
+  Alert01Icon,
   Speaker01Icon,
   Cancel01Icon,
-  Book01Icon
+  Book01Icon,
+  Camera01Icon
 } from "hugeicons-react";
 import { GlobalCommandMenu } from "@/components/global-command-menu";
 import {
@@ -301,7 +302,12 @@ export default function DashboardLayout({
       const justLoggedIn = sessionStorage.getItem('justLoggedIn');
       if (justLoggedIn === 'true') {
         console.log("User just logged in, waiting for auth to load...");
-        return; // Don't redirect yet
+        // Give more time for Firebase to process the redirect result
+        const checkAuthTimeout = setTimeout(() => {
+          // If still no user after 5 seconds, might be an issue
+          // But don't redirect to login - let the login page handle it
+        }, 5000);
+        return () => clearTimeout(checkAuthTimeout);
       }
       
       // Give Firebase auth MORE time to restore session (increased from 1s to 3s)
@@ -310,10 +316,11 @@ export default function DashboardLayout({
         // Double-check: Make sure Firebase hasn't restored a user since we started the timeout
         const storedGuest = localStorage.getItem('guestUser');
         const isLoggingOut = localStorage.getItem('isLoggingOut');
+        const stillJustLoggedIn = sessionStorage.getItem('justLoggedIn');
         
-        // Don't redirect if logout is in progress
-        if (isLoggingOut === 'true') {
-          console.log("Logout in progress, skipping redirect");
+        // Don't redirect if logout is in progress or if user just logged in
+        if (isLoggingOut === 'true' || stillJustLoggedIn === 'true') {
+          console.log("Logout in progress or just logged in, skipping redirect");
           return;
         }
         
@@ -405,7 +412,7 @@ export default function DashboardLayout({
       <div className="flex h-screen items-center justify-center bg-transparent">
         <div className="text-center">
           <div className="text-red-500 mb-4">
-            <AlertTriangleIcon className="h-12 w-12 mx-auto" />
+            <Alert01Icon className="h-12 w-12 mx-auto" />
           </div>
           <h2 className="text-lg font-semibold mb-2 text-red-600">Authentication Error</h2>
           <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
@@ -640,13 +647,12 @@ export default function DashboardLayout({
                       ? "bg-blue-100 dark:bg-blue-900/50" 
                       : "bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
                   }`}>
-                    <GraduationScrollIcon className="size-4" />
+                    <NoteIcon className="size-4" />
                   </div>
                   <span className="font-medium text-sm">Flashcards</span>
                 </Link>
               </SidebarMenuItem>
-              
-              
+
               {/* Academic Tools - HIDDEN */}
               {/* <SidebarMenuItem>
                 <Link 

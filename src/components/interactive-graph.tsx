@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { BlockMath, InlineMath } from "react-katex";
 import {
   LineChart,
@@ -19,9 +19,18 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  Brush,
 } from "recharts";
 import "katex/dist/katex.min.css";
 import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Download, Palette, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { motion, AnimatePresence } from 'framer-motion';
+// 3D graphs removed for stability
 
 // --- Helper Functions for Text Rendering ---
 
@@ -238,12 +247,37 @@ export interface InteractiveGraphProps {
   className?: string;
 }
 
+// Color scheme presets
+const colorSchemes = {
+  default: ['hsl(var(--primary))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+  vibrant: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'],
+  pastel: ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb7185', '#f472b6'],
+  monochrome: ['#1f2937', '#4b5563', '#6b7280', '#9ca3af', '#d1d5db', '#e5e7eb'],
+  ocean: ['#0ea5e9', '#06b6d4', '#14b8a6', '#10b981', '#22c55e'],
+  sunset: ['#f97316', '#ef4444', '#ec4899', '#a855f7', '#8b5cf6']
+};
+
+// 3D Surface Component removed
+
 // Interactive Graph Component with multiple functions and sliders
 export function InteractiveGraph({ graphData, cleanContent, className }: InteractiveGraphProps) {
-  const textOnly = cleanContent.replace(/GRAPH_DATA:[^\n]+/, '').trim();
-  const chartType = graphData.data.chartType || (graphData.type === 'data' ? 'line' : 'function');
+  // Add safety checks
+  if (!graphData || !graphData.data) {
+    console.error('Invalid graphData:', graphData);
+    return <div className={className}>Error: Invalid graph data</div>;
+  }
+
+  const textOnly = cleanContent?.replace(/GRAPH_DATA:[^\n]+/, '').trim() || '';
+  const chartType = graphData.data?.chartType || (graphData.type === 'data' ? 'line' : 'function');
+  const chartRef = useRef<HTMLDivElement>(null);
   
-  const functions = graphData.data.functions || (graphData.data.function ? [{ 
+  // Enhanced state
+  const [colorScheme, setColorScheme] = useState<keyof typeof colorSchemes>('default');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  
+  const functions = graphData.data?.functions || (graphData.data?.function ? [{ 
     function: graphData.data.function, 
     label: graphData.data.label || graphData.data.function,
     color: graphData.data.color || 'hsl(var(--primary))'
@@ -253,13 +287,95 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
     (graphData.type === 'function' && functions.length === 1 ? `Graph of ${functions[0].label}` : 
      graphData.type === 'function' ? 'Graph' : 'Data Visualization');
   
+  const colors = colorSchemes[colorScheme];
+  
+  // Export functions
+  const handleExportPNG = async () => {
+    if (!chartRef.current) return;
+    try {
+      const canvas = await html2canvas(chartRef.current, { backgroundColor: null });
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `${chartTitle.replace(/[^a-z0-9]/gi, '_')}.png`;
+      link.href = url;
+      link.click();
+    } catch (error) {
+      console.error('Failed to export PNG:', error);
+    }
+  };
+  
+  const handleExportSVG = () => {
+    if (!chartRef.current) return;
+    // For SVG, we'll use a simplified approach - convert chart to SVG
+    const svg = chartRef.current.querySelector('svg');
+    if (svg) {
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const blob = new Blob([svgData], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `${chartTitle.replace(/[^a-z0-9]/gi, '_')}.svg`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+  
+  // Zoom controls
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 3));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
+  const handleResetZoom = () => {
+    setZoomLevel(1);
+    setPanX(0);
+    setPanY(0);
+  };
+  
+  // Control Panel Component
+  const ControlPanel = () => (
+    <div className="flex flex-wrap items-center gap-2 mb-3 p-2 bg-muted/30 rounded-lg">
+      <div className="flex items-center gap-2">
+        <Label className="text-xs">Color:</Label>
+        <Select value={colorScheme} onValueChange={(v: any) => setColorScheme(v)}>
+          <SelectTrigger className="h-8 w-[120px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(colorSchemes).map(scheme => (
+              <SelectItem key={scheme} value={scheme}>{scheme}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-1">
+        <Button size="sm" variant="outline" onClick={handleZoomOut} className="h-8 w-8 p-0">
+          <ZoomOut className="h-4 w-4" />
+        </Button>
+        <span className="text-xs w-12 text-center">{Math.round(zoomLevel * 100)}%</span>
+        <Button size="sm" variant="outline" onClick={handleZoomIn} className="h-8 w-8 p-0">
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleResetZoom} className="h-8 w-8 p-0">
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="flex items-center gap-1 ml-auto">
+        <Button size="sm" variant="outline" onClick={handleExportPNG} className="h-8 text-xs">
+          <Download className="h-3 w-3 mr-1" />
+          PNG
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleExportSVG} className="h-8 text-xs">
+          <Download className="h-3 w-3 mr-1" />
+          SVG
+        </Button>
+      </div>
+    </div>
+  );
+
   // Handle different chart types
   if (chartType === 'bar' && graphData.data.data) {
     const chartData = graphData.data.data;
-    const colors = graphData.data.colors || ['hsl(var(--primary))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
     
     return (
-      <div className={`relative ${className}`}>
+      <div className={`relative ${className}`} ref={chartRef}>
         {textOnly && (
           <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
             {breakIntoParagraphs(textOnly).map((paragraph, i) => (
@@ -269,10 +385,24 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
-        <div className="mt-4 p-4 bg-card border border-border rounded-xl">
+        <motion.div 
+          className="mt-4 p-4 bg-card border border-border rounded-xl"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <h3 className="text-sm font-semibold mb-3 text-foreground">{chartTitle}</h3>
-          <div className="w-full overflow-x-auto">
-            <BarChart width={Math.max(400, chartData.length * 60)} height={300} data={chartData}>
+          <ControlPanel />
+          <div 
+            className="w-full max-w-full overflow-x-auto overflow-y-visible" 
+            style={{ 
+              maxWidth: '100%',
+              transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
+              transformOrigin: 'top left'
+            }}
+          >
+            <div style={{ minWidth: '400px', width: 'max-content' }}>
+              <BarChart width={Math.max(400, chartData.length * 60)} height={300} data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
               <XAxis 
                 dataKey={graphData.data.xKey || "name"}
@@ -293,20 +423,26 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
                 itemStyle={{ color: 'hsl(var(--foreground))' }}
                 labelStyle={{ color: 'hsl(var(--foreground))' }}
               />
-              <Bar dataKey={graphData.data.yKey || "value"} fill={colors[0]} radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Bar 
+                dataKey={graphData.data.yKey || "value"} 
+                fill={colors[0]} 
+                radius={[4, 4, 0, 0]}
+                animationDuration={500}
+              />
+              </BarChart>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
   
   if (chartType === 'pie' && graphData.data.data) {
     const chartData = graphData.data.data;
-    const colors = graphData.data.colors || ['hsl(var(--primary))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+    const chartColors = graphData.data.colors || colors;
     
     return (
-      <div className={`relative ${className}`}>
+      <div className={`relative ${className}`} ref={chartRef}>
         {textOnly && (
           <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
             {breakIntoParagraphs(textOnly).map((paragraph, i) => (
@@ -316,9 +452,21 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
-        <div className="mt-4 p-4 bg-card border border-border rounded-xl">
+        <motion.div 
+          className="mt-4 p-4 bg-card border border-border rounded-xl"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <h3 className="text-sm font-semibold mb-3 text-foreground">{chartTitle}</h3>
-          <div className="w-full flex justify-center">
+          <ControlPanel />
+          <div 
+            className="w-full flex justify-center"
+            style={{ 
+              transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
+              transformOrigin: 'center'
+            }}
+          >
             <PieChart width={400} height={300}>
               <Pie
                 data={chartData}
@@ -331,7 +479,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
                 dataKey={graphData.data.valueKey || "value"}
               >
                 {chartData.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
                 ))}
               </Pie>
               <Tooltip 
@@ -355,17 +503,17 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
               />
             </PieChart>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
   
   if (chartType === 'scatter' && graphData.data.data) {
     const chartData = graphData.data.data;
-    const colors = graphData.data.colors || ['hsl(var(--primary))'];
+    const chartColors = graphData.data.colors || colors;
     
     return (
-      <div className={`relative ${className}`}>
+      <div className={`relative ${className}`} ref={chartRef}>
         {textOnly && (
           <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
             {breakIntoParagraphs(textOnly).map((paragraph, i) => (
@@ -375,10 +523,24 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
-        <div className="mt-4 p-4 bg-card border border-border rounded-xl">
+        <motion.div 
+          className="mt-4 p-4 bg-card border border-border rounded-xl"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <h3 className="text-sm font-semibold mb-3 text-foreground">{chartTitle}</h3>
-          <div className="w-full overflow-x-auto">
-            <ScatterChart width={Math.max(400, chartData.length * 20)} height={300} data={chartData}>
+          <ControlPanel />
+          <div 
+            className="w-full max-w-full overflow-x-auto overflow-y-visible" 
+            style={{ 
+              maxWidth: '100%',
+              transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
+              transformOrigin: 'top left'
+            }}
+          >
+            <div style={{ minWidth: '400px', width: 'max-content' }}>
+              <ScatterChart width={Math.max(400, chartData.length * 20)} height={300} data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
               <XAxis 
                 type="number"
@@ -397,23 +559,27 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
                 contentStyle={{ 
                   backgroundColor: 'hsl(var(--card))',
                   border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px'
+                  borderRadius: '8px',
+                  color: 'hsl(var(--foreground))'
                 }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
+                labelStyle={{ color: 'hsl(var(--foreground))' }}
               />
-              <Scatter dataKey="y" fill={colors[0]} />
-            </ScatterChart>
+              <Scatter dataKey="y" fill={chartColors[0]} />
+              </ScatterChart>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
   
   if (chartType === 'area' && graphData.data.data) {
     const chartData = graphData.data.data;
-    const colors = graphData.data.colors || ['hsl(var(--primary))'];
+    const chartColors = graphData.data.colors || colors;
     
     return (
-      <div className={`relative ${className}`}>
+      <div className={`relative ${className}`} ref={chartRef}>
         {textOnly && (
           <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
             {breakIntoParagraphs(textOnly).map((paragraph, i) => (
@@ -423,14 +589,28 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
-        <div className="mt-4 p-4 bg-card border border-border rounded-xl">
+        <motion.div 
+          className="mt-4 p-4 bg-card border border-border rounded-xl"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <h3 className="text-sm font-semibold mb-3 text-foreground">{chartTitle}</h3>
-          <div className="w-full overflow-x-auto">
-            <AreaChart width={Math.max(400, chartData.length * 10)} height={300} data={chartData}>
+          <ControlPanel />
+          <div 
+            className="w-full max-w-full overflow-x-auto overflow-y-visible" 
+            style={{ 
+              maxWidth: '100%',
+              transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
+              transformOrigin: 'top left'
+            }}
+          >
+            <div style={{ minWidth: '400px', width: 'max-content' }}>
+              <AreaChart width={Math.max(400, chartData.length * 10)} height={300} data={chartData}>
               <defs>
                 <linearGradient id="colorArea" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={colors[0]} stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor={colors[0]} stopOpacity={0.1}/>
+                  <stop offset="5%" stopColor={chartColors[0]} stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor={chartColors[0]} stopOpacity={0.1}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
@@ -456,13 +636,14 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
               <Area 
                 type="monotone" 
                 dataKey="y" 
-                stroke={colors[0]} 
+                stroke={chartColors[0]} 
                 fillOpacity={1}
                 fill="url(#colorArea)"
               />
-            </AreaChart>
+              </AreaChart>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -470,9 +651,10 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
   // Handle line chart (data points) - default for data type
   if (graphData.type === 'data' && graphData.data.points) {
     const chartData = graphData.data.points;
+    const chartColors = graphData.data.colors || colors;
     
     return (
-      <div className={`relative ${className}`}>
+      <div className={`relative ${className}`} ref={chartRef}>
         {textOnly && (
           <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
             {breakIntoParagraphs(textOnly).map((paragraph, i) => (
@@ -482,10 +664,24 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
-        <div className="mt-4 p-4 bg-card border border-border rounded-xl">
+        <motion.div 
+          className="mt-4 p-4 bg-card border border-border rounded-xl"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <h3 className="text-sm font-semibold mb-3 text-foreground">{chartTitle}</h3>
-          <div className="w-full overflow-x-auto">
-            <LineChart width={Math.max(400, chartData.length * 10)} height={300} data={chartData}>
+          <ControlPanel />
+          <div 
+            className="w-full max-w-full overflow-x-auto overflow-y-visible" 
+            style={{ 
+              maxWidth: '100%',
+              transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
+              transformOrigin: 'top left'
+            }}
+          >
+            <div style={{ minWidth: '400px', width: 'max-content' }}>
+              <LineChart width={Math.max(400, chartData.length * 10)} height={300} data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
               <XAxis 
                 dataKey="x" 
@@ -509,27 +705,28 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
               <Line 
                 type="monotone" 
                 dataKey="y" 
-                stroke="hsl(var(--primary))" 
+                stroke={chartColors[0]} 
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}
               />
-            </LineChart>
+              </LineChart>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
   
   // Support parameters with sliders
   const [parameters, setParameters] = useState<Record<string, number>>(
-    graphData.data.parameters || {}
+    graphData.data?.parameters || {}
   );
   
   // Generate data for each function
   const allChartData = useMemo(() => {
-    const minX = graphData.data.minX ?? -5;
-    const maxX = graphData.data.maxX ?? 5;
+    const minX = graphData.data?.minX ?? -5;
+    const maxX = graphData.data?.maxX ?? 5;
     const step = 0.1;
     
     // Generate x values
@@ -570,10 +767,10 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
     });
     
     return { combinedData, datasets };
-  }, [functions, parameters, graphData.data.minX, graphData.data.maxX]);
+  }, [functions, parameters, graphData.data?.minX, graphData.data?.maxX]);
   
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} ref={chartRef}>
       {textOnly && (
         <div className="relative leading-relaxed text-sm max-w-full overflow-hidden break-words ai-response group mb-4">
           {breakIntoParagraphs(textOnly).map((paragraph, i) => (
@@ -583,77 +780,102 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
           ))}
         </div>
       )}
-      <div className="mt-4 p-4 bg-card border border-border rounded-xl dark:bg-transparent dark:border-0 dark:p-0">
+      <motion.div 
+        className="mt-4 p-4 bg-card border border-border rounded-xl dark:bg-transparent dark:border-0 dark:p-0"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
         <h3 className="text-sm font-semibold mb-3 text-foreground px-4 dark:px-0">{chartTitle}</h3>
         
-        {/* Parameter Sliders */}
-        {Object.keys(parameters).length > 0 && (
-          <div className="mb-4 space-y-3 p-3 bg-muted/30 rounded-lg border border-border/50 mx-4 dark:mx-0">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Adjust Parameters:</p>
-            {Object.keys(parameters).map(param => {
-              const paramConfig = graphData.data.parameterConfig?.[param] || { min: -10, max: 10, step: 0.1 };
-              return (
-                <div key={param} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-foreground">{param} = {parameters[param].toFixed(2)}</span>
+        {/* Controls: Color, Zoom, Download */}
+        <div className="mb-4 px-4 dark:px-0">
+          <ControlPanel />
+        </div>
+        
+        {/* Controls: Parameters */}
+        <div className="mb-4 space-y-3 mx-4 dark:mx-0">
+          {Object.keys(parameters).length > 0 && (
+            <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Adjust Parameters:</p>
+              {Object.keys(parameters).map(param => {
+                const paramConfig = graphData.data.parameterConfig?.[param] || { min: -10, max: 10, step: 0.1 };
+                return (
+                  <div key={param} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-foreground">{param} = {parameters[param].toFixed(2)}</span>
+                    </div>
+                    <Slider
+                      value={[parameters[param]]}
+                      onValueChange={([value]) => {
+                        setParameters(prev => ({ ...prev, [param]: value }));
+                      }}
+                      min={paramConfig.min}
+                      max={paramConfig.max}
+                      step={paramConfig.step}
+                      className="w-full"
+                    />
                   </div>
-                  <Slider
-                    value={[parameters[param]]}
-                    onValueChange={([value]) => {
-                      setParameters(prev => ({ ...prev, [param]: value }));
-                    }}
-                    min={paramConfig.min}
-                    max={paramConfig.max}
-                    step={paramConfig.step}
-                    className="w-full"
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
         
         {/* Graph */}
-        <div className="w-full overflow-x-auto">
-          <LineChart 
-            width={Math.max(400, allChartData.combinedData.length * 10)} 
-            height={300} 
-            data={allChartData.combinedData}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
-            <XAxis 
-              dataKey="x" 
-              stroke="hsl(var(--muted-foreground))"
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-            />
-            <YAxis 
-              stroke="hsl(var(--muted-foreground))"
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-            />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '8px'
-              }}
-            />
-            {allChartData.datasets.map((dataset, idx) => (
-              <Line 
-                key={idx}
-                type="monotone" 
-                dataKey={`y${idx}`}
-                name={dataset.name}
-                stroke={dataset.color}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
+        <div 
+          className="w-full max-w-full overflow-x-auto overflow-y-visible" 
+          style={{ 
+            maxWidth: '100%',
+            transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
+            transformOrigin: 'top left'
+          }}
+        >
+          <div style={{ minWidth: '400px', width: 'max-content' }}>
+            <LineChart 
+              width={Math.max(400, allChartData.combinedData.length * 10)} 
+              height={350} 
+              data={allChartData.combinedData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
+              <XAxis 
+                dataKey="x" 
+                stroke="hsl(var(--muted-foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                label={{ value: 'x', position: 'insideBottomRight', offset: -10, fill: 'hsl(var(--muted-foreground))' }}
               />
-            ))}
-          </LineChart>
+              <YAxis 
+                stroke="hsl(var(--muted-foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                label={{ value: 'y', position: 'insideLeft', offset: 10, fill: 'hsl(var(--muted-foreground))' }}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                }}
+              />
+              {allChartData.datasets.map((dataset, idx) => (
+                <Line 
+                  key={idx}
+                  type="monotone" 
+                  dataKey={`y${idx}`}
+                  name={dataset.name}
+                  stroke={dataset.color}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+              ))}
+            </LineChart>
+          </div>
         </div>
         
         {/* Legend for multiple functions */}
-        {allChartData.datasets.length > 1 && (
+        {allChartData.datasets.length > 1 ? (
           <div className="mt-3 flex flex-wrap gap-3 justify-center">
             {allChartData.datasets.map((dataset, idx) => (
               <div key={idx} className="flex items-center gap-2 text-xs">
@@ -665,8 +887,8 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
               </div>
             ))}
           </div>
-        )}
-      </div>
+        ) : null}
+      </motion.div>
     </div>
   );
 }

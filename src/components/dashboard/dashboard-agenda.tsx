@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useChatStore } from '@/hooks/use-chat-store';
 import { Calendar, CheckCircle2, Clock, FileText, GraduationCap, ChevronRight } from 'lucide-react';
@@ -10,14 +10,39 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client-simple';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
+import { generateCelebrationMessage } from '@/lib/emotional-intelligence';
 
 export function DashboardAgenda() {
   const { chats } = useChatStore();
-  const { toast } = useToast();
   const [showAllDialog, setShowAllDialog] = useState(false);
   const [markingComplete, setMarkingComplete] = useState<string | null>(null);
   const [localCompletions, setLocalCompletions] = useState<Record<string, boolean>>({});
+
+  // Sync completion states from database on mount and when chats change
+  useEffect(() => {
+    const completions: Record<string, boolean> = {};
+    
+    Object.values(chats).forEach((chat: any) => {
+      if (chat.chatType !== 'class' || !chat.courseData) return;
+      
+      // Check assignments
+      (chat.courseData.assignments || []).forEach((a: any) => {
+        if (a?.status === 'Completed') {
+          completions[`${chat.id}-${a.name}`] = true;
+        }
+      });
+      
+      // Check exams
+      (chat.courseData.exams || []).forEach((e: any) => {
+        if (e?.status === 'Completed') {
+          completions[`${chat.id}-${e.name}-exam`] = true;
+        }
+      });
+    });
+    
+    setLocalCompletions(completions);
+  }, [chats]);
 
   // Collect all items
   const allItems = React.useMemo(() => {
@@ -30,7 +55,7 @@ export function DashboardAgenda() {
 
       // Assignments
       (chat.courseData.assignments || []).forEach((a: any) => {
-        if (!a?.dueDate || a?.dueDate === 'null' || a?.status === 'Completed') return;
+        if (!a?.dueDate || a?.dueDate === 'null') return;
         const d = new Date(a.dueDate);
         if (isNaN(d.getTime())) return;
         items.push({
@@ -56,7 +81,7 @@ export function DashboardAgenda() {
           course: courseCode,
           chatId: chat.id,
           id: `${chat.id}-${e.name}-exam`,
-          status: 'Upcoming'
+          status: e.status || 'Upcoming'
         });
       });
     });
@@ -68,10 +93,9 @@ export function DashboardAgenda() {
   // Show only first 5 items in the card
   const items = allItems.slice(0, 5);
 
-  // Function to mark assignment as complete
+  // Function to mark item as complete
   const handleMarkComplete = async (item: any) => {
-    if (item.type !== 'assignment') return;
-    
+    if (markingComplete === item.id) return; // Prevent double-clicks
     setMarkingComplete(item.id);
     try {
       const chatRef = doc(db, 'chats', item.chatId);
@@ -79,31 +103,115 @@ export function DashboardAgenda() {
       
       if (chatSnap.exists()) {
         const chatData = chatSnap.data();
-        if (chatData.courseData?.assignments) {
-          const updatedAssignments = chatData.courseData.assignments.map((assignment: any) => {
-            if (assignment.name === item.name) {
-              return { ...assignment, status: 'Completed' };
+        // Check current status from database and local state
+        let currentStatus = item.status || 'Not Started';
+        if (item.type === 'assignment') {
+          const assignment = chatData.courseData?.assignments?.find((a: any) => a.name === item.name);
+          if (assignment) currentStatus = assignment.status || 'Not Started';
+        } else if (item.type === 'exam') {
+          const exam = chatData.courseData?.exams?.find((e: any) => e.name === item.name);
+          if (exam) currentStatus = exam.status || 'Upcoming';
+        }
+        const isCurrentlyCompleted = currentStatus === 'Completed' || localCompletions[item.id];
+        const newStatus = isCurrentlyCompleted ? (item.type === 'assignment' ? 'Not Started' : 'Upcoming') : 'Completed';
+        
+        if (item.type === 'assignment') {
+          if (chatData.courseData?.assignments) {
+            const updatedAssignments = chatData.courseData.assignments.map((assignment: any) => {
+              if (assignment.name === item.name) {
+                return { ...assignment, status: newStatus };
+              }
+              return assignment;
+            });
+            
+            await updateDoc(chatRef, {
+              'courseData.assignments': updatedAssignments
+            });
+            setLocalCompletions(prev => ({ ...prev, [item.id]: !isCurrentlyCompleted }));
+            
+            if (!isCurrentlyCompleted) {
+              // Check if this is a priority task (weight >= 15 or urgent)
+              const assignment = chatData.courseData?.assignments?.find((a: any) => a.name === item.name);
+              const weight = assignment?.weight ? (typeof assignment.weight === 'number' ? assignment.weight : parseFloat(assignment.weight)) : 10;
+              const isPriority = weight >= 15;
+              
+              // Find next upcoming task to calculate days until
+              const allUpcoming = allItems.filter((i: any) => i.id !== item.id && (i.status !== 'Completed' && !localCompletions[i.id]));
+              const nextTask = allUpcoming[0];
+              const daysUntilNext = nextTask ? Math.ceil((nextTask.date.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : undefined;
+              
+              const celebrationMessage = generateCelebrationMessage(item.name, 'assignment', isPriority, daysUntilNext);
+              
+              toast.success("Assignment Completed! 🎉", {
+                description: celebrationMessage,
+                duration: 5000,
+              });
+            } else {
+              toast.info("Assignment Marked as Incomplete", {
+                description: `${item.name} has been marked as incomplete.`,
+                duration: 3000,
+              });
             }
-            return assignment;
-          });
-          
-          await updateDoc(chatRef, {
-            'courseData.assignments': updatedAssignments
-          });
-          setLocalCompletions(prev => ({ ...prev, [item.id]: true }));
-          
-          toast({
-            title: "Assignment Completed!",
-            description: `${item.name} has been marked as complete.`,
-          });
+          }
+        } else if (item.type === 'exam') {
+          if (chatData.courseData?.exams) {
+            const updatedExams = chatData.courseData.exams.map((exam: any) => {
+              if (exam.name === item.name) {
+                return { ...exam, status: newStatus };
+              }
+              return exam;
+            });
+            
+            await updateDoc(chatRef, {
+              'courseData.exams': updatedExams
+            });
+            setLocalCompletions(prev => ({ ...prev, [item.id]: !isCurrentlyCompleted }));
+            
+            if (!isCurrentlyCompleted) {
+              // Exams are typically high priority
+              const exam = chatData.courseData?.exams?.find((e: any) => e.name === item.name);
+              const weight = exam?.weight ? (typeof exam.weight === 'number' ? exam.weight : parseFloat(exam.weight)) : 20;
+              const isPriority = weight >= 15;
+              
+              // Find next upcoming task
+              const allUpcoming = allItems.filter((i: any) => i.id !== item.id && (i.status !== 'Completed' && !localCompletions[i.id]));
+              const nextTask = allUpcoming[0];
+              const daysUntilNext = nextTask ? Math.ceil((nextTask.date.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : undefined;
+              
+              const celebrationMessage = generateCelebrationMessage(item.name, 'exam', isPriority, daysUntilNext);
+              
+              toast.success("Exam Completed! 🎉", {
+                description: celebrationMessage,
+                duration: 5000,
+              });
+            } else {
+              toast.info("Exam Marked as Incomplete", {
+                description: `${item.name} has been marked as incomplete.`,
+                duration: 3000,
+              });
+            }
+          }
+        } else {
+          // For other types, mark locally (could be extended to save to a custom field)
+          setLocalCompletions(prev => ({ ...prev, [item.id]: !isCurrentlyCompleted }));
+          if (!isCurrentlyCompleted) {
+            toast.success("Item Completed! 🎉", {
+              description: `${item.name} has been marked as complete.`,
+              duration: 5000,
+            });
+          } else {
+            toast.info("Item Marked as Incomplete", {
+              description: `${item.name} has been marked as incomplete.`,
+              duration: 3000,
+            });
+          }
         }
       }
     } catch (error) {
-      console.error('Error marking assignment as complete:', error);
-      toast({
-        title: "Error",
-        description: "Failed to mark assignment as complete.",
-        variant: "destructive",
+      console.error('Error marking item as complete:', error);
+      toast.error("Error", {
+        description: "Failed to mark item as complete.",
+        duration: 4000,
       });
     } finally {
       setMarkingComplete(null);
@@ -152,22 +260,37 @@ export function DashboardAgenda() {
                 className={`flex items-start gap-4 p-4 hover:bg-blue-50/30 dark:hover:bg-gray-800/50 transition-all relative group ${!isLast ? 'border-b border-gray-100 dark:border-gray-800' : ''}`}
               >
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity rounded-r-full" />
-                {/* Date Box */}
-                <div className="flex flex-col items-center justify-center min-w-[3.5rem] p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
-                  <span className="text-[10px] font-bold uppercase text-gray-500">
-                    {item.date.toLocaleDateString('en-US', { month: 'short' })}
-                  </span>
-                  <span className="text-lg font-black text-gray-900 dark:text-white leading-none">
-                    {item.date.getDate()}
-                  </span>
-                </div>
+                {/* Date Box or Completed Badge */}
+                {isCompleted ? (
+                  <div className="flex flex-col items-center justify-center min-w-[3.5rem] p-2 rounded-xl bg-green-50 dark:bg-green-900/20 border-2 border-green-500 dark:border-green-400 shadow-sm">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mb-1" />
+                    <span className="text-[9px] font-bold uppercase text-green-700 dark:text-green-300 text-center leading-tight">
+                      COMPLETED
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center min-w-[3.5rem] p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <span className="text-[10px] font-bold uppercase text-gray-500">
+                      {item.date.toLocaleDateString('en-US', { month: 'short' })}
+                    </span>
+                    <span className="text-lg font-black text-gray-900 dark:text-white leading-none">
+                      {item.date.getDate()}
+                    </span>
+                  </div>
+                )}
 
                 {/* Content */}
                 <div className="flex-1 min-w-0 py-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${urgencyColor}`}>
-                      {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} Days`}
-                    </span>
+                    {isCompleted ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        COMPLETED
+                      </span>
+                    ) : (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${urgencyColor}`}>
+                        {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} Days`}
+                      </span>
+                    )}
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
                       {item.course}
                     </span>
@@ -183,35 +306,37 @@ export function DashboardAgenda() {
                 </div>
 
                 {/* Action/Status */}
-                <div className="self-center">
-                    {item.type === 'assignment' ? (
+                <div className="self-center relative z-10">
                     <button
-                      onClick={() => handleMarkComplete(item)}
-                      disabled={markingComplete === item.id || isCompleted}
-                      className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed ${
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkComplete(item);
+                      }}
+                      disabled={markingComplete === item.id}
+                      className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed relative z-20 ${
                         isCompleted
-                          ? 'border-green-500 bg-green-50 text-green-600 shadow-inner dark:bg-green-900/20 dark:border-green-400 dark:text-green-200'
-                          : 'border-gray-200 dark:border-gray-700 text-gray-300 hover:border-green-500 hover:text-green-500'
+                          ? 'border-green-500 bg-green-50 text-green-600 shadow-inner dark:bg-green-900/20 dark:border-green-400 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95'
+                          : 'border-gray-200 dark:border-gray-700 text-gray-300 hover:border-green-500 hover:text-green-500 active:scale-95'
                       }`}
-                      title="Mark Complete"
+                      title={isCompleted ? "Mark Incomplete" : "Mark Complete"}
+                      type="button"
                     >
                       {markingComplete === item.id ? (
                         <div className="h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                      ) : (
+                      ) : isCompleted ? (
                         <CheckCircle2
-                          className={`h-5 w-5 transition-transform ${
-                            isCompleted
-                              ? 'text-green-600 dark:text-green-200'
-                              : 'group-hover:scale-110'
-                          }`}
+                          className="h-5 w-5 text-green-600 dark:text-green-200 transition-transform"
                         />
+                      ) : (
+                        item.type === 'exam' ? (
+                          <Clock className="h-5 w-5 text-gray-400 group-hover:text-green-500 transition-colors" />
+                        ) : (
+                          <CheckCircle2
+                            className="h-5 w-5 transition-transform group-hover:scale-110"
+                          />
+                        )
                       )}
                     </button>
-                  ) : (
-                    <div className="h-8 w-8 flex items-center justify-center">
-                      <Clock className="h-5 w-5 text-gray-400" />
-                    </div>
-                  )}
                 </div>
               </motion.div>
             );
@@ -253,20 +378,35 @@ export function DashboardAgenda() {
                     transition={{ delay: idx * 0.03 }}
                     className="flex items-start gap-4 p-4 rounded-lg hover:bg-blue-50/30 dark:hover:bg-gray-800/50 transition-all border border-gray-200 dark:border-gray-800"
                   >
-                    <div className="flex flex-col items-center justify-center min-w-[3.5rem] p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <span className="text-[10px] font-bold uppercase text-gray-500">
-                        {item.date.toLocaleDateString('en-US', { month: 'short' })}
-                      </span>
-                      <span className="text-lg font-black text-gray-900 dark:text-white leading-none">
-                        {item.date.getDate()}
-                      </span>
-                    </div>
+                    {isCompleted ? (
+                      <div className="flex flex-col items-center justify-center min-w-[3.5rem] p-2 rounded-xl bg-green-50 dark:bg-green-900/20 border-2 border-green-500 dark:border-green-400 shadow-sm">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mb-1" />
+                        <span className="text-[9px] font-bold uppercase text-green-700 dark:text-green-300 text-center leading-tight">
+                          COMPLETED
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center min-w-[3.5rem] p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <span className="text-[10px] font-bold uppercase text-gray-500">
+                          {item.date.toLocaleDateString('en-US', { month: 'short' })}
+                        </span>
+                        <span className="text-lg font-black text-gray-900 dark:text-white leading-none">
+                          {item.date.getDate()}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex-1 min-w-0 py-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${urgencyColor}`}>
-                          {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} Days`}
-                        </span>
+                        {isCompleted ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            COMPLETED
+                          </span>
+                        ) : (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${urgencyColor}`}>
+                            {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} Days`}
+                          </span>
+                        )}
                         <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                           {item.course}
                         </span>
@@ -281,35 +421,37 @@ export function DashboardAgenda() {
                       </h4>
                     </div>
 
-                    <div className="self-center">
-                      {item.type === 'assignment' ? (
-                        <button
-                          onClick={() => handleMarkComplete(item)}
-                          disabled={markingComplete === item.id || isCompleted}
-                          className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed ${
-                            isCompleted
-                              ? 'border-green-500 bg-green-50 text-green-600 shadow-inner dark:bg-green-900/20 dark:border-green-400 dark:text-green-200'
-                              : 'border-gray-200 dark:border-gray-700 text-gray-300 hover:border-green-500 hover:text-green-500'
-                          }`}
-                          title="Mark Complete"
-                        >
-                          {markingComplete === item.id ? (
-                            <div className="h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="self-center relative z-10">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkComplete(item);
+                        }}
+                        disabled={markingComplete === item.id}
+                        className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed relative z-20 ${
+                          isCompleted
+                            ? 'border-green-500 bg-green-50 text-green-600 shadow-inner dark:bg-green-900/20 dark:border-green-400 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95'
+                            : 'border-gray-200 dark:border-gray-700 text-gray-300 hover:border-green-500 hover:text-green-500 active:scale-95'
+                        }`}
+                        title={isCompleted ? "Mark Incomplete" : "Mark Complete"}
+                        type="button"
+                      >
+                        {markingComplete === item.id ? (
+                          <div className="h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                        ) : isCompleted ? (
+                          <CheckCircle2
+                            className="h-5 w-5 text-green-600 dark:text-green-200 transition-transform"
+                          />
+                        ) : (
+                          item.type === 'exam' ? (
+                            <Clock className="h-5 w-5 text-gray-400 group-hover:text-green-500 transition-colors" />
                           ) : (
                             <CheckCircle2
-                            className={`h-5 w-5 transition-transform ${
-                                isCompleted
-                                  ? 'text-green-600 dark:text-green-200'
-                                  : 'group-hover:scale-110'
-                              }`}
+                              className="h-5 w-5 transition-transform group-hover:scale-110"
                             />
-                          )}
-                        </button>
-                      ) : (
-                        <div className="h-8 w-8 flex items-center justify-center">
-                          <Clock className="h-5 w-5 text-gray-400" />
-                        </div>
-                      )}
+                          )
+                        )}
+                      </button>
                     </div>
                   </motion.div>
                 );

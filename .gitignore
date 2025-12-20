@@ -22,6 +22,10 @@
 
 # misc
 .DS_Store
+.turbo
+.cursor
+.idx
+.modified
 *.pem
 
 # debug

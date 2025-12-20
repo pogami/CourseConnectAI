@@ -2,27 +2,33 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Send01Icon,
-  Upload01Icon,
-  Microphone01Icon,
-  MicrophoneOff01Icon,
+  SentIcon,
+  ImageUploadIcon,
+  Mic01Icon,
+  MicOff01Icon,
   BotIcon,
   Brain01Icon,
   Book01Icon,
   Loading01Icon,
-  Square01Icon
+  ArrowDown01Icon,
+  Add01Icon,
+  Camera01Icon,
+  Tick01Icon
 } from 'hugeicons-react';
 import { useTheme } from '@/contexts/theme-context';
 import { cn } from '@/lib/utils';
 import { SearchMenu } from './search-menu';
 import { useChatStore } from '@/hooks/use-chat-store';
 import { useRouter } from 'next/navigation';
+import { useSentimentAnalysis } from '@/hooks/use-sentiment-analysis';
+import { CameraCapture } from './camera-capture';
+import { VoiceVisualizer } from './voice-visualizer';
 // Removed Ollama import - now using API routes
 
 interface EnhancedChatInputProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  onSend: (shouldCallAI?: boolean) => void;
+  onSend: (shouldCallAI?: boolean, aiResponseType?: 'concise' | 'detailed' | 'conversational' | 'analytical') => void;
   onKeyPress?: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onFileUpload?: (file: File) => void;
   onFileProcessed?: (processedFile: any) => void;
@@ -66,18 +72,36 @@ export function EnhancedChatInput({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<{ name: string; size: number; type: string; url?: string }[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [aiResponseType, setAiResponseType] = useState<'concise' | 'detailed' | 'conversational' | 'analytical'>('concise');
+  const [showResponseTypeDropdown, setShowResponseTypeDropdown] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Auto-resize textarea
+  // Auto-resize textarea with smooth growth up to 5 lines
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
     
+    // Calculate line height (font-size * line-height)
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24;
+    const maxHeight = lineHeight * 5; // 5 lines max
+    
     // Reset height to compute scrollHeight correctly
     el.style.height = 'auto';
-    // Set height to scrollHeight - no cap, let it expand naturally
-    el.style.height = el.scrollHeight + 'px';
+    const scrollHeight = el.scrollHeight;
+    
+    // If content exceeds 5 lines, set max height and enable scrolling
+    if (scrollHeight > maxHeight) {
+      el.style.height = `${maxHeight}px`;
+      el.style.overflowY = 'auto';
+    } else {
+      el.style.height = `${scrollHeight}px`;
+      el.style.overflowY = 'hidden';
+    }
     
     // Also handle width expansion for long lines
     el.style.width = '100%';
@@ -214,6 +238,16 @@ export function EnhancedChatInput({
 
   // Use keydown (keypress is deprecated and unreliable for Enter)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    // Handle Ctrl+A / Cmd+A to select all text
+    if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      const textarea = inputRef.current;
+      if (textarea) {
+        textarea.select();
+      }
+      return;
+    }
+
     if (onKeyPress) {
       onKeyPress(e);
     }
@@ -245,9 +279,9 @@ export function EnhancedChatInput({
       if (fileInputRef.current) fileInputRef.current.value = '';
     } else if (value.trim()) {
       // No file, just text
-      // Always use onSend() - handleSendMessage will detect search mode automatically
+      // Pass the AI response type to onSend
       const shouldCallAI = !isPublicChat || value.includes('@ai') || value.includes('@AI');
-      onSend(shouldCallAI);
+      onSend(shouldCallAI, aiResponseType);
       onTypingStop?.();
     }
   };
@@ -255,6 +289,10 @@ export function EnhancedChatInput({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log('📁 File upload triggered', e.target.files);
     const files = Array.from(e.target.files || []);
+    processFiles(files);
+  };
+
+  const processFiles = (files: File[]) => {
     if (files.length === 0) return;
 
     // Allow any file type - just check size
@@ -289,6 +327,22 @@ export function EnhancedChatInput({
     setFilePreviews(prev => [...prev, ...previews]);
     inputRef.current?.focus();
   };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const onDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    processFiles(files);
+  };
   
   const removeFile = (name?: string) => {
     if (!name) {
@@ -311,6 +365,10 @@ export function EnhancedChatInput({
     } else {
       console.error('📁 File input ref not found');
     }
+  };
+
+  const triggerCameraInput = () => {
+    setIsCameraOpen(true);
   };
 
   const toggleVoice = async () => {
@@ -382,12 +440,15 @@ export function EnhancedChatInput({
         recognition.onerror = (event: any) => {
           console.error('🎤 Speech recognition error:', event.error);
           setIsVoiceActive(false);
-          if (event.error === 'not-allowed') {
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             alert('Microphone access is required for voice input. Please allow microphone access and try again.');
           } else if (event.error === 'no-speech') {
-            alert('No speech detected. Please try again.');
+            // Just turn off silently or with a toast for no-speech
+            console.log('🎤 No speech detected');
+          } else if (event.error === 'network') {
+            alert('Voice input requires a stable internet connection. Please check your connection and try again.');
           } else {
-            alert(`Speech recognition error: ${event.error}`);
+            console.warn(`Speech recognition status: ${event.error}`);
           }
         };
         
@@ -414,6 +475,26 @@ export function EnhancedChatInput({
   const hasPreviews = filePreviews.length > 0;
   const courseChats = Object.values(chats || {}).filter((c: any) => c?.chatType === 'class') as any[];
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowResponseTypeDropdown(false);
+      }
+    };
+
+    if (showResponseTypeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showResponseTypeDropdown]);
+
+  const handleResponseTypeSelect = (type: 'concise' | 'detailed' | 'conversational' | 'analytical') => {
+    setAiResponseType(type);
+    setShowResponseTypeDropdown(false);
+    console.log('🎨 Response style changed to:', type);
+  };
+
   return (
     <div className={cn("relative w-full chat-input-container", className)}>
       {/* AI Mention Indicator */}
@@ -437,13 +518,17 @@ export function EnhancedChatInput({
 
       {/* Main Input Container */}
       <div
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
         className={cn(
-          "chat-input-container relative flex flex-col gap-3 px-4 py-3",
+          "chat-input-container relative flex flex-col gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-3 transition-all duration-200",
+          isDragging && "bg-blue-500/5 dark:bg-blue-500/10 ring-2 ring-blue-500/50 rounded-xl",
           // No background, shadow, or border - let parent handle styling
           "bg-transparent"
         )}
         style={{
-          minHeight: hasPreviews ? '140px' : '44px',
+          minHeight: hasPreviews ? (isMobile ? '100px' : '140px') : '44px',
           alignItems: 'flex-end',
           overflow: 'visible',
           height: 'auto'
@@ -496,90 +581,145 @@ export function EnhancedChatInput({
 
         {/* Input Row with Icons and Text */}
         <div className="flex items-end gap-3 w-full">
-          {/* File Upload Icon (Left) */}
-          <div
+          {/* Plus Icon Button (Left) */}
+          <button
             onClick={triggerFileInput}
+            disabled={disabled}
             className={cn(
               "h-8 w-8 flex items-center justify-center cursor-pointer rounded-lg",
               "hover:bg-gray-100 dark:hover:bg-white/10 transition-colors duration-200",
               "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white",
               disabled && "opacity-50 cursor-not-allowed"
             )}
+            title="Upload files"
           >
-            <Upload01Icon className="h-5 w-5" />
-          </div>
+            <Add01Icon className="h-5 w-5" />
+          </button>
+
+          {/* Camera Button (Left) */}
+          <button
+            onClick={triggerCameraInput}
+            disabled={disabled}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center cursor-pointer rounded-lg",
+              "hover:bg-gray-100 dark:hover:bg-white/10 transition-colors duration-200",
+              "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white",
+              disabled && "opacity-50 cursor-not-allowed"
+            )}
+            title="Take photo"
+          >
+            <Camera01Icon className="h-5 w-5" />
+          </button>
 
           {/* Course selector removed per request */}
 
           {/* Search Menu - Temporarily hidden */}
           {false && onSearchSelect && (
             <SearchMenu
-              onSearchSelect={onSearchSelect}
+              onSearchSelect={onSearchSelect!}
               disabled={disabled || isSending}
             />
           )}
 
           {/* Input Field */}
-          <textarea
-            ref={inputRef}
-            value={value}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder={getPlaceholder()}
-            disabled={disabled}
-            className={cn(
-              "flex-1 bg-transparent text-base border-0 outline-none resize-none",
-              "text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400",
-              disabled && "opacity-50 cursor-not-allowed"
-            )}
-            rows={1}
-            style={{ 
-              fontSize: '16px', 
-              minHeight: '24px',
-              maxHeight: '200px'
-            }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = target.scrollHeight + 'px';
-            }}
-          />
+          {isVoiceActive ? (
+            <div className="flex-1 flex items-center h-full min-h-[44px]">
+              <VoiceVisualizer isActive={isVoiceActive} />
+            </div>
+          ) : (
+            <textarea
+              ref={inputRef}
+              value={value}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder={getPlaceholder()}
+              disabled={disabled}
+              className={cn(
+                "flex-1 bg-transparent border-0 outline-none resize-none",
+                "text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400",
+                "transition-all duration-300 ease-in-out",
+                isMobile ? "text-sm" : "text-base",
+                disabled && "opacity-50 cursor-not-allowed"
+              )}
+              rows={1}
+              style={{ 
+                fontSize: isMobile ? '14px' : '16px', 
+                lineHeight: '1.5',
+                minHeight: '24px',
+                transition: 'height 0.2s ease-in-out, overflow 0.2s ease-in-out'
+              }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                const lineHeight = parseFloat(getComputedStyle(target).lineHeight) || 24;
+                const maxHeight = lineHeight * 5; // 5 lines max
+                
+                // Reset height to compute scrollHeight correctly
+                target.style.height = 'auto';
+                const scrollHeight = target.scrollHeight;
+                
+                // If content exceeds 5 lines, set max height and enable scrolling
+                if (scrollHeight > maxHeight) {
+                  target.style.height = `${maxHeight}px`;
+                  target.style.overflowY = 'auto';
+                } else {
+                  target.style.height = `${scrollHeight}px`;
+                  target.style.overflowY = 'hidden';
+                }
+              }}
+            />
+          )}
 
           {/* Voice Icon */}
           <div
             onClick={toggleVoice}
             className={cn(
-              "h-8 w-8 flex items-center justify-center cursor-pointer rounded-full",
-              "hover:bg-gray-100 dark:hover:bg-muted/50 transition-colors duration-200",
+              "h-8 w-8 flex items-center justify-center cursor-pointer rounded-full transition-all duration-300",
               isVoiceActive
-                ? "text-red-500 dark:text-red-400" 
-                : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100",
+                ? "bg-red-500/20 text-red-500 dark:text-red-400 ring-2 ring-red-500/50" 
+                : "hover:bg-gray-100 dark:hover:bg-muted/50 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100",
               disabled && "opacity-50 cursor-not-allowed"
             )}
           >
             {isVoiceActive ? (
-              <MicrophoneOff01Icon className="h-5 w-5" />
+              <MicOff01Icon className="h-5 w-5" />
             ) : (
-              <Microphone01Icon className="h-5 w-5" />
+              <Mic01Icon className="h-5 w-5" />
             )}
           </div>
 
-          {/* Send / Stop Icon */}
-          <button
-            onClick={isSending ? onStop : handleSend}
-            disabled={disabled || (isSending && !onStop)}
+          {/* Send/Stop Button */}
+          <button 
+            onClick={isVoiceActive ? toggleVoice : (isSending ? onStop : handleSend)}
+            disabled={disabled || (isSending && !onStop) || (!value.trim() && selectedFiles.length === 0 && !isVoiceActive)}
+            title={isVoiceActive ? "Stop recording" : (isSending ? "Stop generating" : "Send message")}
             className={cn(
-              "h-8 w-8 flex items-center justify-center rounded-full transition-all duration-200",
-              isSending
-                ? "text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-gray-100 dark:hover:bg-muted/50"
-                : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-muted/50",
+              "h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-full transition-all duration-200",
+              isVoiceActive
+                ? "bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 border border-zinc-700" // Voice Active State - Same as AI Stop
+                : isSending 
+                  ? "bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 border border-zinc-700" // Stop State
+                  : (value.trim().length > 0 || selectedFiles.length > 0)
+                    ? "bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700" // Active Send State
+                    : "bg-gray-300 dark:bg-gray-700 cursor-not-allowed", // Disabled Send State
               (disabled || (isSending && !onStop)) && "opacity-50 cursor-not-allowed"
             )}
           >
-            {isSending ? (
-              <Square01Icon className="h-5 w-5" />
+            {isVoiceActive ? (
+              /* STOP ICON: Same square as AI stop */
+              <div className="w-2.5 h-2.5 bg-current rounded-[1px]" />
+            ) : isSending ? (
+              /* STOP ICON: A simple square */
+              <div className="w-2.5 h-2.5 bg-current rounded-[1px] animate-pulse" />
             ) : (
-              <Send01Icon className="h-5 w-5" />
+              /* SEND ICON: Original upward arrow */
+              <svg 
+                className="h-4 w-4 text-white" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
             )}
           </button>
         </div>
@@ -592,6 +732,25 @@ export function EnhancedChatInput({
           multiple
           accept="*/*"
           className="hidden"
+        />
+
+        {/* Hidden Camera Input */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          onChange={handleFileUpload}
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+        />
+
+        {/* Camera Capture Dialog */}
+        <CameraCapture 
+          isOpen={isCameraOpen}
+          onClose={() => setIsCameraOpen(false)}
+          onCapture={(file) => {
+            processFiles([file]);
+          }}
         />
       </div>
     </div>

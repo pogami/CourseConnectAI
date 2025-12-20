@@ -207,12 +207,16 @@ export default function FlashcardsPage() {
       const analytics = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as Array<{ id: string; timestamp?: string | Date }>;
 
       console.log('Study analytics data:', analytics);
 
       // Sort by timestamp (most recent first)
-      analytics.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      analytics.sort((a, b) => {
+        const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return bTime - aTime;
+      });
 
       setStudyAnalytics(analytics);
     } catch (error) {
@@ -226,24 +230,71 @@ export default function FlashcardsPage() {
   };
 
   // Function to load analytics for a specific set
-  const loadSetAnalytics = async (setTitle: string) => {
+  const loadSetAnalytics = async (setTitle: string, setId?: string) => {
     if (!user) return;
 
     try {
-      const q = query(
-        collection(db, 'studySessions'),
-        where('userId', '==', user.uid),
-        where('setTitle', '==', setTitle)
-      );
+      console.log('Loading analytics for set:', setTitle, setId);
+      
+      // Try to query by setId first if available, otherwise fallback to setTitle
+      let q;
+      if (setId) {
+        q = query(
+          collection(db, 'studySessions'),
+          where('userId', '==', user.uid),
+          where('flashcardSetId', '==', setId)
+        );
+      } else {
+        q = query(
+          collection(db, 'studySessions'),
+          where('userId', '==', user.uid),
+          where('setTitle', '==', setTitle)
+        );
+      }
 
       const snapshot = await getDocs(q);
-      const analytics = snapshot.docs.map(doc => ({
+      let analytics = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as any[];
+
+      // Fallback: If no results with setId, try with setTitle (for legacy data)
+      if (setId && analytics.length === 0) {
+        console.log('No results with setId, falling back to setTitle');
+        const fallbackQ = query(
+          collection(db, 'studySessions'),
+          where('userId', '==', user.uid),
+          where('setTitle', '==', setTitle)
+        );
+        const fallbackSnapshot = await getDocs(fallbackQ);
+        analytics = fallbackSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      }
+
+      // Also try with "Flashcards: " prefix if title matching fails
+      if (analytics.length === 0 && !setTitle.startsWith('Flashcards:')) {
+        const prefixedQ = query(
+          collection(db, 'studySessions'),
+          where('userId', '==', user.uid),
+          where('setTitle', '==', `Flashcards: ${setTitle}`)
+        );
+        const prefixedSnapshot = await getDocs(prefixedQ);
+        if (!prefixedSnapshot.empty) {
+          analytics = prefixedSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+        }
+      }
 
       // Sort by timestamp in JavaScript to avoid Firebase index requirement
-      analytics.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      analytics.sort((a, b) => {
+        const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return bTime - aTime;
+      });
 
       setSelectedSetAnalytics(analytics);
       setSelectedSetTitle(setTitle);
@@ -307,25 +358,25 @@ export default function FlashcardsPage() {
 
           {/* Quick Stats */}
           <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
-            <Card className="border-0 bg-primary/5 backdrop-blur-sm">
+            <Card className="border border-primary/20 bg-primary/15 dark:bg-primary/20 backdrop-blur-sm shadow-md">
               <CardContent className="p-4 flex items-center gap-4">
-                <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                <div className="p-2 rounded-lg bg-primary/20 dark:bg-primary/30 text-primary">
                   <BookOpen className="size-5" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{flashcardSets.length}</p>
-                  <p className="text-xs text-muted-foreground">Total Sets</p>
+                  <p className="text-2xl font-bold text-primary dark:text-primary">{flashcardSets.length}</p>
+                  <p className="text-xs text-muted-foreground font-medium">Total Sets</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-0 bg-purple-500/5 backdrop-blur-sm">
+            <Card className="border border-purple-500/20 bg-purple-500/15 dark:bg-purple-500/20 backdrop-blur-sm shadow-md">
               <CardContent className="p-4 flex items-center gap-4">
-                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600">
+                <div className="p-2 rounded-lg bg-purple-500/20 dark:bg-purple-500/30 text-purple-600 dark:text-purple-400">
                   <Target className="size-5" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{accuracyRate}%</p>
-                  <p className="text-xs text-muted-foreground">Accuracy</p>
+                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{accuracyRate}%</p>
+                  <p className="text-xs text-muted-foreground font-medium">Accuracy</p>
                 </div>
               </CardContent>
             </Card>
@@ -345,13 +396,13 @@ export default function FlashcardsPage() {
             <div className="relative group">
               <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/50 to-purple-600/50 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
               <div className="relative bg-card rounded-xl border shadow-sm overflow-hidden">
-                <CardHeader className="border-b bg-muted/30">
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="border-b bg-muted/30 py-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
                     Generate New Set
+                    <span className="text-sm font-normal text-muted-foreground ml-2">
+                      Create flashcards from your notes or syllabus
+                    </span>
                   </CardTitle>
-                  <CardDescription>
-                    Create flashcards from your notes or syllabus instantly
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-6">
                   <FlashcardGenerator />
@@ -401,7 +452,7 @@ export default function FlashcardsPage() {
                             size="icon"
                             variant="ghost"
                             className="h-8 w-8"
-                            onClick={() => loadSetAnalytics(set.title)}
+                            onClick={() => loadSetAnalytics(set.title, set.id)}
                           >
                             <BarChart3 className="size-4 text-muted-foreground hover:text-primary" />
                           </Button>
@@ -430,184 +481,316 @@ export default function FlashcardsPage() {
               </CardContent>
             </Card>
 
-            {/* Study Tips */}
-            <Card className="bg-green-500/5 border-green-500/20">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold flex items-center gap-2 text-green-700 dark:text-green-400">
-                  <Target className="size-4" />
-                  Pro Tips
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {studyTips.map((tip, i) => (
-                  <div key={i} className="flex gap-3 text-sm text-muted-foreground">
-                    <CheckCircle className="size-4 text-green-500 flex-shrink-0 mt-0.5" />
-                    <span>{tip}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            {/* Dynamic Content: Pro Tips for new users, Weakest Concepts/Study Schedule for active users */}
+            {(() => {
+              // Determine if user is new or active
+              const totalSets = flashcardSets.length;
+              const totalStudySessions = flashcardSets.reduce((sum, set) => sum + (set.studyStats?.totalStudies || 0), 0);
+              const hasRecentStudy = flashcardSets.some(set => {
+                if (!set.studyStats?.lastStudied) return false;
+                const lastStudied = new Date(set.studyStats.lastStudied);
+                const daysSince = (Date.now() - lastStudied.getTime()) / (1000 * 60 * 60 * 24);
+                return daysSince < 7; // Studied within last week
+              });
+              
+              const isNewUser = totalSets < 2 || totalStudySessions < 5 || !hasRecentStudy;
+              
+              // Calculate weakest concepts for active users
+              const weakestConcepts = flashcardSets
+                .filter(set => set.studyStats?.totalStudies >= 3) // Only sets with at least 3 study sessions
+                .map(set => {
+                  const accuracy = set.studyStats.totalStudies > 0 
+                    ? (set.studyStats.correctAnswers / set.studyStats.totalStudies) * 100 
+                    : 100;
+                  return {
+                    title: set.title,
+                    topic: set.topic,
+                    accuracy: Math.round(accuracy),
+                    totalStudies: set.studyStats.totalStudies
+                  };
+                })
+                .filter(item => item.accuracy < 70) // Only show concepts with < 70% accuracy
+                .sort((a, b) => a.accuracy - b.accuracy) // Sort by worst first
+                .slice(0, 3); // Top 3 weakest
+              
+              // Calculate upcoming study schedule
+              const upcomingStudy = flashcardSets
+                .map(set => {
+                  const lastStudied = set.studyStats?.lastStudied 
+                    ? new Date(set.studyStats.lastStudied)
+                    : new Date(set.createdAt);
+                  const daysSince = (Date.now() - lastStudied.getTime()) / (1000 * 60 * 60 * 24);
+                  return {
+                    title: set.title,
+                    topic: set.topic,
+                    daysSince: Math.round(daysSince),
+                    lastStudied: lastStudied
+                  };
+                })
+                .sort((a, b) => b.daysSince - a.daysSince) // Most overdue first
+                .slice(0, 3);
+              
+              if (isNewUser) {
+                // Show Pro Tips for new users
+                return (
+                  <Card className="bg-green-500/5 border-green-500/20">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold flex items-center gap-2 text-green-700 dark:text-green-400">
+                        <Target className="size-4" />
+                        Pro Tips
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {studyTips.map((tip, i) => (
+                        <div key={i} className="flex gap-3 text-sm text-muted-foreground">
+                          <CheckCircle className="size-4 text-green-500 flex-shrink-0 mt-0.5" />
+                          <span>{tip}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              } else if (weakestConcepts.length > 0) {
+                // Show Weakest Concepts for active users
+                return (
+                  <Card className="bg-orange-500/5 border-orange-500/20">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                        <AlertCircle className="size-4" />
+                        Weakest Concepts
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {weakestConcepts.map((concept, i) => (
+                        <div key={i} className="flex flex-col gap-1 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-foreground">{concept.title}</span>
+                            <Badge variant="destructive" className="text-xs">
+                              {concept.accuracy}%
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{concept.topic}</span>
+                            <span>•</span>
+                            <span>{concept.totalStudies} studies</span>
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
+                        Focus on these topics to improve your understanding
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              } else {
+                // Show Upcoming Study Schedule
+                return (
+                  <Card className="bg-blue-500/5 border-blue-500/20">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                        <Clock className="size-4" />
+                        Upcoming Study Schedule
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {upcomingStudy.map((item, i) => (
+                        <div key={i} className="flex flex-col gap-1 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-foreground">{item.title}</span>
+                            <Badge variant={item.daysSince > 7 ? "destructive" : "secondary"} className="text-xs">
+                              {item.daysSince === 0 ? "Today" : item.daysSince === 1 ? "1 day ago" : `${item.daysSince} days ago`}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {item.topic}
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
+                        Review these sets to maintain your knowledge
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              }
+            })()}
           </motion.div>
         </div>
       </div>
 
       {/* Study Analytics Popup */}
       <Dialog open={showAnalyticsPopup} onOpenChange={setShowAnalyticsPopup}>
-        <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="flex items-center gap-3 text-2xl">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <BarChart3 className="size-6 text-primary" />
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0 gap-0 border-border/40 bg-background/95 backdrop-blur-xl sm:rounded-3xl shadow-2xl">
+          <div className="h-full flex flex-col relative">
+            <DialogHeader className="p-8 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                    <BarChart3 className="size-5" />
               </div>
-              Study Analytics
+                  <span className="text-xs font-bold uppercase tracking-widest text-primary/70">Master Performance</span>
+                </div>
+                <DialogTitle className="text-3xl font-bold tracking-tight">
+                  Global Analytics
             </DialogTitle>
-            <DialogDescription className="text-base">
-              Track your learning progress and identify areas for improvement
+                <DialogDescription className="text-lg font-medium text-muted-foreground flex items-center gap-2">
+                  <Sparkles className="size-4 text-purple-500" />
+                  Across all study sets
             </DialogDescription>
+              </div>
           </DialogHeader>
 
-          <div className="overflow-y-auto max-h-[calc(85vh-120px)] pr-2">
-            <div className="space-y-6">
-              {/* Summary Stats - Cleaner Design */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/30 dark:to-emerald-900/20 rounded-xl p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-500/10">
-                      <ThumbsUp className="size-5 text-emerald-600" />
+            <div className="flex-1 overflow-y-auto p-8 pt-2 space-y-10">
+              {/* Summary Stats - Premium Horizontal Design */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="relative group overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-5 transition-all hover:bg-emerald-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-emerald-500/10 text-emerald-600 shadow-sm shadow-emerald-500/10">
+                      <ThumbsUp className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                      <p className="text-sm font-medium text-emerald-600/70 dark:text-emerald-400/60 uppercase tracking-wider">Total Correct</p>
+                      <h4 className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                         {studyAnalytics.filter(a => a.isCorrect).length}
-                      </p>
-                      <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80">Correct Answers</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-950/30 dark:to-rose-900/20 rounded-xl p-4 border border-rose-200/50 dark:border-rose-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-rose-500/10">
-                      <ThumbsDown className="size-5 text-rose-600" />
+                <div className="relative group overflow-hidden rounded-2xl border border-rose-500/20 bg-rose-500/[0.03] p-5 transition-all hover:bg-rose-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-rose-500/10 text-rose-600 shadow-sm shadow-rose-500/10">
+                      <ThumbsDown className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">
+                      <p className="text-sm font-medium text-rose-600/70 dark:text-rose-400/60 uppercase tracking-wider">Total Incorrect</p>
+                      <h4 className="text-3xl font-bold text-rose-600 dark:text-rose-400">
                         {studyAnalytics.filter(a => !a.isCorrect).length}
-                      </p>
-                      <p className="text-sm text-rose-600/80 dark:text-rose-400/80">Incorrect Answers</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20 rounded-xl p-4 border border-blue-200/50 dark:border-blue-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-blue-500/10">
-                      <Target className="size-5 text-blue-600" />
+                <div className="relative group overflow-hidden rounded-2xl border border-blue-500/20 bg-blue-500/[0.03] p-5 transition-all hover:bg-blue-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-blue-500/10 text-blue-600 shadow-sm shadow-blue-500/10">
+                      <Target className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                      <p className="text-sm font-medium text-blue-600/70 dark:text-blue-400/60 uppercase tracking-wider">Overall Accuracy</p>
+                      <h4 className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                         {studyAnalytics.length > 0 ? Math.round((studyAnalytics.filter(a => a.isCorrect).length / studyAnalytics.length) * 100) : 0}%
-                      </p>
-                      <p className="text-sm text-blue-600/80 dark:text-blue-400/80">Accuracy Rate</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950/30 dark:to-violet-900/20 rounded-xl p-4 border border-violet-200/50 dark:border-violet-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-violet-500/10">
-                      <BookOpen className="size-5 text-violet-600" />
+                <div className="relative group overflow-hidden rounded-2xl border border-violet-500/20 bg-violet-500/[0.03] p-5 transition-all hover:bg-violet-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-violet-500/10 text-violet-600 shadow-sm shadow-violet-500/10">
+                      <BookOpen className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-violet-700 dark:text-violet-400">
+                      <p className="text-sm font-medium text-violet-600/70 dark:text-violet-400/60 uppercase tracking-wider">Sets Studied</p>
+                      <h4 className="text-3xl font-bold text-violet-600 dark:text-violet-400">
                         {new Set(studyAnalytics.map(a => a.setTitle)).size}
-                      </p>
-                      <p className="text-sm text-violet-600/80 dark:text-violet-400/80">Sets Studied</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Study History - Improved Design */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-border">
-                  <Clock className="size-5 text-primary" />
-                  <h3 className="text-xl font-semibold">Study History</h3>
+              {/* Global Study History Section */}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="size-2 rounded-full bg-primary" />
+                    <h3 className="text-xl font-bold tracking-tight">Full History</h3>
+                  </div>
+                  <Badge variant="secondary" className="px-3 py-1 font-semibold bg-secondary/50 backdrop-blur-sm">
+                    {studyAnalytics.length} SESSIONS RECORDED
+                  </Badge>
                 </div>
 
                 {studyAnalytics.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
-                      <AlertCircle className="size-8 text-muted-foreground" />
+                  <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-muted/20 rounded-[2.5rem] border-2 border-dashed border-border/50">
+                    <div className="p-5 rounded-2xl bg-muted/50 mb-6 ring-1 ring-border">
+                      <Brain className="size-10 text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">No Study Data Yet</h3>
-                    <p className="text-muted-foreground max-w-md mx-auto">
-                      Start studying your flashcards to see detailed analytics and track your progress here.
+                    <h4 className="text-xl font-bold">No data available</h4>
+                    <p className="text-muted-foreground text-base max-w-[300px] mx-auto mt-2 leading-relaxed">
+                      Start studying any of your sets to see your global learning progress here.
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="grid gap-6">
                     {studyAnalytics.map((session, index) => (
-                      <div key={session.id} className={`rounded-xl border-2 transition-all hover:shadow-md ${session.isCorrect
-                          ? 'border-emerald-200 bg-emerald-50/30 dark:border-emerald-800/30 dark:bg-emerald-950/10'
-                          : 'border-rose-200 bg-rose-50/30 dark:border-rose-800/30 dark:bg-rose-950/10'
-                        }`}>
-                        <div className="p-5">
-                          <div className="flex items-start justify-between mb-4">
+                      <div 
+                        key={session.id} 
+                        className="group relative overflow-hidden rounded-3xl border border-border/50 bg-card/50 hover:bg-card hover:border-border transition-all duration-300 shadow-sm"
+                      >
+                        <div className="p-6 sm:p-8">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
+                            <div className="flex items-center gap-4">
+                              <div className={`flex items-center justify-center size-14 rounded-2xl ${
+                                session.isCorrect 
+                                  ? 'bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20' 
+                                  : 'bg-rose-500/10 text-rose-600 ring-1 ring-rose-500/20'
+                              }`}>
+                                {session.isCorrect ? <ThumbsUp className="size-7" /> : <ThumbsDown className="size-7" />}
+                              </div>
+                              <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs font-medium">
-                                {session.setTitle}
-                              </Badge>
-                              <Badge
-                                variant={session.difficulty === 'Easy' ? 'secondary' : session.difficulty === 'Medium' ? 'default' : 'destructive'}
-                                className="text-xs"
-                              >
+                                  <span className={`text-lg font-black uppercase tracking-tighter ${session.isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {session.isCorrect ? 'Mastered' : 'Needs Review'}
+                                  </span>
+                                  <Badge variant="secondary" className="text-[10px] font-bold h-5 px-2">
                                 {session.difficulty}
                               </Badge>
-                              <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${session.isCorrect
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                                  : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
-                                }`}>
-                                {session.isCorrect ? (
-                                  <>
-                                    <ThumbsUp className="size-3" />
-                                    Correct
-                                  </>
-                                ) : (
-                                  <>
-                                    <ThumbsDown className="size-3" />
-                                    Incorrect
-                                  </>
-                                )}
                               </div>
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2 text-xs font-semibold">
+                                  <span className="text-primary/70">{session.setTitle}</span>
+                                  <span className="text-muted-foreground/30">•</span>
+                                  <span className="text-muted-foreground flex items-center gap-1">
                               <Clock className="size-3" />
                               {new Date(session.timestamp).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           </div>
 
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Question:</p>
-                              <div className="text-sm bg-background/50 rounded-lg p-3 border">
+                          <div className="space-y-8">
+                            <div className="relative">
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">The Question</span>
+                                <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                              </div>
+                              <div className="text-lg font-semibold leading-relaxed text-foreground/90 bg-muted/20 rounded-[1.5rem] p-6 ring-1 ring-border/50 shadow-inner">
                                 <LatexMathRenderer text={session.question} />
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-1">Your Answer:</p>
-                                <div className={`text-sm p-3 rounded-lg border ${session.isCorrect
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-200'
-                                    : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/20 dark:border-rose-800 dark:text-rose-200'
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Your Response</span>
+                                  <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                                </div>
+                                <div className={`text-base font-medium rounded-2xl p-5 ring-1 ${
+                                  session.isCorrect 
+                                    ? 'bg-emerald-500/[0.03] ring-emerald-500/20 text-emerald-700 dark:text-emerald-400' 
+                                    : 'bg-rose-500/[0.03] ring-rose-500/20 text-rose-700 dark:text-rose-400'
                                   }`}>
                                   <LatexMathRenderer text={session.userAnswer} />
                                 </div>
                               </div>
-
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-1">Correct Answer:</p>
-                                <div className="text-sm p-3 rounded-lg bg-muted/50 border text-foreground">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Correct Solution</span>
+                                  <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                                </div>
+                                <div className="text-base font-medium bg-primary/[0.03] ring-1 ring-primary/20 rounded-2xl p-5 text-foreground/80">
                                   <LatexMathRenderer text={session.correctAnswer} />
                                 </div>
                               </div>
@@ -626,158 +809,184 @@ export default function FlashcardsPage() {
 
       {/* Individual Set Analytics Popup */}
       <Dialog open={showSetAnalyticsPopup} onOpenChange={setShowSetAnalyticsPopup}>
-        <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="flex items-center gap-3 text-2xl">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <BarChart3 className="size-6 text-primary" />
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0 gap-0 border-border/40 bg-background/95 backdrop-blur-xl sm:rounded-3xl shadow-2xl">
+          <div className="h-full flex flex-col relative">
+            <DialogHeader className="p-8 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                    <BarChart3 className="size-5" />
               </div>
-              Study Analytics - {selectedSetTitle}
+                  <span className="text-xs font-bold uppercase tracking-widest text-primary/70">Performance Report</span>
+                </div>
+                <DialogTitle className="text-3xl font-bold tracking-tight">
+                  Study Analytics
             </DialogTitle>
-            <DialogDescription className="text-base">
-              Track your learning progress for this specific flashcard set
+                <DialogDescription className="text-lg font-medium text-muted-foreground flex items-center gap-2">
+                  <BookOpen className="size-4" />
+                  {selectedSetTitle}
             </DialogDescription>
+              </div>
           </DialogHeader>
 
-          <div className="overflow-y-auto max-h-[calc(85vh-120px)] pr-2">
-            <div className="space-y-6">
-              {/* Summary Stats for this set */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/30 dark:to-emerald-900/20 rounded-xl p-4 border border-emerald-200/50 dark:border-emerald-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-500/10">
-                      <ThumbsUp className="size-5 text-emerald-600" />
+            <div className="flex-1 overflow-y-auto p-8 pt-2 space-y-10">
+              {/* Summary Stats - Premium Horizontal Design */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="relative group overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-5 transition-all hover:bg-emerald-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-emerald-500/10 text-emerald-600 shadow-sm shadow-emerald-500/10">
+                      <ThumbsUp className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                      <p className="text-sm font-medium text-emerald-600/70 dark:text-emerald-400/60 uppercase tracking-wider">Correct</p>
+                      <h4 className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                         {selectedSetAnalytics.filter(a => a.isCorrect).length}
-                      </p>
-                      <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80">Correct Answers</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-950/30 dark:to-rose-900/20 rounded-xl p-4 border border-rose-200/50 dark:border-rose-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-rose-500/10">
-                      <ThumbsDown className="size-5 text-rose-600" />
+                <div className="relative group overflow-hidden rounded-2xl border border-rose-500/20 bg-rose-500/[0.03] p-5 transition-all hover:bg-rose-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-rose-500/10 text-rose-600 shadow-sm shadow-rose-500/10">
+                      <ThumbsDown className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">
+                      <p className="text-sm font-medium text-rose-600/70 dark:text-rose-400/60 uppercase tracking-wider">Incorrect</p>
+                      <h4 className="text-3xl font-bold text-rose-600 dark:text-rose-400">
                         {selectedSetAnalytics.filter(a => !a.isCorrect).length}
-                      </p>
-                      <p className="text-sm text-rose-600/80 dark:text-rose-400/80">Incorrect Answers</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20 rounded-xl p-4 border border-blue-200/50 dark:border-blue-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-blue-500/10">
-                      <Target className="size-5 text-blue-600" />
+                <div className="relative group overflow-hidden rounded-2xl border border-blue-500/20 bg-blue-500/[0.03] p-5 transition-all hover:bg-blue-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-blue-500/10 text-blue-600 shadow-sm shadow-blue-500/10">
+                      <Target className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                      <p className="text-sm font-medium text-blue-600/70 dark:text-blue-400/60 uppercase tracking-wider">Accuracy</p>
+                      <h4 className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                         {selectedSetAnalytics.length > 0 ? Math.round((selectedSetAnalytics.filter(a => a.isCorrect).length / selectedSetAnalytics.length) * 100) : 0}%
-                      </p>
-                      <p className="text-sm text-blue-600/80 dark:text-blue-400/80">Accuracy Rate</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950/30 dark:to-violet-900/20 rounded-xl p-4 border border-violet-200/50 dark:border-violet-800/30">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-violet-500/10">
-                      <BookOpen className="size-5 text-violet-600" />
+                <div className="relative group overflow-hidden rounded-2xl border border-purple-500/20 bg-purple-500/[0.03] p-5 transition-all hover:bg-purple-500/[0.06]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-xl bg-purple-500/10 text-purple-600 shadow-sm shadow-purple-500/10">
+                      <Zap className="size-6" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-violet-700 dark:text-violet-400">
+                      <p className="text-sm font-medium text-purple-600/70 dark:text-purple-400/60 uppercase tracking-wider">Attempts</p>
+                      <h4 className="text-3xl font-bold text-purple-600 dark:text-purple-400">
                         {selectedSetAnalytics.length}
-                      </p>
-                      <p className="text-sm text-violet-600/80 dark:text-violet-400/80">Total Attempts</p>
+                      </h4>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Study History for this set */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-border">
-                  <Clock className="size-5 text-primary" />
-                  <h3 className="text-xl font-semibold">Study History for {selectedSetTitle}</h3>
+              {/* Study History Section */}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="size-2 rounded-full bg-primary" />
+                    <h3 className="text-xl font-bold tracking-tight">Recent Sessions</h3>
+                  </div>
+                  <Badge variant="secondary" className="px-3 py-1 font-semibold bg-secondary/50 backdrop-blur-sm">
+                    {selectedSetAnalytics.length} TOTAL SESSIONS
+                  </Badge>
                 </div>
 
                 {selectedSetAnalytics.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
-                      <AlertCircle className="size-8 text-muted-foreground" />
+                  <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-muted/20 rounded-[2rem] border-2 border-dashed border-border/50">
+                    <div className="p-5 rounded-2xl bg-muted/50 mb-6 ring-1 ring-border">
+                      <Brain className="size-10 text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">No Study Data Yet</h3>
-                    <p className="text-muted-foreground max-w-md mx-auto">
-                      Start studying this flashcard set to see detailed analytics and track your progress here.
+                    <h4 className="text-xl font-bold">No progress yet</h4>
+                    <p className="text-muted-foreground text-base max-w-[300px] mx-auto mt-2 leading-relaxed">
+                      Finish your first study session to unlock these detailed insights!
                     </p>
+                    <Button 
+                      className="mt-8 rounded-full px-8 py-6 h-auto text-base font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+                      onClick={() => setShowSetAnalyticsPopup(false)}
+                    >
+                      Start Studying Now
+                    </Button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="grid gap-6">
                     {selectedSetAnalytics.map((session, index) => (
-                      <div key={session.id} className={`rounded-xl border-2 transition-all hover:shadow-md ${session.isCorrect
-                          ? 'border-emerald-200 bg-emerald-50/30 dark:border-emerald-800/30 dark:bg-emerald-950/10'
-                          : 'border-rose-200 bg-rose-50/30 dark:border-rose-800/30 dark:bg-rose-950/10'
-                        }`}>
-                        <div className="p-5">
-                          <div className="flex items-start justify-between mb-4">
+                      <div 
+                        key={session.id} 
+                        className="group relative overflow-hidden rounded-3xl border border-border/50 bg-card/50 hover:bg-card hover:border-border transition-all duration-300 shadow-sm"
+                      >
+                        <div className="p-6 sm:p-8">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
+                            <div className="flex items-center gap-4">
+                              <div className={`flex items-center justify-center size-14 rounded-2xl ${
+                                session.isCorrect 
+                                  ? 'bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20' 
+                                  : 'bg-rose-500/10 text-rose-600 ring-1 ring-rose-500/20'
+                              }`}>
+                                {session.isCorrect ? <ThumbsUp className="size-7" /> : <ThumbsDown className="size-7" />}
+                              </div>
+                              <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <Badge
-                                variant={session.difficulty === 'Easy' ? 'secondary' : session.difficulty === 'Medium' ? 'default' : 'destructive'}
-                                className="text-xs"
-                              >
+                                  <span className={`text-lg font-black uppercase tracking-tighter ${session.isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {session.isCorrect ? 'Mastered' : 'Needs Review'}
+                                  </span>
+                                  <Badge variant="outline" className="text-[10px] font-bold h-5 px-2 bg-background/50 border-border/50">
                                 {session.difficulty}
                               </Badge>
-                              <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${session.isCorrect
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                                  : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
-                                }`}>
-                                {session.isCorrect ? (
-                                  <>
-                                    <ThumbsUp className="size-3" />
-                                    Correct
-                                  </>
-                                ) : (
-                                  <>
-                                    <ThumbsDown className="size-3" />
-                                    Incorrect
-                                  </>
-                                )}
                               </div>
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                  <Clock className="size-3.5" />
+                                  {new Date(session.timestamp).toLocaleDateString(undefined, { 
+                                    month: 'long', 
+                                    day: 'numeric', 
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
                             </div>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Clock className="size-3" />
-                              {new Date(session.timestamp).toLocaleDateString()}
+                              </div>
                             </div>
                           </div>
 
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Question:</p>
-                              <div className="text-sm bg-background/50 rounded-lg p-3 border">
+                          <div className="space-y-8">
+                            <div className="relative">
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">The Question</span>
+                                <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                              </div>
+                              <div className="text-lg font-semibold leading-relaxed text-foreground/90 bg-muted/20 rounded-[1.5rem] p-6 ring-1 ring-border/50 shadow-inner">
                                 <LatexMathRenderer text={session.question} />
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-1">Your Answer:</p>
-                                <div className={`text-sm p-3 rounded-lg border ${session.isCorrect
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-200'
-                                    : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/20 dark:border-rose-800 dark:text-rose-200'
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Your Response</span>
+                                  <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                                </div>
+                                <div className={`text-base font-medium rounded-2xl p-5 ring-1 ${
+                                  session.isCorrect 
+                                    ? 'bg-emerald-500/[0.03] ring-emerald-500/20 text-emerald-700 dark:text-emerald-400' 
+                                    : 'bg-rose-500/[0.03] ring-rose-500/20 text-rose-700 dark:text-rose-400'
                                   }`}>
                                   <LatexMathRenderer text={session.userAnswer} />
                                 </div>
                               </div>
-
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-1">Correct Answer:</p>
-                                <div className="text-sm p-3 rounded-lg bg-muted/50 border text-foreground">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Correct Solution</span>
+                                  <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                                </div>
+                                <div className="text-base font-medium bg-primary/[0.03] ring-1 ring-primary/20 rounded-2xl p-5 text-foreground/80">
                                   <LatexMathRenderer text={session.correctAnswer} />
                                 </div>
                               </div>

@@ -34,8 +34,7 @@ import {
   SparklesIcon,
   ArrowRight01Icon,
   Download01Icon,
-  ZoomInIcon,
-  ZoomOutIcon,
+  ZoomIcon,
   RotateLeft01Icon,
   ViewIcon,
   ViewOffIcon
@@ -106,19 +105,63 @@ function extractQuizData(content: string): { type: 'quiz' | 'exam' | null, data:
 // Detect and extract graph data
 function extractGraphData(content: string): { type: 'function' | 'data' | null, data: any } {
   try {
-    // Look for GRAPH_DATA: marker
-    const graphMatch = content.match(/GRAPH_DATA:\s*(\{[^\n]*\})/);
+    if (!content || typeof content !== 'string') {
+      return { type: null, data: null };
+    }
     
-    if (graphMatch) {
-      console.log('Found GRAPH_DATA marker');
-      const jsonStr = graphMatch[1].trim();
+    // Look for GRAPH_DATA: marker - find the opening brace and match balanced braces
+    const graphMatch = content.match(/GRAPH_DATA:\s*(\{)/);
+    
+    if (graphMatch && graphMatch.index !== undefined) {
+      const startIndex = graphMatch.index + graphMatch[0].length - 1; // Position of opening brace
+      let braceCount = 0;
+      let endIndex = startIndex;
+      
+      // Find the matching closing brace
+      for (let i = startIndex; i < content.length; i++) {
+        if (content[i] === '{') braceCount++;
+        if (content[i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            endIndex = i + 1;
+            break;
+          }
+        }
+      }
+      
+      if (endIndex > startIndex) {
+        const jsonStr = content.substring(startIndex, endIndex).trim();
+        try {
+          const data = JSON.parse(jsonStr);
+          if (data && typeof data === 'object') {
+            console.log('Successfully parsed graph data:', data.type);
+            return { type: data.type || 'function', data: data || {} };
+          }
+        } catch (parseError) {
+          console.error('Failed to parse graph JSON:', parseError);
+          return { type: null, data: null };
+        }
+      }
+    }
+    
+    // Also check for simple JSON array of {x, y} points at the start/end of content
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith('[') && trimmedContent.endsWith(']')) {
       try {
-        const data = JSON.parse(jsonStr);
-        console.log('Successfully parsed graph data:', data.type);
-        return { type: data.type || 'function', data };
-      } catch (parseError) {
-        console.error('Failed to parse graph JSON:', parseError);
-        return { type: null, data: null };
+        const parsed = JSON.parse(trimmedContent);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((p: any) => p && typeof p === 'object' && "x" in p && "y" in p)) {
+          console.log('Found simple graph data array');
+          return {
+            type: 'data',
+            data: {
+              type: 'data',
+              chartType: 'line',
+              points: parsed
+            }
+          };
+        }
+      } catch (e) {
+        // Not valid JSON, continue
       }
     }
     
@@ -132,7 +175,7 @@ function extractGraphData(content: string): { type: 'function' | 'data' | null, 
 // Helper to extract follow-up questions
 function extractFollowUps(content: string): { text: string, followUps: string[] } {
   // Try to find the block
-  const match = content.match(/\/\/\/FOLLOWUP_START\/\/\/(.*?)\/\/\/FOLLOWUP_END\/\/\//s);
+  const match = content.match(/\/\/\/FOLLOWUP_START\/\/\/([\s\S]*?)\/\/\/FOLLOWUP_END\/\/\//);
   if (match) {
     try {
       const jsonStr = match[1].trim();
@@ -434,7 +477,14 @@ export default function BotResponse({ content, className = "", sources, isSearch
   const { text: cleanContent, followUps } = useMemo(() => extractFollowUps(content), [content]);
   const isGraph = useMemo(() => looksLikeGraph(cleanContent), [cleanContent]);
   const quizData = useMemo(() => extractQuizData(cleanContent), [cleanContent]);
-  const graphData = useMemo(() => extractGraphData(cleanContent), [cleanContent]);
+  const graphData = useMemo(() => {
+    try {
+      return extractGraphData(cleanContent);
+    } catch (error) {
+      console.error('Error extracting graph data:', error);
+      return { type: null, data: null };
+    }
+  }, [cleanContent]);
   const { isFeatureEnabled } = useFeatureFlags();
   const [isCopied, setIsCopied] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
@@ -562,23 +612,35 @@ export default function BotResponse({ content, className = "", sources, isSearch
 
   // Render graph if graph data is detected
   if (graphData.type && graphData.data) {
-    return <InteractiveGraph graphData={graphData} cleanContent={cleanContent} className={className} />;
+    try {
+      return <InteractiveGraph graphData={graphData} cleanContent={cleanContent || ''} className={className} />;
+    } catch (error) {
+      console.error('Error rendering graph:', error);
+      // Fall through to regular text rendering
+    }
   }
 
   if (isGraph) {
-    const data = JSON.parse(cleanContent);
-    return (
-      <div className={`p-5 ${className}`}>
-        <h3 className="text-lg font-semibold mb-2">Graph Output:</h3>
-        <LineChart width={400} height={300} data={data}>
-          <Line type="monotone" dataKey="y" stroke="#4F46E5" strokeWidth={2} />
-          <CartesianGrid stroke="#E5E7EB" />
-          <XAxis dataKey="x" />
-          <YAxis />
-          <Tooltip />
-        </LineChart>
-      </div>
-    );
+    try {
+      const data = JSON.parse(cleanContent);
+      if (Array.isArray(data) && data.length > 0) {
+        return (
+          <div className={`p-5 ${className}`}>
+            <h3 className="text-lg font-semibold mb-2">Graph Output:</h3>
+            <LineChart width={400} height={300} data={data}>
+              <Line type="monotone" dataKey="y" stroke="#4F46E5" strokeWidth={2} />
+              <CartesianGrid stroke="#E5E7EB" />
+              <XAxis dataKey="x" />
+              <YAxis />
+              <Tooltip />
+            </LineChart>
+          </div>
+        );
+      }
+    } catch (error) {
+      console.error('Error parsing graph data:', error);
+      // Fall through to regular text rendering
+    }
   }
 
   // Check if content contains code blocks (triple backticks)
@@ -685,11 +747,11 @@ export default function BotResponse({ content, className = "", sources, isSearch
           </div>
           
           <div className="grid gap-2">
-            {sources.map((source, idx) => {
+            {sources && sources.map((source, idx) => {
               const fileName = source.fileName || source.title || 'Syllabus';
 
               // Clean snippet to avoid leaking internal markers like FOLLOWUP blocks
-              const rawSnippet = source.snippet || source.excerpt || '';
+              const rawSnippet = source.snippet || '';
               const cleanedSnippet = rawSnippet
                 // Strip FOLLOWUP markers and any JSON that follows them
                 .replace(/\/\/\/FOLLOWUP_START\/\/\/[\s\S]*$/g, '')
@@ -764,7 +826,7 @@ export default function BotResponse({ content, className = "", sources, isSearch
                        {isExpanded && (
                          <div className="mt-3 pt-3 border-t border-border/40 animate-in fade-in slide-in-from-top-1 duration-200">
                            <div className="flex gap-2 items-start text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/10 p-2 rounded-lg border border-amber-200/50 dark:border-amber-800/30">
-                             <Search className="w-3 h-3 mt-0.5 shrink-0" />
+                             <Search01Icon className="w-3 h-3 mt-0.5 shrink-0" />
                              <p>This is a direct quote from your uploaded file. Always double-check dates and policies in the original document.</p>
                            </div>
                          </div>
@@ -790,36 +852,40 @@ export default function BotResponse({ content, className = "", sources, isSearch
       {/* Source Icon - Inline (for web sources only) */}
       {sources && sources.length > 0 && sources.some(s => s.url && s.url !== '#') && (
         <div className="inline-block ml-2">
-          <SourceIcon sources={sources.filter(s => s.url && s.url !== '#')} />
+          <SourceIcon sources={sources.filter(s => s.url && s.url !== '#').map(s => ({
+            title: s.title || s.fileName || '',
+            url: s.url || '',
+            snippet: s.snippet || ''
+          }))} />
         </div>
       )}
       
-      {/* Copy Button - Inline */}
-      <button
-        className="inline-block ml-2 h-6 w-6 p-0 bg-transparent hover:bg-muted-foreground/10 rounded-md z-10 flex items-center justify-center transition-all duration-200 ease-in-out"
-        onClick={copyToClipboard}
-        title="Copy message"
-      >
-        <div className="relative">
-          <Copy01Icon 
-            className={`h-3.5 w-3.5 text-muted-foreground transition-all duration-300 ease-in-out ${
-              isCopied ? 'opacity-0 scale-0 rotate-180' : 'opacity-100 scale-100 rotate-0'
-            }`} 
-          />
-          <CheckmarkCircle01Icon 
-            className={`absolute inset-0 h-3.5 w-3.5 text-green-600 transition-all duration-300 ease-in-out ${
-              isCopied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-0 -rotate-180'
-            }`} 
-          />
-        </div>
-      </button>
+      {/* Copy Button and Feedback - Inline Row */}
+      <div className="inline-flex items-center gap-1 ml-2">
+        <button
+          className="h-6 w-6 p-0 bg-transparent hover:bg-muted-foreground/10 rounded-md z-10 flex items-center justify-center transition-all duration-200 ease-in-out"
+          onClick={copyToClipboard}
+          title="Copy message"
+        >
+          <div className="relative">
+            <Copy01Icon 
+              className={`h-3.5 w-3.5 text-muted-foreground transition-all duration-300 ease-in-out ${
+                isCopied ? 'opacity-0 scale-0 rotate-180' : 'opacity-100 scale-100 rotate-0'
+              }`} 
+            />
+            <CheckmarkCircle01Icon 
+              className={`absolute inset-0 h-3.5 w-3.5 text-green-600 transition-all duration-300 ease-in-out ${
+                isCopied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-0 -rotate-180'
+              }`} 
+            />
+          </div>
+        </button>
 
-      {/* AI Feedback - Inline */}
-      {messageId && onFeedback && (
-        <div className="inline-block ml-2">
+        {/* AI Feedback - Next to Copy Button */}
+        {messageId && onFeedback && (
           <AIFeedback messageId={messageId} aiContent={content} onFeedback={onFeedback} />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

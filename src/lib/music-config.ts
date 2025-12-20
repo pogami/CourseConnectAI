@@ -16,8 +16,9 @@ export const config = {
   },
   aiMusic: {
     apiKey: process.env.NEXT_PUBLIC_MUSIC_GENERATION_API_KEY || '',
-    apiUrl: process.env.NEXT_PUBLIC_MUSIC_GENERATION_API_URL || 'https://api.example.com/generate-music',
-    openaiApiKey: process.env.OPENAI_API_KEY || ''
+    apiUrl: process.env.NEXT_PUBLIC_MUSIC_GENERATION_API_URL || 'https://api.example.com/generate-music'
+    // Note: OPENAI_API_KEY removed - server-side keys should not be in config files
+    // Use server-side API routes if OpenAI is needed for music generation
   }
 };
 

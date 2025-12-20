@@ -481,7 +481,7 @@ async function searchWithAlternativeMethod(query: string): Promise<{ success: bo
     return {
       success: false,
       results: [],
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 }
@@ -508,8 +508,8 @@ async function checkForPlagiarism(text: string, minLength: number): Promise<Omit
         try {
           // Try DuckDuckGo first
           const duckDuckGoResults = await searchCurrentInformation(query);
-          if (duckDuckGoResults.success && duckDuckGoResults.results.length > 0) {
-            return duckDuckGoResults;
+          if (duckDuckGoResults.results && duckDuckGoResults.results.length > 0) {
+            return { success: true, results: duckDuckGoResults.results };
           }
           
           // If DuckDuckGo fails, try a different approach
@@ -517,7 +517,7 @@ async function checkForPlagiarism(text: string, minLength: number): Promise<Omit
           return await searchWithAlternativeMethod(query);
         } catch (error) {
           console.log(`❌ Search failed for "${query}":`, error);
-          return { success: false, results: [], error: error.message };
+          return { success: false, results: [], error: error instanceof Error ? error.message : String(error) };
         }
       })
     );
@@ -623,13 +623,13 @@ async function detectAIContent(text: string): Promise<PlagiarismResult['aiDetect
     Respond with: CONFIDENCE_SCORE: [0-100], REASONING: [brief explanation]`;
 
     const response = await provideStudyAssistanceWithFallback({
-      userInput: aiDetectionPrompt,
+      question: aiDetectionPrompt,
       context: 'ai-detection'
     });
 
     // Parse AI response
-    const confidenceMatch = response.match(/CONFIDENCE_SCORE:\s*(\d+)/i);
-    const reasoningMatch = response.match(/REASONING:\s*(.+)/i);
+    const confidenceMatch = response.answer.match(/CONFIDENCE_SCORE:\s*(\d+)/i);
+    const reasoningMatch = response.answer.match(/REASONING:\s*(.+)/i);
     
     const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 0;
     const reasoning = reasoningMatch ? reasoningMatch[1] : 'Unable to determine';
@@ -784,11 +784,11 @@ async function calculateCoherence(text: string): Promise<number> {
     Text: "${text.substring(0, 800)}"`;
     
     const response = await provideStudyAssistanceWithFallback({
-      userInput: coherencePrompt,
+      question: coherencePrompt,
       context: 'coherence-analysis'
     });
     
-    const scoreMatch = response.match(/(\d+)/);
+    const scoreMatch = response.answer.match(/(\d+)/);
     return scoreMatch ? parseInt(scoreMatch[1]) : 75; // Default moderate score
     
   } catch (error) {

@@ -54,8 +54,7 @@ export async function searchCurrentInformation(query: string): Promise<WebSearch
     if (!googleApiKey || typeof googleApiKey !== 'string' || googleApiKey.trim().length === 0 ||
         googleApiKey === 'demo-key' || googleApiKey === 'your_google_search_key_here') {
       console.error('❌ GOOGLE_SEARCH_API_KEY is missing or invalid');
-      console.error('   Value:', googleApiKey);
-      console.error('   Type:', typeof googleApiKey);
+      // Security: Do not log the actual API key value
       return {
         results: [],
         query,
@@ -66,7 +65,7 @@ export async function searchCurrentInformation(query: string): Promise<WebSearch
     if (!googleSearchEngineId || typeof googleSearchEngineId !== 'string' || googleSearchEngineId.trim().length === 0 ||
         googleSearchEngineId === 'demo-engine-id' || googleSearchEngineId === 'your_search_engine_id_here') {
       console.error('❌ GOOGLE_SEARCH_ENGINE_ID is missing or invalid');
-      console.error('   Value:', googleSearchEngineId);
+      // Security: Do not log the actual engine ID value
       console.error('   Type:', typeof googleSearchEngineId);
       return {
         results: [],

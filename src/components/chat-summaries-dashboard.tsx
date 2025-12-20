@@ -58,6 +58,10 @@ export function ChatSummariesDashboard() {
       return null;
     }
 
+    // Add timeout to each request - reduced for faster feedback
+    const controller = new AbortController();
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     try {
       // Limit message content to avoid huge payloads
       const recentMessages = messages.slice(-50); // Last 50 messages
@@ -69,9 +73,8 @@ export function ChatSummariesDashboard() {
         })
         .join('\n\n');
 
-      // Add timeout to each request - reduced for faster feedback
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      // Set timeout
+      timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       // Determine chat title for API - explicitly handle general chat
       const isGeneralChatForAPI = chat.id === 'private-general-chat';
@@ -94,7 +97,10 @@ export function ChatSummariesDashboard() {
         signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
 
       if (!response.ok) {
         return null;
@@ -126,6 +132,21 @@ export function ChatSummariesDashboard() {
         courseCode: chat.courseData?.courseCode
       };
     } catch (error: any) {
+      // Clear timeout in case of error
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      // Silently handle AbortError (timeout or manual abort)
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return null;
+      }
+      
+      // Only log non-abort errors for debugging
+      if (error && !error?.name?.includes('Abort')) {
+        console.warn('Error fetching chat summary:', error);
+      }
+      
       return null;
     }
   };

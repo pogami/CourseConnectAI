@@ -22,8 +22,7 @@ import {
   CheckmarkCircle01Icon,
   Globe02Icon,
   Book01Icon,
-  SparklesIcon,
-  ScrollVerticalIcon
+  SparklesIcon
 } from "hugeicons-react";
 import { useChatStore } from "@/hooks/use-chat-store";
 import { useTextExtraction } from "@/hooks/use-text-extraction";
@@ -3410,8 +3409,7 @@ export default function ChatPage() {
         <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <ScrollVerticalIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <DialogTitle>
                         Chat Summary
                     </DialogTitle>
                     <DialogDescription>

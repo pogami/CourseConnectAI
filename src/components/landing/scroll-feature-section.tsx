@@ -338,12 +338,9 @@ export function ScrollFeatureSection() {
                   Don't just ChatGPT it. CourseConnect knows what your professor actually assigned, so you get answers that make sense for your class, not generic internet advice.
                 </p>
 
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/50 dark:border-indigo-800/50 text-sm">
-                  <span className="text-indigo-700 dark:text-indigo-300 font-medium">
-                    Lecture notes & handwritten text support coming soon —{' '}
-                    <Link href="/features#roadmap" className="underline hover:text-indigo-900 dark:hover:text-indigo-200 font-semibold">
-                      see roadmap
-                    </Link>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50 text-sm">
+                  <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+                    ✓ Handwritten notes OCR now available in chat
                   </span>
                 </div>
 

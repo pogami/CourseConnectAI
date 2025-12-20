@@ -43,7 +43,8 @@ const roadmapDomains = [
     features: [
       { title: 'Class Chat', status: 'live', year: '2025' },
       { title: 'Syllabus Parser', status: 'live', year: '2025' },
-      { title: 'Vision OCR', status: 'active', year: '2026' },
+      { title: 'Vision OCR', status: 'live', year: '2025' },
+      { title: 'AI Chat Summaries', status: 'live', year: '2025' },
       { title: 'Voice-to-Study', status: 'future', year: '2026' },
       { title: 'Math & Symbols', status: 'future', year: '2026' }
     ]
@@ -57,6 +58,7 @@ const roadmapDomains = [
       { title: 'Flashcard engine', status: 'live', year: '2025' },
       { title: 'Study Analytics', status: 'live', year: '2025' },
       { title: 'Smart Focus', status: 'live', year: '2025' },
+      { title: 'Interactive Charts & Graphs', status: 'live', year: '2025' },
       { title: 'Calendar Sync', status: 'active', year: '2026' },
       { title: 'Deep Note Search', status: 'future', year: '2026' }
     ]

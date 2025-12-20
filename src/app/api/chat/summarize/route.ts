@@ -5,11 +5,17 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const { messages, chatTitle, courseData } = body;
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch (e) {
+      return NextResponse.json({ success: false, error: 'Invalid request' }, { status: 400 });
+    }
+
+    const { messages, chatTitle } = body || {};
     
-    if (!messages || (typeof messages === 'string' && messages.trim().length === 0)) {
-      return NextResponse.json({ success: false, error: 'No messages' }, { status: 400 });
+    if (!messages || typeof messages !== 'string' || messages.trim().length === 0) {
+      return NextResponse.json({ success: false, error: 'No messages provided' }, { status: 400 });
     }
 
     const prompt = `Summarize this conversation. Focus on main topics, key questions/answers, important concepts, and action items. Use clear paragraphs with bullets.
@@ -18,7 +24,7 @@ ${messages}
 
 Summary:`;
 
-    let result;
+    let result: any = null;
     try {
       result = await provideStudyAssistanceWithFallback({
         question: prompt,
@@ -29,21 +35,28 @@ Summary:`;
       console.error('AI service error:', aiError);
       return NextResponse.json({ 
         success: false,
-        error: 'AI service error. Please try again.'
+        error: 'AI service unavailable'
       }, { status: 500 });
     }
 
-    const summary = result?.answer?.trim() || 'Summary generated successfully.';
+    if (!result || !result.answer) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'No summary generated'
+      }, { status: 500 });
+    }
+
+    const summary = String(result.answer || '').trim();
 
     return NextResponse.json({ 
       success: true,
-      summary: summary
+      summary: summary || 'Summary generated successfully.'
     });
   } catch (error: any) {
-    console.error('Summarize API error:', error);
+    console.error('Summarize route error:', error);
     return NextResponse.json({ 
       success: false,
-      error: String(error?.message || 'Failed to generate summary')
+      error: 'Failed to generate summary'
     }, { status: 500 });
   }
 }

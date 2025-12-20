@@ -46,20 +46,37 @@ ${courseData ? `\nContext: This conversation is about ${chatTitle || 'a course'}
 Please provide a comprehensive but concise summary:`;
 
     // Use the AI service to generate the summary
-    const aiResponse = await provideStudyAssistanceWithFallback({
-      question: summaryPrompt,
-      context: chatTitle || 'General Chat',
-      conversationHistory: []
-    });
-
-    if (!aiResponse || !aiResponse.answer) {
+    let aiResponse;
+    try {
+      aiResponse = await provideStudyAssistanceWithFallback({
+        question: summaryPrompt,
+        context: chatTitle || 'General Chat',
+        conversationHistory: []
+      });
+    } catch (aiError: any) {
+      console.error('🚨 AI service error:', aiError);
       return NextResponse.json({ 
         success: false,
-        error: 'Failed to generate summary' 
+        error: `AI service error: ${aiError.message || 'Unknown error'}` 
+      }, { status: 500 });
+    }
+
+    if (!aiResponse || !aiResponse.answer) {
+      console.error('🚨 AI response is empty or invalid:', aiResponse);
+      return NextResponse.json({ 
+        success: false,
+        error: 'AI service returned empty response' 
       }, { status: 500 });
     }
 
     const summary = aiResponse.answer.trim();
+    
+    if (!summary || summary.length === 0) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Generated summary is empty' 
+      }, { status: 500 });
+    }
 
     console.log('✅ Summary generated successfully, length:', summary.length);
 

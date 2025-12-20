@@ -2196,10 +2196,15 @@ export default function ChatPage() {
             });
             
             if (!response.ok) {
-                throw new Error('Failed to generate summary');
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                console.error('Summary API error:', errorData);
+                throw new Error(errorData.error || `Failed to generate summary (${response.status})`);
             }
             
             const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to generate summary');
+            }
             setChatSummary(data.summary || 'Unable to generate summary.');
         } catch (error: any) {
             console.error('Error generating summary:', error);

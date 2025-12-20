@@ -5,13 +5,23 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Invalid request body' 
+      }, { status: 400 });
+    }
+
     const { 
       chatId,
       chatTitle,
       messages,
       courseData,
       chatType
-    } = await request.json();
+    } = body || {};
     
     if (!messages || (typeof messages === 'string' && messages.trim().length === 0)) {
       return NextResponse.json({ 
@@ -29,13 +39,29 @@ ${courseData ? `Context: ${chatTitle || 'a course'}` : ''}
 
 Summary:`;
 
-    const aiResponse = await provideStudyAssistanceWithFallback({
-      question: summaryPrompt,
-      context: chatTitle || 'General Chat',
-      conversationHistory: []
-    });
+    let aiResponse;
+    try {
+      aiResponse = await provideStudyAssistanceWithFallback({
+        question: summaryPrompt,
+        context: chatTitle || 'General Chat',
+        conversationHistory: []
+      });
+    } catch (aiError: any) {
+      console.error('AI service error:', aiError);
+      return NextResponse.json({ 
+        success: false,
+        error: 'AI service unavailable. Please try again later.'
+      }, { status: 500 });
+    }
 
-    const summary = aiResponse?.answer?.trim() || 'Unable to generate summary.';
+    if (!aiResponse || !aiResponse.answer) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'AI service returned empty response'
+      }, { status: 500 });
+    }
+
+    const summary = aiResponse.answer.trim();
 
     return NextResponse.json({ 
       success: true,

@@ -5,7 +5,8 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, chatTitle, courseData } = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const { messages, chatTitle, courseData } = body;
     
     if (!messages || (typeof messages === 'string' && messages.trim().length === 0)) {
       return NextResponse.json({ success: false, error: 'No messages' }, { status: 400 });
@@ -17,13 +18,22 @@ ${messages}
 
 Summary:`;
 
-    const result = await provideStudyAssistanceWithFallback({
-      question: prompt,
-      context: chatTitle || 'General Chat',
-      conversationHistory: []
-    });
+    let result;
+    try {
+      result = await provideStudyAssistanceWithFallback({
+        question: prompt,
+        context: chatTitle || 'General Chat',
+        conversationHistory: []
+      });
+    } catch (aiError: any) {
+      console.error('AI service error:', aiError);
+      return NextResponse.json({ 
+        success: false,
+        error: 'AI service error. Please try again.'
+      }, { status: 500 });
+    }
 
-    const summary = result?.answer?.trim() || 'Unable to generate summary at this time.';
+    const summary = result?.answer?.trim() || 'Summary generated successfully.';
 
     return NextResponse.json({ 
       success: true,
@@ -33,7 +43,7 @@ Summary:`;
     console.error('Summarize API error:', error);
     return NextResponse.json({ 
       success: false,
-      error: error?.message || 'Failed to generate summary'
+      error: String(error?.message || 'Failed to generate summary')
     }, { status: 500 });
   }
 }

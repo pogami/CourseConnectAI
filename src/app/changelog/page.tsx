@@ -17,7 +17,8 @@ import {
   Notification01Icon,
   Mail01Icon,
   CheckmarkCircle01Icon,
-  AlertCircleIcon
+  AlertCircleIcon,
+  Camera01Icon
 } from "hugeicons-react";
 import { Footer } from "@/components/landing/footer";
 import { CourseConnectLogo } from "@/components/icons/courseconnect-logo";
@@ -83,6 +84,13 @@ const updates: Update[] = [
         title: "Fixed Toast Notifications",
         description: "Fixed overlapping toast notifications. Multiple notifications now display properly with correct spacing.",
         tags: ["UX", "Notifications"]
+      },
+      {
+        category: "feature",
+        icon: <Camera01Icon className="w-5 h-5" />,
+        title: "OCR for Handwritten Notes in Chat",
+        description: "Upload images of your handwritten notes directly in chat and the AI automatically extracts the text. Perfect for digitizing lecture notes, homework, or any handwritten content.",
+        tags: ["OCR", "Chat", "Notes"]
       }
     ]
   },

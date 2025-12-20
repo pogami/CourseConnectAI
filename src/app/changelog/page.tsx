@@ -55,6 +55,38 @@ interface Update {
 
 const updates: Update[] = [
   {
+    id: "dec-3-2025-charts",
+    date: "December 3, 2025",
+    version: "1.3.2",
+    title: "Enhanced Chart Controls & AI Improvements",
+    description: "Full interactive controls for all charts plus improved AI chart generation.",
+    impact: "You can now zoom, change color schemes, and download any chart as PNG or SVG. The AI also generates charts directly instead of suggesting external tools.",
+    type: "minor",
+    items: [
+      {
+        category: "feature",
+        icon: <ChartBarLineIcon className="w-5 h-5" />,
+        title: "Interactive Chart Controls",
+        description: "All charts (pie, bar, line, area, scatter, function graphs) now have zoom controls, color scheme selection, and PNG/SVG download options. Export your visualizations for presentations and reports.",
+        tags: ["Charts", "Visualization", "Export"]
+      },
+      {
+        category: "improvement",
+        icon: <MagicWand01Icon className="w-5 h-5" />,
+        title: "Improved AI Chart Generation",
+        description: "The AI now generates charts directly when you ask for them, instead of suggesting external tools like Excel or Google Sheets. Just ask for a pie chart or graph and get it instantly.",
+        tags: ["AI", "Charts", "Visualization"]
+      },
+      {
+        category: "fix",
+        icon: <Notification01Icon className="w-5 h-5" />,
+        title: "Fixed Toast Notifications",
+        description: "Fixed overlapping toast notifications. Multiple notifications now display properly with correct spacing.",
+        tags: ["UX", "Notifications"]
+      }
+    ]
+  },
+  {
     id: "dec-7-2025-docs",
     date: "December 7, 2025",
     version: "1.3.1",

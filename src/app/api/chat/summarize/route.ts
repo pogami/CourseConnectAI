@@ -5,15 +5,16 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json();
     const { 
       chatId,
       chatTitle,
       messages,
       courseData,
       chatType
-    } = await request.json();
+    } = body;
     
-    if (!messages || messages.trim().length === 0) {
+    if (!messages || (typeof messages === 'string' && messages.trim().length === 0)) {
       return NextResponse.json({ 
         success: false,
         error: 'No messages provided for summarization' 
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     console.log('📝 Summarize API called:', { 
       chatId, 
       chatTitle, 
-      messageLength: messages.length,
+      messageLength: typeof messages === 'string' ? messages.length : 'not a string',
       chatType 
     });
 
@@ -39,7 +40,7 @@ Focus on:
 Format the summary in clear paragraphs with bullet points for key takeaways.
 
 Conversation:
-${messages}
+${typeof messages === 'string' ? messages : JSON.stringify(messages)}
 
 ${courseData ? `\nContext: This conversation is about ${chatTitle || 'a course'}.` : ''}
 
@@ -55,17 +56,30 @@ Please provide a comprehensive but concise summary:`;
       });
     } catch (aiError: any) {
       console.error('🚨 AI service error:', aiError);
+      const errorMessage = aiError?.message || aiError?.toString() || 'Unknown AI service error';
       return NextResponse.json({ 
         success: false,
-        error: `AI service error: ${aiError.message || 'Unknown error'}` 
+        error: `AI service error: ${errorMessage}` 
       }, { status: 500 });
     }
 
-    if (!aiResponse || !aiResponse.answer) {
-      console.error('🚨 AI response is empty or invalid:', aiResponse);
+    if (!aiResponse) {
+      console.error('🚨 AI response is null or undefined');
       return NextResponse.json({ 
         success: false,
-        error: 'AI service returned empty response' 
+        error: 'AI service returned null response' 
+      }, { status: 500 });
+    }
+
+    if (!aiResponse.answer || typeof aiResponse.answer !== 'string') {
+      console.error('🚨 AI response is empty or invalid:', { 
+        hasAnswer: !!aiResponse.answer,
+        answerType: typeof aiResponse.answer,
+        provider: aiResponse.provider
+      });
+      return NextResponse.json({ 
+        success: false,
+        error: 'AI service returned empty or invalid response' 
       }, { status: 500 });
     }
 
@@ -86,10 +100,11 @@ Please provide a comprehensive but concise summary:`;
     });
   } catch (error: any) {
     console.error('🚨 Summarize API error:', error);
+    const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
     return NextResponse.json(
       { 
         success: false,
-        error: error.message || 'Failed to generate summary' 
+        error: errorMessage
       },
       { status: 500 }
     );

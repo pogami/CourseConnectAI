@@ -56,33 +56,33 @@ interface Update {
 
 const updates: Update[] = [
   {
-    id: "dec-3-2025-charts",
-    date: "December 3, 2025",
+    id: "dec-20-2025-charts",
+    date: "December 20, 2025",
     version: "1.3.2",
-    title: "Enhanced Chart Controls & AI Improvements",
-    description: "Full interactive controls for all charts plus improved AI chart generation.",
-    impact: "You can now zoom, change color schemes, and download any chart as PNG or SVG. The AI also generates charts directly instead of suggesting external tools.",
+    title: "Charts That Actually Work",
+    description: "Full control over every visualization. Zoom, customize, export—and the AI actually generates charts instead of telling you to use Excel.",
+    impact: "Every chart is now fully interactive. Zoom in on details, switch color schemes on the fly, and export as PNG or SVG for your presentations. Plus, when you ask for a chart, you get it instantly—no more suggestions to use external tools.",
     type: "minor",
     items: [
       {
         category: "feature",
         icon: <ChartBarLineIcon className="w-5 h-5" />,
         title: "Interactive Chart Controls",
-        description: "All charts (pie, bar, line, area, scatter, function graphs) now have zoom controls, color scheme selection, and PNG/SVG download options. Export your visualizations for presentations and reports.",
+        description: "Every chart type—pie, bar, line, area, scatter, and function graphs—now has zoom controls, color scheme selection, and PNG/SVG download. Perfect for presentations and reports.",
         tags: ["Charts", "Visualization", "Export"]
       },
       {
         category: "improvement",
         icon: <MagicWand01Icon className="w-5 h-5" />,
-        title: "Improved AI Chart Generation",
-        description: "The AI now generates charts directly when you ask for them, instead of suggesting external tools like Excel or Google Sheets. Just ask for a pie chart or graph and get it instantly.",
+        title: "AI Generates Charts Directly",
+        description: "Ask for a pie chart or graph and get it instantly. The AI no longer suggests Excel or Google Sheets—it just creates the visualization you need, right here in the chat.",
         tags: ["AI", "Charts", "Visualization"]
       },
       {
         category: "fix",
         icon: <Notification01Icon className="w-5 h-5" />,
         title: "Fixed Toast Notifications",
-        description: "Fixed overlapping toast notifications. Multiple notifications now display properly with correct spacing.",
+        description: "Multiple notifications now display properly with correct spacing. No more overlapping toasts cluttering your screen.",
         tags: ["UX", "Notifications"]
       },
       {
@@ -875,8 +875,9 @@ export default function ChangelogPage() {
                                       <div className="p-4">
                                         <InteractiveGraph 
                                           graphData={{
-                                            type: "pie",
+                                            type: "data",
                                             data: {
+                                              chartType: "pie",
                                               data: [
                                                 { name: "A", value: 30 },
                                                 { name: "B", value: 40 },

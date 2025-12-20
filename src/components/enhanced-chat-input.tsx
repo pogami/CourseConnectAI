@@ -72,6 +72,7 @@ export function EnhancedChatInput({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<{ name: string; size: number; type: string; url?: string }[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [isProcessingOCR, setIsProcessingOCR] = useState<Record<string, boolean>>({});
   const [aiResponseType, setAiResponseType] = useState<'concise' | 'detailed' | 'conversational' | 'analytical'>('concise');
   const [showResponseTypeDropdown, setShowResponseTypeDropdown] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -292,7 +293,51 @@ export function EnhancedChatInput({
     processFiles(files);
   };
 
-  const processFiles = (files: File[]) => {
+  const processOCR = async (file: File): Promise<string | null> => {
+    if (!file.type.startsWith('image/')) return null;
+    
+    try {
+      setIsProcessingOCR(prev => ({ ...prev, [file.name]: true }));
+      
+      // Convert file to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      const base64Image = await base64Promise;
+      const mimeType = base64Image.split(',')[0].split(':')[1].split(';')[0];
+      
+      // Call OCR API
+      const response = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          image: base64Image,
+          mimeType: mimeType
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('OCR processing failed');
+      }
+      
+      const data = await response.json();
+      return data.text || null;
+    } catch (error) {
+      console.error('OCR error:', error);
+      return null;
+    } finally {
+      setIsProcessingOCR(prev => ({ ...prev, [file.name]: false }));
+    }
+  };
+
+  const processFiles = async (files: File[]) => {
     if (files.length === 0) return;
 
     // Allow any file type - just check size
@@ -325,6 +370,30 @@ export function EnhancedChatInput({
     }));
     setSelectedFiles(prev => [...prev, ...valid]);
     setFilePreviews(prev => [...prev, ...previews]);
+    
+    // Process OCR for images
+    for (const file of valid) {
+      if (file.type.startsWith('image/')) {
+        const extractedText = await processOCR(file);
+        if (extractedText && extractedText.trim()) {
+          // Append extracted text to input value
+          const currentValue = value.trim();
+          const separator = currentValue ? '\n\n' : '';
+          const newValue = `${currentValue}${separator}[Text from ${file.name}]:\n${extractedText.trim()}`;
+          
+          // Update input value
+          if (inputRef.current) {
+            inputRef.current.value = newValue;
+            // Trigger onChange event
+            const event = new Event('input', { bubbles: true });
+            inputRef.current.dispatchEvent(event);
+            // Manually call onChange if it exists
+            onChange({ target: { value: newValue } } as any);
+          }
+        }
+      }
+    }
+    
     inputRef.current?.focus();
   };
 

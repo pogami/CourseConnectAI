@@ -862,6 +862,29 @@ export default function ChangelogPage() {
                                       </div>
                                     </div>
                                   )}
+                                  {item.category === 'feature' && item.title.includes("Interactive Chart Controls") && (
+                                    <div className="mt-6 w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50">
+                                      <div className="p-4">
+                                        <InteractiveGraph 
+                                          graphData={{
+                                            type: "pie",
+                                            data: {
+                                              data: [
+                                                { name: "A", value: 30 },
+                                                { name: "B", value: 40 },
+                                                { name: "C", value: 20 },
+                                                { name: "D", value: 10 }
+                                              ],
+                                              title: "Try the Controls: Grade Distribution",
+                                              valueKey: "value"
+                                            }
+                                          }}
+                                          cleanContent=""
+                                          className="w-full"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
                               </div>
                             </motion.div>
                             ))

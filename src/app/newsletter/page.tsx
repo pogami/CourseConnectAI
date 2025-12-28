@@ -170,12 +170,6 @@ export default function NewsletterPage() {
                   Back to Home
                 </Button>
               </Link>
-              {/* <Link href="/changelog">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                  View Recent Updates
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
             </div>
           </div>
         </div>

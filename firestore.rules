@@ -30,10 +30,33 @@ service cloud.firestore {
     
     // Chats collection - users can read/write their own chats
     match /chats/{chatId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      // Allow read only if:
+      // 1. Chat has userId field matching current user, OR
+      // 2. Chat is public (public-general-chat), OR  
+      // 3. Chat is guest chat (private-general-chat-guest), OR
+      // 4. Chat ID is private-general-chat-{userId} (user's private general chat)
+      allow read: if isSignedIn() && (
+        (resource.data.userId != null && resource.data.userId == request.auth.uid) ||
+        chatId == 'public-general-chat' ||
+        chatId == 'private-general-chat-guest' ||
+        chatId == 'private-general-chat-' + request.auth.uid
+      );
+      // Allow create only if userId matches or chat is public/guest/user's private general
+      allow create: if isSignedIn() && (
+        (request.resource.data.userId != null && request.resource.data.userId == request.auth.uid) ||
+        chatId == 'public-general-chat' ||
+        chatId == 'private-general-chat-guest' ||
+        chatId == 'private-general-chat-' + request.auth.uid
+      );
+      // Allow update only if user owns it or it's public/guest/user's private general
+      allow update: if isSignedIn() && (
+        (resource.data.userId != null && resource.data.userId == request.auth.uid) ||
+        chatId == 'public-general-chat' ||
+        chatId == 'private-general-chat-guest' ||
+        chatId == 'private-general-chat-' + request.auth.uid
+      );
+      // Allow delete only if user owns it
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       
       // Messages subcollection within chats
       match /messages/{messageId} {

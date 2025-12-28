@@ -212,13 +212,19 @@ async function flushWriteQueue(chatId: string) {
       }
     } else {
       // Create new chat document
-      const newChat: Omit<Chat, 'id'> = {
+      // Get current user for userId (if authenticated)
+      const user = (auth as Auth)?.currentUser;
+      const newChat: any = {
         title: chatId === 'public-general-chat' ? 'Community' : chatId,
         messages: messagesToWrite,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         chatType: chatId === 'public-general-chat' ? 'public' : 'private'
       };
+      // CRITICAL: Add userId to all private chats for security
+      if (user && chatId !== 'public-general-chat' && chatId !== 'private-general-chat-guest') {
+        newChat.userId = user.uid;
+      }
       await setDoc(chatDocRef, newChat);
     }
   } catch (error: any) {
@@ -449,11 +455,30 @@ export const useChatStore = create<ChatState>()(
             if (user) {
               // User is signed in.
               console.log("User signed in, loading chats...");
-              // Clear uploaded syllabi when new user signs in
+              // CRITICAL: Clear guest data when user signs in to prevent data leakage
               if (typeof window !== 'undefined') {
                 localStorage.removeItem('uploaded-syllabi');
+                // Clear guest chat storage
+                localStorage.removeItem('chat-storage');
+                localStorage.removeItem('cc-chat-store');
+                localStorage.removeItem('cc-active-tab');
+                // Clear guest notifications
+                localStorage.removeItem('guest-notifications');
+                localStorage.removeItem('guestUser');
+                // Clear all chat join times except for public-general-chat
+                Object.keys(localStorage).forEach(key => {
+                  if (key.startsWith('chat-join-time-') && key !== 'chat-join-time-public-general-chat') {
+                    localStorage.removeItem(key);
+                  }
+                });
+                console.log('✅ Cleared all guest data from localStorage');
               }
-              set({ isGuest: false, isStoreLoading: false }); // Keep loading false for real-time chat
+              // Clear guest chats from store state
+              set({ 
+                isGuest: false, 
+                isStoreLoading: false,
+                chats: {} // Clear all chats - will be reloaded from Firestore
+              });
               
               // Create user-specific private general chat
               const privateGeneralChatId = `private-general-chat-${user.uid}`;
@@ -486,7 +511,20 @@ export const useChatStore = create<ChatState>()(
                          const chatDocRef = doc(db as Firestore, 'chats', chatId);
                          const chatDocSnap = await getDoc(chatDocRef);
                          if (chatDocSnap.exists()) {
-                             const chatData = chatDocSnap.data() as Omit<Chat, 'id'>;
+                             const chatData = chatDocSnap.data() as any;
+                             
+                             // CRITICAL SECURITY CHECK: Verify chat ownership
+                             const chatUserId = chatData.userId;
+                             const isPublic = chatId === 'public-general-chat';
+                             const isGuest = chatId === 'private-general-chat-guest';
+                             const isUserPrivateGeneral = chatId === `private-general-chat-${user.uid}`;
+                             const isOwnedByUser = chatUserId === user.uid;
+                             
+                             // Only load chats that belong to the user
+                             if (!isPublic && !isGuest && !isUserPrivateGeneral && !isOwnedByUser) {
+                               console.warn(`🚨 SECURITY: Skipping chat ${chatId} - doesn't belong to user ${user.uid}. Chat userId: ${chatUserId}`);
+                               continue; // Skip this chat
+                             }
                              
                              // SAFETY CHECK: Ensure chatType is set (for backward compatibility)
                              let chatType = chatData.chatType;
@@ -506,10 +544,20 @@ export const useChatStore = create<ChatState>()(
                              chatsToLoad[chatId] = { ...chatData, id: chatId, chatType };
                          }
                     }
-                    // Merge with existing local chats to preserve any guest chats
+                    // CRITICAL: Clear guest chats before loading user chats to prevent data leakage
+                    // Only keep public-general-chat if it exists, clear all other guest chats
                     const currentState = get();
-                    const mergedChats = { ...currentState.chats, ...chatsToLoad };
-                    set({ chats: mergedChats, isStoreLoading: false });
+                    const cleanedChats: Record<string, Chat> = {};
+                    
+                    // Only preserve public-general-chat (if it exists)
+                    if (currentState.chats['public-general-chat']) {
+                      cleanedChats['public-general-chat'] = currentState.chats['public-general-chat'];
+                    }
+                    
+                    // Load only user's chats (these are already filtered by userId in Firestore)
+                    const userChats = { ...cleanedChats, ...chatsToLoad };
+                    set({ chats: userChats, isStoreLoading: false });
+                    console.log('✅ Cleared guest chats, loaded user chats only:', Object.keys(userChats));
                 } else {
                      // Don't overwrite existing chats if user has no Firestore chats yet
                      const currentState = get();
@@ -686,15 +734,16 @@ export const useChatStore = create<ChatState>()(
             const chatDocSnap = await getDoc(chatDocRef);
 
             if (!chatDocSnap.exists()) {
-                const newChat: Omit<Chat, 'id'> = {
+                const newChat: any = {
                     title: chatName,
                     messages: [safeInitialMessage],
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
                     chatType: chatType || (courseData ? 'class' : 'private'),
-                    courseData: courseData || undefined
+                    courseData: courseData || undefined,
+                    userId: user.uid // CRITICAL: Always include userId for security
                 };
-                console.log('💾 Saving chat to Firestore:', { chatId, chatType: newChat.chatType, hasCourseData: !!newChat.courseData });
+                console.log('💾 Saving chat to Firestore:', { chatId, chatType: newChat.chatType, hasCourseData: !!newChat.courseData, userId: newChat.userId });
                 await setDoc(chatDocRef, newChat);
             }
             
@@ -933,7 +982,27 @@ export const useChatStore = create<ChatState>()(
           
           const unsubscribe = onSnapshot(chatDocRef, (snap) => {
             if (snap.exists()) {
-              const data = snap.data() as Omit<Chat, 'id'>;
+              const data = snap.data() as any;
+              
+              // CRITICAL SECURITY CHECK: Verify chat ownership
+              const currentUser = (auth as Auth)?.currentUser;
+              const chatUserId = data.userId;
+              
+              // Allow if:
+              // 1. Public chat
+              // 2. Guest chat
+              // 3. User's private general chat
+              // 4. Chat belongs to current user (userId matches)
+              const isPublic = chatId === 'public-general-chat';
+              const isGuest = chatId === 'private-general-chat-guest';
+              const isUserPrivateGeneral = chatId === `private-general-chat-${currentUser?.uid}`;
+              const isOwnedByUser = currentUser && chatUserId === currentUser.uid;
+              
+              if (!isPublic && !isGuest && !isUserPrivateGeneral && !isOwnedByUser) {
+                console.warn(`🚨 SECURITY: Attempted to load chat ${chatId} that doesn't belong to user ${currentUser?.uid}. Chat userId: ${chatUserId}`);
+                return; // Don't load chat that doesn't belong to user
+              }
+              
               // Ensure messages text are strings for safety
               const allMessages = (data.messages || []).map((m: any) => ({
                 ...m,
@@ -1373,8 +1442,13 @@ export const useChatStore = create<ChatState>()(
           
           const chatDocRef = doc(db as Firestore, 'chats', chatId);
           try {
+            // Get current user to preserve userId
+            const user = (auth as Auth)?.currentUser;
+            const chatDocSnap = await getDoc(chatDocRef);
+            const existingUserId = chatDocSnap.exists() ? chatDocSnap.data()?.userId : null;
+            
             // Completely replace the chat document with only the welcome message
-            await setDoc(chatDocRef, {
+            const resetData: any = {
               title: chat.title,
               messages: resetMessages,
               createdAt: chat.createdAt || Date.now(),
@@ -1382,7 +1456,16 @@ export const useChatStore = create<ChatState>()(
               chatType: chat.chatType,
               courseData: chat.courseData,
               members: chat.members || []
-            }, { merge: false }); // merge: false ensures complete replacement
+            };
+            
+            // CRITICAL: Preserve userId if it exists, or add it if user is authenticated
+            if (existingUserId) {
+              resetData.userId = existingUserId;
+            } else if (user && chatId !== 'public-general-chat' && chatId !== 'private-general-chat-guest') {
+              resetData.userId = user.uid;
+            }
+            
+            await setDoc(chatDocRef, resetData, { merge: false }); // merge: false ensures complete replacement
             
             console.log(`✅ Chat ${chatId} reset successfully in Firestore with only welcome message`);
             

@@ -104,7 +104,6 @@ export function InDepthAnalysis({ question, conversationHistory, userName }: InD
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calculator className="h-5 w-5 text-blue-500" />
-              Detailed Mathematical Analysis
             </DialogTitle>
           </DialogHeader>
           

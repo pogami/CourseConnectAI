@@ -291,17 +291,92 @@ const convertHighlightedTerms = (text: string) => {
   });
 };
 
+// Prevent line breaks in date patterns like "nov - 24", "Nov.3", "Sep.1", "Dec.9 - Dec.16"
+function preventDateBreaks(text: string): string {
+  // Replace spaces around hyphens in date patterns with non-breaking spaces
+  // Pattern: month abbreviation (3 letters) + space + hyphen + space + number
+  // Examples: "nov - 24", "dec - 16", "jan - 1"
+  return text
+    // Handle dates with periods and no space: "Nov.3", "Sep.1", "Aug.25"
+    .replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\.(\d+)\b/gi, '$1.\u00A0$2') // Non-breaking space after period
+    // Handle dates with periods and space: "Nov. 3", "Sep. 1"
+    .replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\.\s+(\d+)\b/gi, '$1.\u00A0$2') // Non-breaking space
+    // Handle date ranges with periods: "Dec.9 - Dec.16"
+    .replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\.(\d+)\s+-\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\.(\d+)\b/gi, '$1.\u00A0$2\u00A0-\u00A0$3.\u00A0$4') // Non-breaking spaces in ranges
+    // Handle dates with spaces around hyphens: "nov - 24", "dec - 16"
+    .replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\.?\s+-\s+(\d+)\b/gi, '$1\u00A0-\u00A0$2') // Non-breaking spaces
+    // Handle full month names with hyphens: "january - 1"
+    .replace(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+-\s+(\d+)\b/gi, '$1\u00A0-\u00A0$2'); // Full month names
+}
+
+// Protect math expressions from markdown processing
+// Detects patterns like "80 * 0.48 = 38.4" and wraps them in math delimiters
+function protectMathExpressions(text: string): string {
+  // First, protect existing math delimiters
+  const mathPlaceholders: string[] = [];
+  let placeholderIndex = 0;
+  
+  // Replace existing math delimiters with placeholders
+  let processedText = text.replace(/(\$\$[\s\S]*?\$\$|\$[^$]*?\$|\\\[[\s\S]*?\\\]|\\\([^)]*?\\\))/g, (match) => {
+    const placeholder = `__MATH_PLACEHOLDER_${placeholderIndex}__`;
+    mathPlaceholders[placeholderIndex] = match;
+    placeholderIndex++;
+    return placeholder;
+  });
+  
+  // Detect and wrap math expressions
+  // Pattern 1: Full equation like "80 * 0.48 = 38.4"
+  processedText = processedText.replace(/(\d+(?:\.\d+)?)\s*([*×])\s*(\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)/g, (match, num1, op, num2, result) => {
+    return `$${num1} \\times ${num2} = ${result}$`;
+  });
+  
+  // Pattern 2: Multiplication/division like "80 * 0.48" or "18.5 / 0.22"
+  processedText = processedText.replace(/(\d+(?:\.\d+)?)\s*([*×/÷])\s*(\d+(?:\.\d+)?)/g, (match, num1, op, num2) => {
+    const opLatex = op === '*' || op === '×' ? '\\times' : op === '/' || op === '÷' ? '\\div' : op;
+    return `$${num1} ${opLatex} ${num2}$`;
+  });
+  
+  // Pattern 3: Addition/subtraction in equations like "38.4 + 11.7 = 50.1"
+  processedText = processedText.replace(/(\d+(?:\.\d+)?)\s*([+\-])\s*(\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)/g, (match, num1, op, num2, result) => {
+    return `$${num1} ${op} ${num2} = ${result}$`;
+  });
+  
+  // Pattern 4: Variable expressions like "Final × 0.22" or "Final * 0.22 = 18.5"
+  processedText = processedText.replace(/([A-Za-z]+)\s*([*×])\s*(\d+(?:\.\d+)?)\s*(?:=\s*(\d+(?:\.\d+)?))?/g, (match, variable, op, num, result) => {
+    if (result) {
+      return `$${variable} \\times ${num} = ${result}$`;
+    }
+    return `$${variable} \\times ${num}$`;
+  });
+  
+  // Pattern 5: Percentage expressions like "80 * 0.48" (already handled, but ensure no double-wrapping)
+  // This is already covered by Pattern 2
+  
+  // Restore math placeholders
+  mathPlaceholders.forEach((placeholder, index) => {
+    processedText = processedText.replace(`__MATH_PLACEHOLDER_${index}__`, placeholder);
+  });
+  
+  return processedText;
+}
+
 // Detect math and render with KaTeX
 function renderMathLine(line: string, i: number) {
+  // Prevent breaks in date patterns first
+  const lineWithFixedDates = preventDateBreaks(line);
+  
+  // Protect math expressions from markdown processing
+  const lineWithProtectedMath = protectMathExpressions(lineWithFixedDates);
+  
   // Check if line contains any math delimiters
-  const hasMath = line.includes("$$") || (line.includes("$") && line.includes("$")) || 
-                  (line.includes("\\(") && line.includes("\\)")) || 
-                  (line.includes("\\[") && line.includes("\\]")) ||
-                  line.includes("\\boxed{");
+  const hasMath = lineWithProtectedMath.includes("$$") || (lineWithProtectedMath.includes("$") && lineWithProtectedMath.includes("$")) || 
+                  (lineWithProtectedMath.includes("\\(") && lineWithProtectedMath.includes("\\)")) || 
+                  (lineWithProtectedMath.includes("\\[") && lineWithProtectedMath.includes("\\]")) ||
+                  lineWithProtectedMath.includes("\\boxed{");
   
   if (!hasMath) {
     // No math, return as regular text with bold formatting
-    let processedLine = line
+    let processedLine = lineWithProtectedMath
       .replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>') // Bold
       .replace(/\*([^\*]+)\*/g, '<strong>$1</strong>'); // Convert italic to bold instead
     
@@ -315,7 +390,7 @@ function renderMathLine(line: string, i: number) {
   }
 
   // Split the line by math expressions and render each part appropriately
-  const parts = line.split(/(\$\$[\s\S]*?\$\$|\$[^$]*?\$|\\\[[\s\S]*?\\\]|\\\([^)]*?\\\)|\\boxed\{[^}]*\})/);
+  const parts = lineWithProtectedMath.split(/(\$\$[\s\S]*?\$\$|\$[^$]*?\$|\\\[[\s\S]*?\\\]|\\\([^)]*?\\\)|\\boxed\{[^}]*\})/);
   
   // Check if this line contains block math (which renders as <div>)
   const hasBlockMath = parts.some(part => 

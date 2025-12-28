@@ -39,7 +39,7 @@ export default function FlashcardGenerator() {
     const [quizResults, setQuizResults] = useState<any[]>([]); // Store quiz results for summary
     const [showQuizSummary, setShowQuizSummary] = useState(false); // Show quiz summary
     const [quizSummaryCard, setQuizSummaryCard] = useState(0); // Current card in quiz summary
-    const [answerType, setAnswerType] = useState<'text' | 'mcq'>('text'); // Track answer input type
+    const [answerType, setAnswerType] = useState<'text' | 'mcq'>('mcq'); // Always use multiple choice
     const [mcqOptions, setMcqOptions] = useState<string[]>([]); // Store MCQ options
 
     // Function to generate realistic MCQ options - returns immediately with fallback, enhances in background
@@ -77,36 +77,51 @@ export default function FlashcardGenerator() {
                 options.push(answer.replace(/always/g, 'sometimes'));
                 options.push(answer.replace(/always/g, 'rarely'));
                 options.push(answer.replace(/always/g, 'never'));
-            } else {
-                // Generic realistic alternatives
-                const answerLength = answer.length;
-                if (answerLength > 50) {
-                    // For long answers, create shorter plausible alternatives
-                    const sentences = answer.split(/[.!?]+/).filter(s => s.trim().length > 10);
-                    if (sentences.length > 1) {
-                        options.push(sentences[0].trim() + '.');
-                        options.push(sentences[sentences.length - 1].trim() + '.');
-                        options.push(sentences.slice(0, 2).join(' ').trim() + '.');
-                    } else {
-                        // Create variations by changing key words
-                        options.push(answer.replace(/\b(is|are|was|were)\b/g, 'was'));
-                        options.push(answer.replace(/\b(the|a|an)\b/g, 'a'));
-                        options.push(answer.replace(/\b(and|or)\b/g, 'or'));
-                    }
                 } else {
-                    // For shorter answers, create related but different options
-                    options.push(answer.replace(/\b(primary|main|key)\b/gi, 'secondary'));
-                    options.push(answer.replace(/\b(first|initial)\b/gi, 'final'));
-                    options.push(answer.replace(/\b(high|low|large|small)\b/gi, (match) => {
-                        const opposites: Record<string, string> = {
-                            'high': 'low', 'low': 'high',
-                            'large': 'small', 'small': 'large',
-                            'big': 'small', 'small': 'big'
-                        };
-                        return opposites[match.toLowerCase()] || match;
-                    }));
+                    // Generic realistic alternatives
+                    const answerLength = answer.length;
+                    if (answerLength > 50) {
+                        // For long answers, create meaningful variations
+                        const sentences = answer.split(/[.!?]+/).filter(s => s.trim().length > 10);
+                        if (sentences.length > 1) {
+                            // Use different sentence combinations
+                            options.push(sentences[0].trim() + '.');
+                            if (sentences.length > 2) {
+                                options.push(sentences[sentences.length - 1].trim() + '.');
+                                options.push(sentences.slice(1, 3).join(' ').trim() + '.');
+                            } else {
+                                options.push(sentences[1].trim() + '.');
+                                // Create a variation by changing key terms
+                                const modified = answer
+                                    .replace(/\b(can|cannot|must|should)\b/gi, 'cannot')
+                                    .replace(/\b(only|always|never)\b/gi, 'sometimes')
+                                    .replace(/\b(all|every|any)\b/gi, 'some');
+                                if (modified !== answer) {
+                                    options.push(modified);
+                                } else {
+                                    options.push(sentences[0].trim() + ' However, this is not always the case.');
+                                }
+                            }
+                        } else {
+                            // Single long sentence - create variations
+                            options.push(answer.replace(/\b(can|cannot|must|should)\b/gi, 'cannot'));
+                            options.push(answer.replace(/\b(only|always|never)\b/gi, 'sometimes'));
+                            options.push(answer.replace(/\b(all|every|any)\b/gi, 'some'));
+                        }
+                    } else {
+                        // For shorter answers, create related but different options
+                        options.push(answer.replace(/\b(primary|main|key)\b/gi, 'secondary'));
+                        options.push(answer.replace(/\b(first|initial)\b/gi, 'final'));
+                        options.push(answer.replace(/\b(high|low|large|small)\b/gi, (match) => {
+                            const opposites: Record<string, string> = {
+                                'high': 'low', 'low': 'high',
+                                'large': 'small', 'small': 'large',
+                                'big': 'small', 'small': 'big'
+                            };
+                            return opposites[match.toLowerCase()] || match;
+                        }));
+                    }
                 }
-            }
         }
 
         // Remove duplicates and ensure we have exactly 4 options
@@ -117,9 +132,33 @@ export default function FlashcardGenerator() {
             uniqueOptions[0] = answer;
         }
         
-        // Fill to 4 options if needed
+        // Fill to 4 options if needed - create better distractors instead of placeholders
         while (uniqueOptions.length < 4) {
-            uniqueOptions.push(`Option ${uniqueOptions.length + 1}`);
+            const currentLength = uniqueOptions.length;
+            // Create contextually relevant distractors based on the answer
+            if (answer.length > 50) {
+                // For long answers, create partial or modified versions
+                const words = answer.split(/\s+/);
+                if (words.length > 10) {
+                    uniqueOptions.push(words.slice(0, Math.floor(words.length * 0.6)).join(' ') + '...');
+                } else {
+                    uniqueOptions.push(answer.replace(/\b(only|always|never|all|every)\b/gi, 'sometimes'));
+                }
+            } else {
+                // For short answers, create related but wrong options
+                const variations = [
+                    answer.replace(/\b(is|are)\b/gi, 'is not'),
+                    answer.replace(/\b(can|will|should)\b/gi, 'cannot'),
+                    'None of the above',
+                    'All of the above'
+                ];
+                const newOption = variations[currentLength - 1] || `Related concept: ${answer.substring(0, Math.floor(answer.length / 2))}...`;
+                if (!uniqueOptions.includes(newOption)) {
+                    uniqueOptions.push(newOption);
+                } else {
+                    uniqueOptions.push(`Alternative: ${answer}`);
+                }
+            }
         }
         
         // Take exactly 4 options
@@ -173,27 +212,155 @@ export default function FlashcardGenerator() {
     // Reset answer type when flashcards change or current card changes
     useEffect(() => {
         if (flashcards.length > 0) {
-            setAnswerType('text'); // Default to text input
-            setMcqOptions([]);
-        }
-    }, [flashcards]);
-
-    // Generate MCQ options when card changes in MCQ mode - returns immediately
-    useEffect(() => {
-        if (isQuizMode && answerType === 'mcq' && flashcards.length > 0 && flashcards[currentCard]) {
+            setAnswerType('mcq'); // Always use multiple choice
+            // Generate MCQ options automatically - show immediately
             const currentFlashcard = flashcards[currentCard];
-            // Generate options immediately (synchronous fallback), enhance in background
-            generateOptionsForFlashcard(currentFlashcard.answer, currentFlashcard.question, true)
-                .then(options => setMcqOptions(options))
-                .catch(error => {
-                    console.error('Error generating options:', error);
-                    // Fallback options are already generated synchronously, so this shouldn't happen
-                });
-        } else if (!isQuizMode || answerType !== 'mcq') {
-            setMcqOptions([]);
+            if (currentFlashcard) {
+                const correctAnswer = currentFlashcard.answer;
+                // Generate fallback options immediately (synchronous)
+                const generateFallbackOptions = (): string[] => {
+                    const answerLower = correctAnswer.toLowerCase().trim();
+                    const questionLower = currentFlashcard.question.toLowerCase();
+                    const options: string[] = [correctAnswer]; // Start with correct answer
+
+                    // For numeric answers, create realistic variations
+                    if (!isNaN(parseFloat(answerLower)) && isFinite(parseFloat(answerLower))) {
+                        const numAnswer = parseFloat(correctAnswer);
+                        const variations = [
+                            (numAnswer * 0.5).toString(),
+                            (numAnswer * 1.5).toString(),
+                            (numAnswer + (numAnswer * 0.1)).toString(),
+                        ];
+                        options.push(...variations);
+                    } else {
+                        // For text answers, create plausible alternatives
+                        const keyTerms = correctAnswer.split(/[,\s]+/).filter(term => term.length > 3).slice(0, 3);
+                        
+                        if (answerLower.includes('primarily') || answerLower.includes('mainly')) {
+                            options.push(correctAnswer.replace(/primarily|mainly/g, 'occasionally'));
+                            options.push(correctAnswer.replace(/primarily|mainly/g, 'rarely'));
+                            options.push(correctAnswer.replace(/primarily|mainly/g, 'never'));
+                        } else if (answerLower.includes('all') || answerLower.includes('every')) {
+                            options.push(correctAnswer.replace(/all|every/g, 'some'));
+                            options.push(correctAnswer.replace(/all|every/g, 'most'));
+                            options.push(correctAnswer.replace(/all|every/g, 'few'));
+                        } else if (answerLower.includes('always')) {
+                            options.push(correctAnswer.replace(/always/g, 'sometimes'));
+                            options.push(correctAnswer.replace(/always/g, 'rarely'));
+                            options.push(correctAnswer.replace(/always/g, 'never'));
+                        } else {
+                            const answerLength = correctAnswer.length;
+                            if (answerLength > 50) {
+                                // For long answers, create meaningful variations
+                                const sentences = correctAnswer.split(/[.!?]+/).filter(s => s.trim().length > 10);
+                                if (sentences.length > 1) {
+                                    // Use different sentence combinations
+                                    options.push(sentences[0].trim() + '.');
+                                    if (sentences.length > 2) {
+                                        options.push(sentences[sentences.length - 1].trim() + '.');
+                                        options.push(sentences.slice(1, 3).join(' ').trim() + '.');
+                                    } else {
+                                        options.push(sentences[1].trim() + '.');
+                                        // Create a variation by changing key terms
+                                        const modified = correctAnswer
+                                            .replace(/\b(can|cannot|must|should)\b/gi, 'cannot')
+                                            .replace(/\b(only|always|never)\b/gi, 'sometimes')
+                                            .replace(/\b(all|every|any)\b/gi, 'some');
+                                        if (modified !== correctAnswer) {
+                                            options.push(modified);
+                                        } else {
+                                            options.push(sentences[0].trim() + ' However, this is not always the case.');
+                                        }
+                                    }
+                                } else {
+                                    // Single long sentence - create variations
+                                    options.push(correctAnswer.replace(/\b(can|cannot|must|should)\b/gi, 'cannot'));
+                                    options.push(correctAnswer.replace(/\b(only|always|never)\b/gi, 'sometimes'));
+                                    options.push(correctAnswer.replace(/\b(all|every|any)\b/gi, 'some'));
+                                }
+                            } else {
+                                // For shorter answers, create related but different options
+                                options.push(correctAnswer.replace(/\b(primary|main|key)\b/gi, 'secondary'));
+                                options.push(correctAnswer.replace(/\b(first|initial)\b/gi, 'final'));
+                                options.push(correctAnswer.replace(/\b(high|low|large|small)\b/gi, (match) => {
+                                    const opposites: Record<string, string> = {
+                                        'high': 'low', 'low': 'high',
+                                        'large': 'small', 'small': 'large',
+                                        'big': 'small', 'small': 'big'
+                                    };
+                                    return opposites[match.toLowerCase()] || match;
+                                }));
+                            }
+                        }
+                    }
+
+                    // Remove duplicates and ensure we have exactly 4 options
+                    const uniqueOptions = Array.from(new Set(options));
+                    
+                    // Ensure correct answer is always present
+                    if (!uniqueOptions.includes(correctAnswer)) {
+                        uniqueOptions[0] = correctAnswer;
+                    }
+                    
+                    // Fill to 4 options if needed - create better distractors instead of placeholders
+                    while (uniqueOptions.length < 4) {
+                        const currentLength = uniqueOptions.length;
+                        // Create contextually relevant distractors based on the answer
+                        if (correctAnswer.length > 50) {
+                            // For long answers, create partial or modified versions
+                            const words = correctAnswer.split(/\s+/);
+                            if (words.length > 10) {
+                                uniqueOptions.push(words.slice(0, Math.floor(words.length * 0.6)).join(' ') + '...');
+                            } else {
+                                uniqueOptions.push(correctAnswer.replace(/\b(only|always|never|all|every)\b/gi, 'sometimes'));
+                            }
+                        } else {
+                            // For short answers, create related but wrong options
+                            const variations = [
+                                correctAnswer.replace(/\b(is|are)\b/gi, 'is not'),
+                                correctAnswer.replace(/\b(can|will|should)\b/gi, 'cannot'),
+                                'None of the above',
+                                'All of the above'
+                            ];
+                            const newOption = variations[currentLength - 1] || `Related concept: ${correctAnswer.substring(0, Math.floor(correctAnswer.length / 2))}...`;
+                            if (!uniqueOptions.includes(newOption)) {
+                                uniqueOptions.push(newOption);
+                            } else {
+                                uniqueOptions.push(`Alternative: ${correctAnswer}`);
+                            }
+                        }
+                    }
+                    
+                    // Take exactly 4 options
+                    const finalOptions = uniqueOptions.slice(0, 4);
+                    
+                    // Shuffle to randomize position of correct answer
+                    for (let i = finalOptions.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [finalOptions[i], finalOptions[j]] = [finalOptions[j], finalOptions[i]];
+                    }
+                    
+                    return finalOptions;
+                };
+                
+                // Set fallback options immediately - no delay
+                const immediateOptions = generateFallbackOptions();
+                setMcqOptions(immediateOptions);
+                
+                // Enhance with API call in background (non-blocking)
+                generateOptionsForFlashcard(correctAnswer, currentFlashcard.question, true)
+                    .then(options => {
+                        // Only update if we got better options and user hasn't answered yet
+                        if (options && options.length === 4 && !showAnswer) {
+                            setMcqOptions(options);
+                        }
+                    })
+                    .catch(error => console.error('Error generating options:', error));
+            } else {
+                setMcqOptions([]);
+            }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentCard, isQuizMode, answerType]);
+    }, [flashcards, currentCard, showAnswer]);
 
 
     // Function to generate wrong options for MCQ
@@ -548,56 +715,11 @@ export default function FlashcardGenerator() {
     const checkAnswer = () => {
         if (!userAnswer.trim()) return;
         
-        let isAnswerCorrect = false;
-        let actualUserAnswer = userAnswer;
-        
-        if (answerType === 'mcq') {
-            // For MCQ, check if the selected letter corresponds to the correct option
-            const selectedIndex = userAnswer.charCodeAt(0) - 65; // Convert A=0, B=1, etc.
-            const selectedOption = mcqOptions[selectedIndex];
-            isAnswerCorrect = selectedOption === flashcards[currentCard].answer;
-            actualUserAnswer = selectedOption || userAnswer; // Use the actual option text
-        } else {
-            // For text input, use smart fuzzy matching
-            const correctAnswer = flashcards[currentCard].answer.toLowerCase();
-            const userAnswerLower = userAnswer.toLowerCase();
-            
-            // Normalize both answers for better matching
-            const normalizeAnswer = (answer: string) => {
-                return answer
-                    .toLowerCase()
-                    .replace(/₂/g, '2')  // Convert subscript 2 to regular 2
-                    .replace(/₃/g, '3')  // Convert subscript 3 to regular 3
-                    .replace(/₄/g, '4')  // Convert subscript 4 to regular 4
-                    .replace(/₅/g, '5')  // Convert subscript 5 to regular 5
-                    .replace(/₆/g, '6')  // Convert subscript 6 to regular 6
-                    .replace(/₇/g, '7')  // Convert subscript 7 to regular 7
-                    .replace(/₈/g, '8')  // Convert subscript 8 to regular 8
-                    .replace(/₉/g, '9')  // Convert subscript 9 to regular 9
-                    .replace(/₀/g, '0')  // Convert subscript 0 to regular 0
-                    .replace(/₁/g, '1')  // Convert subscript 1 to regular 1
-                    .replace(/[^\w\s]/g, '') // Remove special characters
-                    .trim();
-            };
-            
-            const normalizedCorrect = normalizeAnswer(correctAnswer);
-            const normalizedUser = normalizeAnswer(userAnswerLower);
-            
-            // Only accept answers that are substantial (not just single characters)
-            const isSubstantialAnswer = normalizedUser.length >= 2;
-            
-            if (!isSubstantialAnswer) {
-                isAnswerCorrect = false;
-            } else {
-                isAnswerCorrect = normalizedCorrect.includes(normalizedUser) || 
-                                 normalizedUser.includes(normalizedCorrect) ||
-                                 normalizedUser === normalizedCorrect ||
-                                 correctAnswer.includes(userAnswerLower) || 
-                                 userAnswerLower.includes(correctAnswer) ||
-                                 userAnswerLower === correctAnswer;
-            }
-            actualUserAnswer = userAnswer;
-        }
+        // For MCQ, check if the selected letter corresponds to the correct option
+        const selectedIndex = userAnswer.charCodeAt(0) - 65; // Convert A=0, B=1, etc.
+        const selectedOption = mcqOptions[selectedIndex];
+        const isAnswerCorrect = selectedOption === flashcards[currentCard].answer;
+        const actualUserAnswer = selectedOption || userAnswer; // Use the actual option text
         
         setIsCorrect(isAnswerCorrect);
         setShowAnswer(true);
@@ -800,7 +922,7 @@ export default function FlashcardGenerator() {
                                 <Button onClick={() => setShowQuizSummary(false)} variant="outline" className="flex-1">
                                     Continue Studying
                                 </Button>
-                                <Button onClick={resetState} className="flex-1">
+                                <Button onClick={resetState} variant="outline" className="flex-1">
                                     Start New Quiz
                                 </Button>
                             </div>
@@ -883,42 +1005,13 @@ export default function FlashcardGenerator() {
                         {/* Quiz Mode Interface */}
                         {isQuizMode && (
                             <div className="w-full space-y-4">
-                                {/* Answer Type Toggle */}
-                                <div className="flex items-center justify-center gap-2 p-2 bg-muted rounded-lg">
-                                    <span className="text-sm font-medium">Answer Type:</span>
-                                    <Button
-                                        size="sm"
-                                        variant={answerType === 'text' ? 'default' : 'outline'}
-                                        onClick={() => setAnswerType('text')}
-                                        className="text-xs"
-                                    >
-                                        Text Input
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant={answerType === 'mcq' ? 'default' : 'outline'}
-                                        onClick={async () => {
-                                            setAnswerType('mcq');
-                                            // Generate MCQ options when switching to MCQ - returns immediately
-                                            if (flashcards.length > 0 && flashcards[currentCard]) {
-                                                const currentFlashcard = flashcards[currentCard];
-                                                const correctAnswer = currentFlashcard.answer;
-                                                // Generate immediately, enhance in background
-                                                generateOptionsForFlashcard(correctAnswer, currentFlashcard.question, true)
-                                                    .then(options => setMcqOptions(options))
-                                                    .catch(error => console.error('Error generating options:', error));
-                                            }
-                                        }}
-                                        className="text-xs"
-                                    >
-                                        Multiple Choice
-                                    </Button>
-                                </div>
-                                
-                                {answerType === 'mcq' ? (
+                                {/* MCQ Interface - Always use multiple choice */}
+                                {answerType === 'mcq' && mcqOptions.length > 0 && (
                                     /* MCQ Interface */
                                     <div className="space-y-3">
-                                        <p className="text-sm font-medium text-muted-foreground">Choose the correct answer:</p>
+                                        <p className="text-sm font-medium text-muted-foreground">
+                                            {showAnswer ? "Review your answer:" : "Choose the correct answer:"}
+                                        </p>
                                         <div className="grid gap-2">
                                             {mcqOptions.map((option, index) => {
                                                 const letter = String.fromCharCode(65 + index);
@@ -970,136 +1063,64 @@ export default function FlashcardGenerator() {
                                             Check Answer
                                         </Button>
                                     </div>
-                                ) : (
-                                    /* Text Input Interface */
-                                    <div className="flex gap-2">
-                                        <Input
-                                            placeholder="Type your answer here..."
-                                            value={userAnswer}
-                                            onChange={(e) => setUserAnswer(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && !showAnswer && checkAnswer()}
-                                            className="flex-1"
-                                            disabled={showAnswer}
-                                        />
-                                        <Button 
-                                            onClick={checkAnswer} 
-                                            disabled={!userAnswer.trim() || showAnswer}
-                                            className="px-6"
-                                        >
-                                            Check
-                                        </Button>
-                                    </div>
                                 )}
                                 
                                 {showAnswer && (
                                     <div className="space-y-3">
-                                        {/* Enhanced feedback for MCQ */}
-                                        {answerType === 'mcq' ? (
-                                            <div className={cn(
-                                                "p-4 rounded-lg border-2 transition-all duration-500",
-                                                isCorrect 
-                                                    ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/20 dark:border-green-800 dark:text-green-300" 
-                                                    : "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/20 dark:border-red-800 dark:text-red-300"
-                                            )}>
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="text-xl">{isCorrect ? "✓" : "✗"}</span>
-                                                    <span className="font-semibold">{isCorrect ? "Correct!" : "Incorrect"}</span>
-                                                </div>
+                                        {/* Enhanced feedback for MCQ - Show for both correct and incorrect */}
+                                        <div className={cn(
+                                            "p-4 rounded-lg border-2 transition-all duration-500",
+                                            isCorrect 
+                                                ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/20 dark:border-green-800 dark:text-green-300" 
+                                                : "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/20 dark:border-red-800 dark:text-red-300"
+                                        )}>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-xl">{isCorrect ? "✓" : "✗"}</span>
+                                                <span className="font-semibold">{isCorrect ? "Correct!" : "Incorrect"}</span>
+                                            </div>
+                                            <div className="text-sm">
                                                 {!isCorrect && (
-                                                    <div className="text-sm">
-                                                        <p className="mb-2">The correct answer is <strong>{
-                                                            (() => {
-                                                                const correctIndex = mcqOptions.findIndex(option => option === flashcards[currentCard].answer);
-                                                                return String.fromCharCode(65 + correctIndex); // Convert to A, B, C, D
-                                                            })()
-                                                        }</strong>.</p>
-                                                        <div className="text-muted-foreground space-y-2">
-                                                            <p className="font-medium">Explanation:</p>
-                                                            <p className="text-sm leading-relaxed">
-                                                                {(() => {
-                                                                    const question = flashcards[currentCard].question;
-                                                                    const correctAnswer = flashcards[currentCard].answer;
-                                                                    const questionLower = question.toLowerCase();
-                                                                    const answerLower = correctAnswer.toLowerCase();
-                                                                    
-                                                                    // Generate a comprehensive explanation
-                                                                    let explanation = `The correct answer is: "${correctAnswer}". `;
-                                                                    
-                                                                    // Add context-specific explanations
-                                                                    if (questionLower.includes('primarily') || questionLower.includes('mainly') || answerLower.includes('primarily') || answerLower.includes('mainly')) {
-                                                                        explanation += `This answer is correct because it accurately identifies the primary or main focus of the topic. The word "primarily" indicates the most important or most common aspect, which makes this the most precise answer. `;
-                                                                    }
-                                                                    
-                                                                    if (answerLower.includes('commercial vessels') || answerLower.includes('cargo ships')) {
-                                                                        explanation += `This answer correctly identifies the specific types of targets. Commercial vessels, cargo ships, and oil tankers were indeed the primary targets because they carried valuable cargo and were vulnerable in international waters. The mention of the Gulf of Aden and Indian Ocean is accurate as these were the key areas where piracy occurred. `;
-                                                                    }
-                                                                    
-                                                                    if (questionLower.includes('why') || questionLower.includes('reason') || questionLower.includes('because')) {
-                                                                        explanation += `This answer provides the correct reasoning by explaining the underlying cause or mechanism. `;
-                                                                    }
-                                                                    
-                                                                    if (questionLower.includes('what') || questionLower.includes('which') || questionLower.includes('who')) {
-                                                                        explanation += `This answer correctly identifies the specific subject, object, or person being asked about in the question. `;
-                                                                    }
-                                                                    
-                                                                    if (questionLower.includes('how') || questionLower.includes('process')) {
-                                                                        explanation += `This answer correctly describes the process, method, or mechanism by which something occurs. `;
-                                                                    }
-                                                                    
-                                                                    // Add general explanation if no specific pattern matches
-                                                                    if (explanation.length < 100) {
-                                                                        explanation += `This answer is correct because it directly addresses the question asked and provides accurate information. The answer "${correctAnswer}" is the most appropriate response based on the context and facts related to "${question}". `;
-                                                                    }
-                                                                    
-                                                                    // Ensure explanation is complete and not cut off
-                                                                    explanation += `This makes it the best choice among the options provided.`;
-                                                                    
-                                                                    return explanation;
-                                                                })()}
-                                                            </p>
-                                                        </div>
-                                                    </div>
+                                                    <p className="mb-2">The correct answer is <strong>{
+                                                        (() => {
+                                                            const correctIndex = mcqOptions.findIndex(option => option === flashcards[currentCard].answer);
+                                                            return String.fromCharCode(65 + correctIndex); // Convert to A, B, C, D
+                                                        })()
+                                                    }</strong>.</p>
                                                 )}
-                                            </div>
-                                        ) : (
-                                            /* Detailed feedback for text input */
-                                            <div className={cn(
-                                                "p-4 rounded-lg border-2 transition-all duration-500",
-                                                isCorrect 
-                                                    ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/20 dark:border-green-800 dark:text-green-300" 
-                                                    : "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/20 dark:border-red-800 dark:text-red-300"
-                                            )}>
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="text-2xl">{isCorrect ? "🎉" : "❌"}</span>
-                                                    <span className="font-semibold">{isCorrect ? "Correct!" : "Not quite right"}</span>
-                                                </div>
-                                                <p className="text-sm mb-3">
-                                                    <strong>Your answer:</strong> 
-                                                    <div className="ml-2 mt-1">
+                                                <div className="text-muted-foreground space-y-2">
+                                                    <p className="font-medium">Explanation:</p>
+                                                    <div className="text-sm leading-relaxed">
                                                         {(() => {
-                                                            const answerText = userAnswer;
-                                                            // Only render KaTeX if it contains LaTeX syntax
-                                                            return answerText.includes('$') || answerText.includes('\\') 
-                                                                ? <LatexMathRenderer text={answerText} />
-                                                                : <span>{answerText}</span>;
-                                                        })()}
-                                                    </div>
-                                                </p>
-                                                <div className="text-sm mb-3">
-                                                    <strong>Correct answer:</strong> 
-                                                    <div className="ml-2 mt-1">
-                                                        {(() => {
-                                                            const answerText = flashcards[currentCard].answer;
-                                                            // Only render KaTeX if it contains LaTeX syntax
-                                                            return answerText.includes('$') || answerText.includes('\\') 
-                                                                ? <LatexMathRenderer text={answerText} />
-                                                                : <span>{answerText}</span>;
+                                                            const question = flashcards[currentCard].question;
+                                                            const correctAnswer = flashcards[currentCard].answer;
+                                                            
+                                                            // Generate a genuine explanation based on the actual answer content
+                                                            if (!correctAnswer || correctAnswer.trim().length === 0) {
+                                                                return `Please review the correct answer below.`;
+                                                            }
+                                                            
+                                                            // For MCQ questions, the answer is the option text
+                                                            // For open-ended questions, the answer is the full explanation
+                                                            // Use the answer content directly as it contains the actual explanation
+                                                            if (isCorrect) {
+                                                                return (
+                                                                    <>
+                                                                        <span className="font-medium text-green-600 dark:text-green-400">Great job! You selected the correct answer.</span>
+                                                                        <br />
+                                                                        <br />
+                                                                        <LatexMathRenderer text={correctAnswer} />
+                                                                    </>
+                                                                );
+                                                            } else {
+                                                                // For incorrect answers, just show the explanation directly
+                                                                // (The "correct answer is A" is already shown above)
+                                                                return <LatexMathRenderer text={correctAnswer} />;
+                                                            }
                                                         })()}
                                                     </div>
                                                 </div>
                                             </div>
-                                        )}
-                                        
+                                        </div>
                                     </div>
                                 )}
                             </div>

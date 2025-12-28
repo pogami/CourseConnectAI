@@ -730,7 +730,7 @@ export default function SyllabusUpload() {
                     <div className="mt-3 p-3 rounded-md border bg-muted/30 text-xs sm:text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                             <Shield className="h-5 w-5" />
-                            <span>Syllabus files are processed on our server to extract text; only the extracted text is sent for AI parsing. We never store original syllabus files, and all parsed course data saved to your account can be deleted.</span>
+                            <span>Your syllabus is processed securely to extract text. Extracted course data is stored in your account to enable AI-powered course assistance. You can delete your course data at any time.</span>
                         </div>
                     </div>
                 )}

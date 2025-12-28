@@ -9,11 +9,11 @@ import Link from 'next/link';
 export function CTASection() {
   return (
     <section className="py-32 relative overflow-hidden bg-white dark:bg-gray-950">
-      {/* Background Effects - Flowing gradient to match FAQ */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-50/30 to-gray-50/50 dark:via-gray-900/30 dark:to-gray-900/50" />
+      {/* Background Effects - Only visible in dark mode */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none hidden dark:block">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-900/30 to-gray-900/50" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[600px] bg-gradient-to-b from-blue-500/5 via-purple-500/5 to-transparent rounded-full blur-3xl -translate-y-1/2" />
-        <div className="absolute bottom-0 right-1/2 translate-x-1/2 w-[800px] h-[800px] bg-gradient-to-t from-gray-50/40 dark:from-gray-900/40 to-transparent blur-[180px]" />
+        <div className="absolute bottom-0 right-1/2 translate-x-1/2 w-[800px] h-[800px] bg-gradient-to-t from-gray-900/40 to-transparent blur-[180px]" />
       </div>
       
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">

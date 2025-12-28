@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Glowing animation for stop button */
+@keyframes glow {
+  0%, 100% {
+    opacity: 0.3;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.5), 0 0 8px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 16px rgba(255, 255, 255, 0.5), 0 0 24px rgba(255, 255, 255, 0.3);
+  }
+}
+
 /* SaaS-level pulsing animations */
 @keyframes pulse-slow {
   0%, 100% {
@@ -264,6 +276,22 @@ body {
   padding: 0.25rem 0.5rem !important;
   background: hsl(var(--muted)) !important;
   color: hsl(var(--foreground)) !important;
+}
+
+/* Prevent line breaks in math expressions */
+.katex {
+  white-space: nowrap !important;
+  display: inline-block !important;
+}
+
+.katex-html {
+  white-space: nowrap !important;
+}
+
+/* Ensure inline math doesn't break across lines */
+span[class*="katex"] {
+  white-space: nowrap !important;
+  display: inline-block !important;
 }
 
 /* Constrain all text in chat messages */
@@ -815,6 +843,67 @@ body {
   overflow-y: auto !important;
 }
 
+/* Prevent browser text highlighting and autocomplete styling in input fields */
+.chat-input-container textarea,
+.chat-input-container input,
+textarea[spellcheck="false"],
+input[spellcheck="false"] {
+  /* Disable browser text selection highlighting */
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  /* Prevent browser autocomplete/suggestion highlighting */
+  -webkit-text-fill-color: inherit !important;
+  color: inherit !important;
+  /* Remove any browser-applied background colors */
+  background-color: transparent !important;
+  /* Prevent browser extension highlighting */
+  text-shadow: none !important;
+  /* Ensure no purple/blue highlighting from browser */
+  caret-color: currentColor !important;
+  /* Prevent any inline styling from browser extensions */
+  font-weight: inherit !important;
+  font-style: inherit !important;
+  text-decoration: none !important;
+}
+
+/* Prevent browser autocomplete styling */
+.chat-input-container textarea:-webkit-autofill,
+.chat-input-container input:-webkit-autofill {
+  -webkit-text-fill-color: inherit !important;
+  -webkit-box-shadow: 0 0 0px 1000px transparent inset !important;
+  box-shadow: 0 0 0px 1000px transparent inset !important;
+  background-color: transparent !important;
+}
+
+/* Specifically prevent purple/blue pill highlighting from browser extensions or autocomplete */
+.chat-input-container textarea::selection,
+.chat-input-container input::selection {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  color: inherit !important;
+}
+
+.chat-input-container textarea::-webkit-textfield-decoration-container,
+.chat-input-container input::-webkit-textfield-decoration-container {
+  display: none !important;
+}
+
+/* Prevent any span or inline elements from being rendered inside textarea (shouldn't happen but just in case) */
+.chat-input-container textarea *,
+.chat-input-container input * {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Override any browser extension styles that might add purple/blue backgrounds */
+.chat-input-container textarea span,
+.chat-input-container input span {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
 /* Ensure expanded AI responses stay within message boundaries */
 .ai-response .max-h-80 {
   max-height: 20rem !important;
@@ -1345,6 +1434,8 @@ body {
 [data-sonner-toaster] {
   --width: 356px;
   --gap: 8px;
+  z-index: 9999 !important;
+  position: fixed !important;
 }
 
 [data-sonner-toast] {
@@ -1357,13 +1448,22 @@ body {
   padding: 16px !important;
   color: #fff !important;
   transition: all 0.2s ease !important;
+  position: relative !important;
+  z-index: 1000 !important;
+  pointer-events: auto !important;
 }
 
-/* Hover state - elevate and brighten (like Vercel) */
+/* Hover state - elevate and brighten (like Vercel) - fixed z-index */
+[data-sonner-toast] {
+  z-index: 1000 !important;
+  position: relative !important;
+}
+
 [data-sonner-toast]:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
   transform: translateY(-2px) scale(1.01) !important;
   transition: all 0.2s ease !important;
+  z-index: 1001 !important;
 }
 
 /* Title styling - bold white at top */
@@ -1389,6 +1489,9 @@ body {
   gap: 8px !important;
   margin-top: 12px !important;
   justify-content: flex-end !important;
+  position: relative !important;
+  z-index: 5 !important;
+  pointer-events: auto !important;
 }
 
 /* Cancel/Dismiss button - ghost style */
@@ -1419,24 +1522,34 @@ body {
   font-size: 13px !important;
   font-weight: 500 !important;
   transition: all 0.2s ease !important;
+  position: relative !important;
+  z-index: 6 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
 }
 
 [data-sonner-toast] button[data-button]:not([data-cancel]):hover {
   background: rgba(255, 255, 255, 0.25) !important;
+  z-index: 7 !important;
 }
 
-/* Close button */
+/* Close button - more visible */
 [data-sonner-toast] button[data-close-button] {
   background: transparent !important;
   border: none !important;
-  color: rgba(255, 255, 255, 0.7) !important;
-  opacity: 0.7 !important;
-  transition: opacity 0.2s ease !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  opacity: 1 !important;
+  transition: all 0.2s ease !important;
+  z-index: 10 !important;
+  position: relative !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
 }
 
 [data-sonner-toast] button[data-close-button]:hover {
   opacity: 1 !important;
   color: #fff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* Override white background for course card text container */

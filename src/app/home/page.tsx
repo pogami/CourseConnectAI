@@ -906,7 +906,7 @@ export default function LandingPage() {
             </main>
             
             {/* Pricing Section */}
-            <section id="features" className="py-16 sm:py-20 lg:py-24 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-950 dark:via-blue-950 dark:to-indigo-950">
+            <section id="features" className="py-16 sm:py-20 lg:py-24 bg-white dark:bg-gradient-to-br dark:from-slate-950 dark:via-blue-950 dark:to-indigo-950">
                 <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-12 sm:mb-16">
                         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-4 sm:mb-6">
@@ -927,7 +927,7 @@ export default function LandingPage() {
             <SiteFooter />
 
 
-            <Toaster />
+            {/* <Toaster /> */}
 
 
             

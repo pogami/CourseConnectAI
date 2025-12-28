@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { provideStudyAssistanceWithFallback } from '@/ai/services/dual-ai-service';
 import { filterContent } from '@/lib/content-filter';
 import { db } from '@/lib/firebase/server';
+import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,7 @@ export async function POST(request: NextRequest) {
       shouldCallAI = true,
       isPublicChat = false,
       allSyllabi,
+      courseData, // ✅ CRITICAL: Extract courseData for class chats
       userName,
       userId,
       documentContext,
@@ -51,7 +53,29 @@ export async function POST(request: NextRequest) {
             thinking: 'checking your syllabus'
           }) + '\n'));
 
-          // Get syllabi context if available
+          // ✅ CRITICAL: Handle courseData for class chats - extract full syllabus text
+          let syllabusContent = '';
+          if (courseData && courseData.syllabusText) {
+            // Include FULL syllabus text (up to 200k chars)
+            const fullSyllabus = courseData.syllabusText.length > 200000 
+              ? courseData.syllabusText.substring(0, 200000) 
+              : courseData.syllabusText;
+            // Use shared prompt generator for syllabus content
+            const syllabusPrompt = generateMainSystemPrompt({
+              syllabusContent: `🚨🚨🚨 FULL SYLLABUS TEXT - USE THIS DIRECTLY 🚨🚨🚨
+
+${fullSyllabus}
+
+[END OF FULL SYLLABUS TEXT]`,
+              courseInfo: 'See course context below',
+              dateFormatted: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+            });
+            
+            syllabusContent = syllabusPrompt;
+            console.log('✅ Stream: Full syllabus included from courseData, length:', fullSyllabus.length);
+          }
+
+          // Get syllabi context if available (fallback for general chat)
           let syllabiContext = '';
           if (allSyllabi && Array.isArray(allSyllabi) && allSyllabi.length > 0) {
             syllabiContext = allSyllabi.map((s: any) =>
@@ -59,9 +83,13 @@ export async function POST(request: NextRequest) {
             ).join('\n\n---\n\n');
           }
 
-          // Enrich context with syllabi
+          // Enrich context with syllabi - prioritize courseData syllabusText
           let enrichedContext = context || 'General Chat';
-          if (syllabiContext) {
+          if (syllabusContent) {
+            // Use full syllabus from courseData
+            enrichedContext = `${context || 'General Chat'}\n\n${syllabusContent}`;
+          } else if (syllabiContext) {
+            // Fallback to allSyllabi
             enrichedContext = `${context || 'General Chat'}\n\n${syllabiContext}`;
           }
 
@@ -185,40 +213,40 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           answer = answer.replace(/  +/g, ' ');
           // Clean up multiple newlines (keep max 2)
           answer = answer.replace(/\n{3,}/g, '\n\n');
-          // Ensure proper paragraph breaks
-          answer = answer.replace(/([.!?])\s+([A-Z][a-z])/g, (match, punct, next) => {
-            // Don't add break if it's already a list item
-            if (next.match(/^\d+\./)) return match;
-            return punct + '\n\n' + next;
-          });
+          // Remove the aggressive newline additions - let the AI's natural formatting stand
+          // Only fix spacing issues, don't add paragraph breaks
           // Trim and clean
           answer = answer.trim();
 
-          // Stream the response in sentence/phrase chunks (not word by word)
-          // Split by sentences first, then by phrases for smoother streaming
-          const sentences = answer.split(/(?<=[.!?])\s+/);
-          for (const sentence of sentences) {
-            // Split long sentences into phrases for better streaming
-            const phrases = sentence.match(/.{1,50}(\s|$)/g) || [sentence];
+          // Stream the response word by word for smooth, natural streaming
+          // Split into words and spaces, preserving the original structure
+          const tokens = answer.match(/\S+|\s+/g) || [answer];
+          
+          for (const token of tokens) {
+            // Skip empty strings
+            if (!token) continue;
+            
+            // Send each token (word or space) individually
+            controller.enqueue(encoder.encode(JSON.stringify({
+              type: 'content',
+              content: token
+            }) + '\n'));
 
-            for (const phrase of phrases) {
-              if (phrase.trim()) {
-                controller.enqueue(encoder.encode(JSON.stringify({
-                  type: 'content',
-                  content: phrase
-                }) + '\n'));
-
-                // Small delay to simulate streaming
-                await new Promise(resolve => setTimeout(resolve, 50));
-              }
-            }
+            // Small delay between tokens for natural streaming effect
+            // Longer delay for words, shorter for spaces/newlines
+            const isWord = token.trim().length > 0;
+            const delay = isWord ? 25 : 8;
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
 
-          // Send done signal
+          // Send done signal with final response
           controller.enqueue(encoder.encode(JSON.stringify({
             type: 'done',
             fullResponse: answer
           }) + '\n'));
+          
+          // Small delay before closing to ensure last chunk is sent
+          await new Promise(resolve => setTimeout(resolve, 10));
 
           controller.close();
         } catch (error: any) {

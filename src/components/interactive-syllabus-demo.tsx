@@ -1312,8 +1312,7 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
               <span>Secure & Private Processing</span>
             </div>
             <p className="text-[10px] text-gray-400 dark:text-gray-500 max-w-md">
-              Your syllabus is processed securely to extract text and is never stored.
-              You maintain full control and ownership of your data.
+              Your syllabus is processed securely to extract text. Extracted course data is stored in your account to enable AI-powered course assistance. You can delete your course data at any time.
             </p>
           </div>
         </CardContent>

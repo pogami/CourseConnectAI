@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { provideStudyAssistanceWithFallback } from '@/ai/services/dual-ai-service';
 import { extractUserNameFromMessages, extractUserNameFromMessage } from '@/lib/extract-user-name';
 import { filterContent, generateFilterResponse } from '@/lib/content-filter';
+import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
 import { createAIResponseNotification } from '@/lib/notifications/server';
 import { db } from '@/lib/firebase/server';
 
@@ -178,40 +179,26 @@ export async function POST(request: NextRequest) {
     const frustration = detectFrustration(cleanedQuestion, conversationHistory);
     const empatheticPrefix = generateEmpatheticPrefix(frustration);
 
-    // Simple prompt - AI service will handle search and insert results if needed
-    const prompt = `You're CourseConnect AI - an all-in-one academic assistant${allSyllabi && allSyllabi.length > 0 ? ` with full access to the student's course syllabi` : ''}.
-
-${syllabiContext}
-
-You help with:
-- Academic questions (math, science, homework, any subject)
-- Course-specific help (assignments, exams, topics)
-- Study strategies and explanations
-- General knowledge and learning
-- Current events and real-time information (when search results are provided)
-
-Style rules:
-- Be conversational and helpful
-- Provide clear, detailed explanations
-- If you know about their courses, reference them naturally
-- Be encouraging and supportive
-
-${frustration.isFrustrated ? `🚨 EMOTIONAL INTELLIGENCE - FRUSTRATION DETECTED:
+    // Build frustration guidance
+    const frustrationGuidance = frustration.isFrustrated 
+      ? `🚨 EMOTIONAL INTELLIGENCE - FRUSTRATION DETECTED:
 The student is showing signs of frustration (${frustration.level} level). Reasons: ${frustration.reasons.join(', ')}.
 ${frustration.suggestedApproach === 'analogy' ? 'IMPORTANT: Use a real-world analogy or sports example instead of formulas/math. Step away from technical language and make it relatable.' : ''}
 ${frustration.suggestedApproach === 'step-by-step' ? 'IMPORTANT: Break this down into very small, clear steps. Go slowly and check understanding at each step.' : ''}
 ${frustration.suggestedApproach === 'example' ? 'IMPORTANT: Use concrete examples to illustrate the concept. Show, do not just tell.' : ''}
 ${frustration.suggestedApproach === 'break' ? 'IMPORTANT: Break this into the smallest possible pieces. Tackle one tiny piece at a time.' : ''}
-Start your response with empathy and understanding. Acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.` : ''}
+Start your response with empathy and understanding. Acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.`
+      : '';
 
-If the user's question is mathematical or an equation, strictly follow these rules:
-- Do NOT ask for confirmation. Provide the solution immediately.
-- Show concise, numbered steps when useful.
-- Prefer plain text narrative; use LaTeX only for formulas.
-- End with a single line: 'Final Answer: [value]' (no bold).
-- Keep it brief unless the user asks for more detail.
+    // Use shared prompt generator
+    const basePrompt = generateMainSystemPrompt({
+      syllabusContent: syllabiContext || undefined,
+      courseInfo: context || 'General Chat',
+      dateFormatted: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+      frustrationGuidance: frustrationGuidance
+    });
 
-Context: ${context || 'General Chat'}
+    const prompt = `${basePrompt}
 
 ${convoContext}User: ${cleanedQuestion}
 
@@ -296,9 +283,9 @@ CourseConnect AI:`;
       const lowerQuestion = cleanedQuestion.toLowerCase();
       
       if (lowerQuestion.includes('hello') || lowerQuestion.includes('hi') || lowerQuestion.includes('hey')) {
-        aiResponse = "Hey there! I'm CourseConnect AI, your friendly study buddy! I'm here to help with academics, homework questions, study strategies, or just chat about whatever's on your mind. What's up today?";
+        aiResponse = "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?";
       } else if (lowerQuestion.includes('who are you')) {
-        aiResponse = "I'm CourseConnect AI, your friendly study buddy! I was created by a solo developer who built CourseConnect as a unified platform for college students. I'm here to help you with studies, answer questions, or just chat about whatever's on your mind. What's up?";
+        aiResponse = "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?";
       } else if (lowerQuestion.includes('news') || lowerQuestion.includes('current')) {
         aiResponse = "I'd love to help with current events! Unfortunately I'm having trouble accessing real-time info right now. Feel free to ask me about academic topics, or try asking something like 'what's the latest news about...' specifically.";
       } else {

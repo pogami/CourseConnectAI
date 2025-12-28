@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { searchCurrentInformation, needsCurrentInformation, formatSearchResultsForAI } from './web-search-service';
 import { extractUrlsFromText, scrapeMultiplePages, formatScrapedContentForAI } from './web-scraping-service';
 import { shouldAutoSearch, performAutoSearch, enhancedWebBrowsing, shouldUsePuppeteer } from './enhanced-web-browsing-service';
+import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
 
 // Initialize OpenAI client
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -216,9 +217,8 @@ PERSONALIZATION INSTRUCTIONS:
       }
     }
     
-    let systemInstruction = `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
-
-🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+    // Build graph data rules (specific to dual-ai-service)
+    const graphDataRules = `🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
 WHEN USERS ASK FOR CHARTS, GRAPHS, PIE CHARTS, BAR CHARTS, OR ANY VISUALIZATION:
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
@@ -238,15 +238,14 @@ IMPORTANT USER CONTEXT RULES:
 3. Remember personal details the user shares (their courses, interests, study habits, etc.) and reference them in future responses.
 4. Build a relationship by remembering what you've learned about the user throughout the conversation.
 
-You are having a NATURAL CONVERSATION with a student. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
-- Make jokes and be playful when appropriate
-- Use casual language and expressions
-- Show personality and humor
-- Be empathetic and understanding
-- Respond naturally to random questions or topics
-- Don't take everything too literally - understand context and intent
-- Acknowledge that CourseConnect was built by a solo developer (not a team)
-- Use the user's name naturally when appropriate (don't overuse it)
+`;
+
+    // Get shared prompt and prepend graph data rules
+    const sharedPrompt = generateMainSystemPrompt({
+      userName: input.userName || undefined
+    });
+
+    let systemInstruction = `${graphDataRules}${sharedPrompt}
 
 Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
 
@@ -337,7 +336,7 @@ ${responseStyleInstruction}
 
 RESPONSE STYLE RULES (Secondary - follow the style above first):
 1. Be conversational and friendly - like talking to a friend
-2. For simple greetings (hi, hello, hey): Respond naturally like "Hey! What's up?" or "Hi there! How's it going?"
+2. For simple greetings (hi, hello, hey): Use the standard greeting: "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?"
 3. For jokes or casual comments: Play along, be funny, don't take things too seriously
 4. For random questions: Answer naturally and show interest
 5. For academic questions: Be helpful but still conversational
@@ -346,6 +345,7 @@ RESPONSE STYLE RULES (Secondary - follow the style above first):
 8. Don't be overly formal - avoid "I am here to assist you" type language
 9. When student uses vague references ("that", "it", "the recent thing"), always connect to the most recent topic
 10. Show conversation continuity by referencing what was just discussed
+11. NEVER end with filler phrases like "feel free to ask", "let me know if you need help", "if you have any questions", "feel free to reach out", "don't hesitate to ask", "if you need more details or have any specific questions about these topics, feel free to ask", or any variation - just answer naturally and stop
 
 CONVERSATION CONTINUITY RULES:
 1. ALWAYS reference previous messages when relevant
@@ -704,9 +704,8 @@ PERSONALIZATION INSTRUCTIONS:
       }
     }
     
-    let systemInstruction = `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
-
-🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+    // Build graph data rules (specific to dual-ai-service)
+    const graphDataRules = `🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
 WHEN USERS ASK FOR CHARTS, GRAPHS, PIE CHARTS, BAR CHARTS, OR ANY VISUALIZATION:
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
@@ -726,15 +725,14 @@ IMPORTANT USER CONTEXT RULES:
 3. Remember personal details the user shares (their courses, interests, study habits, etc.) and reference them in future responses.
 4. Build a relationship by remembering what you've learned about the user throughout the conversation.
 
-You are having a NATURAL CONVERSATION with a student. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
-- Make jokes and be playful when appropriate
-- Use casual language and expressions
-- Show personality and humor
-- Be empathetic and understanding
-- Respond naturally to random questions or topics
-- Don't take everything too literally - understand context and intent
-- Acknowledge that CourseConnect was built by a solo developer (not a team)
-- Use the user's name naturally when appropriate (don't overuse it)
+`;
+
+    // Get shared prompt and prepend graph data rules
+    const sharedPrompt = generateMainSystemPrompt({
+      userName: input.userName || undefined
+    });
+
+    let systemInstruction = `${graphDataRules}${sharedPrompt}
 
 Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
 
@@ -825,7 +823,7 @@ ${responseStyleInstruction}
 
 RESPONSE STYLE RULES (Secondary - follow the style above first):
 1. Be conversational and friendly - like talking to a friend
-2. For simple greetings (hi, hello, hey): Respond naturally like "Hey! What's up?" or "Hi there! How's it going?"
+2. For simple greetings (hi, hello, hey): Use the standard greeting: "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?"
 3. For jokes or casual comments: Play along, be funny, don't take things too seriously
 4. For random questions: Answer naturally and show interest
 5. For academic questions: Be helpful but still conversational
@@ -899,7 +897,7 @@ For mathematical expressions, use LaTeX formatting:
 - Write words OUTSIDE math delimiters, symbols INSIDE math delimiters`;
 
     const response = await openai.chat.completions.create({
-      model: input.image ? 'gpt-4o' : 'gpt-3.5-turbo',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
@@ -985,7 +983,7 @@ function getEnhancedFallback(input: StudyAssistanceInput): AIResponse {
   
   // Default enhanced response with more personality
   return {
-    answer: `Hey! I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students.\n\nI can help with:\n📚 Academic subjects and homework\n💡 Study strategies and tips\n📝 Writing and research\n🧠 Problem-solving\n💬 General questions and conversation\n\nWhat's on your mind? What would you like to talk about or get help with?`,
+    answer: `Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?`,
     provider: 'fallback'
   };
 }
@@ -1176,13 +1174,13 @@ async function tryOpenAIInDepth(input: StudyAssistanceInput): Promise<AIResponse
     }
     
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
-          content: `You are CourseConnect AI, a friendly and helpful study buddy! When asked "who are you" or similar questions, respond with: "I'm CourseConnect AI, your friendly study buddy! I'm here to help you with your studies, answer questions, or just chat about whatever's on your mind. I was created by a solo developer who built CourseConnect as a unified platform for college students. What's up?"
+          content: `You are a course tutor and syllabus assistant. When asked "who are you" or similar questions, respond with: "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?"
 
-You are having a NATURAL CONVERSATION with a student. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
+You are having a NATURAL CONVERSATION with a student. Be PROACTIVE, FRIENDLY, and HELPFUL. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
 - Make jokes and be playful when appropriate
 - Use casual language and expressions
 - Show personality and humor
@@ -1271,23 +1269,23 @@ export async function provideStudyAssistanceWithFallback(input: StudyAssistanceI
   console.log('AI Service: Starting with input:', input.question);
   
   try {
-    // Try Google AI first (Primary)
-    console.log('AI Service: Trying Google AI...');
+    // Try OpenAI first (Primary - GPT-4o)
+    console.log('AI Service: Trying OpenAI (GPT-4o)...');
     try {
-      const result = await tryGoogleAI(input);
-      console.log('AI Service: Google AI succeeded:', result.provider);
+      const result = await tryOpenAI(input);
+      console.log('AI Service: OpenAI succeeded:', result.provider);
       return result;
-    } catch (googleError) {
-      console.warn('AI Service: Google AI failed with error:', googleError);
+    } catch (openaiError) {
+      console.warn('AI Service: OpenAI failed with error:', openaiError);
       
-      // Try OpenAI as fallback
-      console.log('AI Service: Trying OpenAI...');
+      // Try Google AI as fallback
+      console.log('AI Service: Trying Google AI as fallback...');
       try {
-        const result = await tryOpenAI(input);
-        console.log('AI Service: OpenAI succeeded:', result.provider);
+        const result = await tryGoogleAI(input);
+        console.log('AI Service: Google AI succeeded:', result.provider);
         return result;
-      } catch (openaiError) {
-        console.warn('AI Service: OpenAI failed with error:', openaiError);
+      } catch (googleError) {
+        console.warn('AI Service: Google AI failed with error:', googleError);
         console.log('AI Service: All APIs failed, using enhanced fallback');
         return getEnhancedFallback(input);
       }

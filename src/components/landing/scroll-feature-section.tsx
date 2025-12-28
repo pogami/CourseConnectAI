@@ -2,7 +2,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useScroll, useTransform, motion } from 'framer-motion';
-import Link from 'next/link';
 import { Calendar, CheckCircle, Clock, FileText, Sparkles, Zap, AlertCircle, TrendingUp, ShieldCheck, Check, Upload, BookOpen, ArrowRight, Users, Search, Filter, MapPin, GraduationCap, Bell } from 'lucide-react';
 import { UserGroupIcon, LaptopIcon } from 'hugeicons-react';
 import { InlineMath } from 'react-katex';
@@ -338,12 +337,6 @@ export function ScrollFeatureSection() {
                   Don't just ChatGPT it. CourseConnect knows what your professor actually assigned, so you get answers that make sense for your class, not generic internet advice.
                 </p>
 
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50 text-sm">
-                  <span className="text-emerald-700 dark:text-emerald-300 font-medium">
-                    ✓ Handwritten notes OCR now available in chat
-                  </span>
-                </div>
-
                 <ul className="space-y-3">
                   {[
                     'Knows your specific class',
@@ -354,6 +347,9 @@ export function ScrollFeatureSection() {
                         <Check className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                       </div>
                       <span className="text-sm font-medium">{item}</span>
+                      {item === 'Cites the syllabus' && (
+                        <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">soon</span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -478,14 +474,6 @@ export function ScrollFeatureSection() {
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400">ace together.</span>
                 </h3>
 
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/50 dark:border-indigo-800/50 text-sm">
-                  <span className="text-indigo-700 dark:text-indigo-300 font-medium">
-                    Syllabi-based student matching coming soon —{' '}
-                    <Link href="/features#roadmap" className="underline hover:text-indigo-900 dark:hover:text-indigo-200 font-semibold">
-                      see roadmap
-                    </Link>
-                  </span>
-                </div>
 
                 <p className="text-xl text-gray-600 dark:text-gray-400 leading-relaxed">
                   Upload your syllabus and automatically connect with students in the same course at your school or similar courses at other institutions. Form study groups and study smarter together.

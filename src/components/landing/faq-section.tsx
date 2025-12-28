@@ -39,8 +39,8 @@ const faqs = [
 export function FAQSection() {
   return (
     <section className="py-32 bg-white dark:bg-gray-950 relative overflow-hidden">
-      {/* Subtle background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-gray-50/50 via-transparent to-gray-50/50 dark:from-gray-900/50 dark:via-transparent dark:to-gray-900/50" />
+      {/* Background overlay - solid white in light mode, gradient in dark mode */}
+      <div className="absolute inset-0 bg-white dark:bg-gradient-to-b dark:from-gray-900/50 dark:via-transparent dark:to-gray-900/50" />
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <motion.div

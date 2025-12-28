@@ -34,8 +34,6 @@ import { useState, useEffect } from "react";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { MobileButton } from "@/components/ui/mobile-button";
 import GeolocationGreeting from "@/components/geolocation-greeting";
-import { StudyFocusSuggestions } from "@/components/study-focus-suggestions";
-import { ChatSummariesDashboard } from "@/components/chat-summaries-dashboard";
 import { DailyBriefing } from "@/components/dashboard/daily-briefing";
 import { DashboardAgenda } from "@/components/dashboard/dashboard-agenda";
 import dynamic from "next/dynamic";
@@ -519,6 +517,30 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Listen for guest name updates and refresh user object
+  useEffect(() => {
+    const handleGuestNameUpdate = () => {
+      const guestUserData = localStorage.getItem('guestUser');
+      if (guestUserData) {
+        try {
+          const guestUser = JSON.parse(guestUserData);
+          console.log("Dashboard: Guest name updated, refreshing user object:", guestUser);
+          setUser(guestUser);
+        } catch (error) {
+          console.warn("Dashboard: Error parsing guest user data on update:", error);
+        }
+      }
+    };
+    
+    window.addEventListener('guestNameUpdated', handleGuestNameUpdate);
+    window.addEventListener('guestProfileUpdated', handleGuestNameUpdate);
+    
+    return () => {
+      window.removeEventListener('guestNameUpdated', handleGuestNameUpdate);
+      window.removeEventListener('guestProfileUpdated', handleGuestNameUpdate);
+    };
+  }, []);
+
   // Check for upcoming assignments and create notifications
   useEffect(() => {
     if (user && Object.keys(chats).length > 0) {
@@ -641,15 +663,6 @@ export default function DashboardPage() {
         {/* Agenda - Timeline View */}
         <DashboardAgenda />
 
-        {/* What to Focus On - AI Study Suggestions */}
-        <div className="mt-12 lg:mt-16">
-          <StudyFocusSuggestions />
-        </div>
-
-        {/* Course Chat Summaries */}
-        <div className="mt-14 lg:mt-18">
-          <ChatSummariesDashboard />
-        </div>
 
         {/* Topics to Review (lightweight, signal-driven) */}
         {showTopicsReview && (

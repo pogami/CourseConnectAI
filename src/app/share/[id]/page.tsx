@@ -131,7 +131,7 @@ export default function SharedChatPage() {
         {/* Gradient overlays */}
         <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[120px]" />
         <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[100px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white/50 dark:to-gray-950/50" />
+        <div className="absolute inset-0 bg-white dark:bg-gradient-to-b dark:from-transparent dark:via-transparent dark:to-gray-950/50" />
       </div>
 
       {/* Header */}

@@ -312,6 +312,10 @@ export function FullPageChat({ isOpen, onClose, courseId, courseTitle }: FullPag
                   <Input
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    autoComplete="off"
                     onKeyPress={handleKeyPress}
                     placeholder={
                       courseTitle 

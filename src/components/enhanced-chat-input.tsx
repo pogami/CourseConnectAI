@@ -12,7 +12,6 @@ import {
   Loading01Icon,
   ArrowDown01Icon,
   Add01Icon,
-  Camera01Icon,
   Tick01Icon
 } from 'hugeicons-react';
 import { useTheme } from '@/contexts/theme-context';
@@ -21,7 +20,6 @@ import { SearchMenu } from './search-menu';
 import { useChatStore } from '@/hooks/use-chat-store';
 import { useRouter } from 'next/navigation';
 import { useSentimentAnalysis } from '@/hooks/use-sentiment-analysis';
-import { CameraCapture } from './camera-capture';
 import { VoiceVisualizer } from './voice-visualizer';
 // Removed Ollama import - now using API routes
 
@@ -76,10 +74,8 @@ export function EnhancedChatInput({
   const [aiResponseType, setAiResponseType] = useState<'concise' | 'detailed' | 'conversational' | 'analytical'>('concise');
   const [showResponseTypeDropdown, setShowResponseTypeDropdown] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Auto-resize textarea with smooth growth up to 5 lines
@@ -399,11 +395,20 @@ export function EnhancedChatInput({
 
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
   };
 
-  const onDragLeave = () => {
-    setIsDragging(false);
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the container itself
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDragging(false);
+    }
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -434,10 +439,6 @@ export function EnhancedChatInput({
     } else {
       console.error('📁 File input ref not found');
     }
-  };
-
-  const triggerCameraInput = () => {
-    setIsCameraOpen(true);
   };
 
   const toggleVoice = async () => {
@@ -591,8 +592,8 @@ export function EnhancedChatInput({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         className={cn(
-          "chat-input-container relative flex flex-col gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-3 transition-all duration-200",
-          isDragging && "bg-blue-500/5 dark:bg-blue-500/10 ring-2 ring-blue-500/50 rounded-xl",
+          "chat-input-container relative flex flex-col gap-2 sm:gap-3 px-2 py-1.5 sm:px-3 sm:py-2 transition-all duration-200",
+          isDragging && "bg-blue-500/10 dark:bg-blue-500/20 ring-2 ring-blue-500/50 dark:ring-blue-400/50 rounded-xl",
           // No background, shadow, or border - let parent handle styling
           "bg-transparent"
         )}
@@ -603,11 +604,20 @@ export function EnhancedChatInput({
           height: 'auto'
         }}
       >
+        {/* Drop Zone Overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/10 dark:bg-blue-500/20 backdrop-blur-sm rounded-xl border-2 border-dashed border-blue-500 dark:border-blue-400">
+            <div className="flex flex-col items-center gap-2 text-blue-600 dark:text-blue-400">
+              <ImageUploadIcon className="h-8 w-8" />
+              <span className="text-sm font-medium">Drop your file here</span>
+            </div>
+          </div>
+        )}
         
         {/* File Previews Above Text Area */}
         {hasPreviews && (
-          <div className="flex items-center gap-3 w-full"> 
-            {filePreviews.slice(0, 3).map((f) => (
+          <div className="flex items-center gap-3 w-full flex-wrap"> 
+            {filePreviews.map((f) => (
                 <div key={f.name} className="relative inline-block rounded-lg overflow-hidden border border-border/60 shadow-md bg-background group">
                 {f.type.startsWith('image/') ? (
                   <img 
@@ -649,7 +659,7 @@ export function EnhancedChatInput({
         )}
 
         {/* Input Row with Icons and Text */}
-        <div className="flex items-end gap-3 w-full">
+        <div className="flex items-end gap-2 w-full">
           {/* Plus Icon Button (Left) */}
           <button
             onClick={triggerFileInput}
@@ -663,21 +673,6 @@ export function EnhancedChatInput({
             title="Upload files"
           >
             <Add01Icon className="h-5 w-5" />
-          </button>
-
-          {/* Camera Button (Left) */}
-          <button
-            onClick={triggerCameraInput}
-            disabled={disabled}
-            className={cn(
-              "h-8 w-8 flex items-center justify-center cursor-pointer rounded-lg",
-              "hover:bg-gray-100 dark:hover:bg-white/10 transition-colors duration-200",
-              "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white",
-              disabled && "opacity-50 cursor-not-allowed"
-            )}
-            title="Take photo"
-          >
-            <Camera01Icon className="h-5 w-5" />
           </button>
 
           {/* Course selector removed per request */}
@@ -703,6 +698,10 @@ export function EnhancedChatInput({
               onKeyDown={handleKeyDown}
               placeholder={getPlaceholder()}
               disabled={disabled}
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
               className={cn(
                 "flex-1 bg-transparent border-0 outline-none resize-none",
                 "text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400",
@@ -758,8 +757,22 @@ export function EnhancedChatInput({
 
           {/* Send/Stop Button */}
           <button 
-            onClick={isVoiceActive ? toggleVoice : (isSending ? onStop : handleSend)}
-            disabled={disabled || (isSending && !onStop) || (!value.trim() && selectedFiles.length === 0 && !isVoiceActive)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (isVoiceActive) {
+                toggleVoice();
+              } else if (isSending && onStop) {
+                onStop();
+              } else {
+                handleSend();
+              }
+            }}
+            disabled={
+              disabled || 
+              (isSending && !onStop) || 
+              (!isSending && !isVoiceActive && !value.trim() && selectedFiles.length === 0)
+            }
             title={isVoiceActive ? "Stop recording" : (isSending ? "Stop generating" : "Send message")}
             className={cn(
               "h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-full transition-all duration-200",
@@ -777,8 +790,8 @@ export function EnhancedChatInput({
               /* STOP ICON: Same square as AI stop */
               <div className="w-2.5 h-2.5 bg-current rounded-[1px]" />
             ) : isSending ? (
-              /* STOP ICON: A simple square */
-              <div className="w-2.5 h-2.5 bg-current rounded-[1px] animate-pulse" />
+              /* STOP ICON: Static square */
+              <div className="w-2.5 h-2.5 bg-current rounded-[1px]" />
             ) : (
               /* SEND ICON: Original upward arrow */
               <svg 
@@ -801,25 +814,6 @@ export function EnhancedChatInput({
           multiple
           accept="*/*"
           className="hidden"
-        />
-
-        {/* Hidden Camera Input */}
-        <input
-          ref={cameraInputRef}
-          type="file"
-          onChange={handleFileUpload}
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-        />
-
-        {/* Camera Capture Dialog */}
-        <CameraCapture 
-          isOpen={isCameraOpen}
-          onClose={() => setIsCameraOpen(false)}
-          onCapture={(file) => {
-            processFiles([file]);
-          }}
         />
       </div>
     </div>

@@ -143,10 +143,31 @@ FORMATTING RULES:
 
 5. Overall tone: Clear, concise, academic, helpful`;
 
+    // Check if user has a specific question or just uploaded without asking
+    const hasSpecificQuestion = prompt && 
+      prompt.trim().length > 0 && 
+      !prompt.toLowerCase().includes('i see you uploaded') &&
+      !prompt.toLowerCase().includes('what do you need help with');
+
     // Enhanced prompt for image-only analysis
-    const enhancedPrompt = prompt.trim() === 'Describe this image and extract relevant info.' 
-      ? 'Analyze this image comprehensively. Identify what you see, extract any text or data, explain concepts shown, and provide educational insights. Be thorough but concise.'
-      : prompt;
+    let enhancedPrompt = prompt;
+    let finalSystemPrompt = systemPrompt;
+    
+    if (!hasSpecificQuestion || prompt.trim() === 'Describe this image and extract relevant info.') {
+      // If no specific question, briefly acknowledge what the image is about (1 sentence) and ask what they need
+      finalSystemPrompt = `You are a helpful academic assistant. When a user uploads an image without a specific question, you should:
+1. Briefly identify what the image shows (ONE sentence)
+2. Ask what they need help with
+
+BAD response:
+"This image shows a calculus problem involving derivatives. The problem asks you to find the derivative of f(x) = x^2 + 3x. Here's how to solve it: [long solution]..."
+
+GOOD response:
+"I see you uploaded an image showing a calculus problem about derivatives. What do you need help with - solving the problem, understanding the concept, or something else?"
+
+Format ALL math using $...$ for inline and $$...$$ for display. NEVER use \\( or \\).`;
+      enhancedPrompt = 'Briefly identify what this image shows in ONE sentence, then ask what the user needs help with. Do not analyze or solve anything yet.';
+    }
 
     const userPrompt = `${enhancedPrompt}
 
@@ -158,7 +179,7 @@ CRITICAL: Format ALL math using $...$ for inline and $$...$$ for display. NEVER 
       messages: [
         {
           role: "system",
-          content: systemPrompt
+          content: finalSystemPrompt
         },
         {
           role: "user",

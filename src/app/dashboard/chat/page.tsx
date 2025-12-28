@@ -176,10 +176,6 @@ export default function ChatPage() {
     const lastScrollTimeRef = useRef(0);
     const [showResetDialog, setShowResetDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [showSummaryDialog, setShowSummaryDialog] = useState(false);
-    const [chatSummary, setChatSummary] = useState<string>('');
-    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-    const [copiedSummary, setCopiedSummary] = useState(false);
     // AbortController for stopping AI responses (works for all chat types: General, Class, Public)
     const abortControllerRef = useRef<AbortController | null>(null);
     // New chat creation is disabled here (only via Upload Syllabus)
@@ -1179,7 +1175,10 @@ export default function ChatPage() {
                         console.log('Including course data in streaming request:', {
                             courseName: currentChat.courseData.courseName,
                             courseCode: currentChat.courseData.courseCode,
-                            hasMetadata: !!currentChat.metadata
+                            hasMetadata: !!currentChat.metadata,
+                            hasSyllabusText: !!currentChat.courseData.syllabusText,
+                            syllabusTextLength: currentChat.courseData.syllabusText?.length || 0,
+                            syllabusTextPreview: currentChat.courseData.syllabusText ? currentChat.courseData.syllabusText.substring(0, 100) : 'N/A'
                         });
                     }
                     
@@ -1283,24 +1282,27 @@ export default function ChatPage() {
 
                                 // Handle different response formats - prioritize streaming format
                                 if (data.type === "content" && data.content) {
-                                    // Stream content chunks incrementally
+                                    // Stream content chunks incrementally (word by word)
                                     fullResponse += data.content;
                                     setStreamingResponse(fullResponse);
                                 } else if (data.type === "done") {
-                                    // Finalize - don't replace the streamed text, just collect metadata
-                                    // fullResponse already contains all the streamed chunks, keep it as-is
-                                    // Only use fullResponse/answer from done message if we somehow got no chunks
-                                    if (fullResponse.trim() === '') {
-                                        // Fallback: use done message content only if we got no chunks
-                                        if (data.fullResponse) {
-                                            fullResponse = data.fullResponse;
-                                            setStreamingResponse(fullResponse);
-                                        } else if (data.answer) {
-                                            fullResponse = data.answer;
-                                            setStreamingResponse(fullResponse);
-                                        }
+                                    // Ensure we have the complete response
+                                    const finalResponse = data.fullResponse || fullResponse;
+                                    
+                                    // Only update if we got a complete response and our accumulated one is different
+                                    if (data.fullResponse && data.fullResponse !== fullResponse) {
+                                        fullResponse = data.fullResponse;
+                                        setStreamingResponse(fullResponse);
+                                    } else if (fullResponse.trim()) {
+                                        // Use accumulated response if we have it
+                                        setStreamingResponse(fullResponse);
+                                    } else if (data.fullResponse) {
+                                        // Fallback: use done message content if we got no chunks
+                                        fullResponse = data.fullResponse;
+                                        setStreamingResponse(fullResponse);
                                     }
-                                    // fullResponse already has the accumulated streamed text, don't replace it
+                                    
+                                    // Collect metadata
                                     if (data.sources) sources = data.sources;
                                     if (data.metadata) metadata = data.metadata;
                                 } else if (data.type === "status") {
@@ -1407,21 +1409,16 @@ export default function ChatPage() {
                         }
                     }
                     
-                    // Use exactly what was streamed - fullResponse has been accumulating chunks
-                    // Don't replace it with anything from the done message
+                    // Use exactly what was streamed word-by-word - fullResponse has been accumulating chunks
                     // Ensure we have a valid response
-                    if (!fullResponse || fullResponse.trim() === '') {
-                        console.warn('Streaming response was empty, using fallback');
-                        fullResponse = "I'm having some trouble processing your request right now. Please try again in a moment.";
-                    }
-                    // fullResponse already contains exactly what was streamed, use it as-is
+                    const finalResponse = fullResponse.trim() || "I'm having some trouble processing your request right now. Please try again in a moment.";
                     
                     // Use the streaming message ID if we have one, otherwise generate new one
                     const messageId = streamingMessageId || generateMessageId();
                     
                     const aiMessage = {
                         id: messageId,
-                        text: fullResponse,
+                        text: finalResponse,
                         sender: 'bot' as const,
                         name: 'CourseConnect AI',
                         timestamp: Date.now(),
@@ -1653,10 +1650,17 @@ export default function ChatPage() {
                                 courseName: chat.courseData?.courseName || chat.title,
                                 courseCode: chat.courseData?.courseCode,
                                 professor: chat.courseData?.professor,
+                                university: chat.courseData?.university,
+                                semester: chat.courseData?.semester,
+                                year: chat.courseData?.year,
+                                classTime: chat.courseData?.classTime,
                                 topics: chat.courseData?.topics,
                                 exams: chat.courseData?.exams,
-                                assignments: chat.courseData?.assignments
+                                assignments: chat.courseData?.assignments,
+                                syllabusText: chat.courseData?.syllabusText || '', // Include full syllabus text
+                                content: chat.courseData?.syllabusText || '' // For backward compatibility
                             }));
+                            console.log('General Chat: Including ALL syllabi from', allClassChats.length, 'class chats');
                         }
                     }
                     
@@ -1968,8 +1972,10 @@ export default function ChatPage() {
                         setInputValue('');
                         await addMessage(currentTab || 'private-general-chat', uploadMessage);
                         
-                        // Now do full analysis
-                        const analysisPrompt = userText || 'Please analyze this image. Extract any text (OCR), solve problems shown, or explain concepts in detail. Use LaTeX for math.';
+                        // Now do full analysis - if no specific question, just acknowledge and ask
+                        const analysisPrompt = userText && userText.trim().length > 0 
+                            ? userText 
+                            : 'I see you uploaded an image. What do you need help with - extracting text, solving a problem, understanding a concept, or something else?';
                         const analysisResponse = await fetch('/api/chat/vision', {
                             method: 'POST',
                             headers: {
@@ -2128,90 +2134,6 @@ export default function ChatPage() {
         }
     };
 
-    const handleGenerateSummary = async () => {
-        if (!currentTab || !chats[currentTab]) return;
-        
-        setIsGeneratingSummary(true);
-        setShowSummaryDialog(true);
-        setChatSummary('');
-        
-        try {
-            const currentChat = chats[currentTab];
-            const messages = currentChat.messages || [];
-            
-            if (messages.length === 0) {
-                setChatSummary('This chat has no messages yet. Start a conversation to get a summary!');
-                setIsGeneratingSummary(false);
-                return;
-            }
-            
-            // Prepare chat content for summarization
-            // Include all messages except system messages and empty messages
-            console.log('📝 Generating summary for chat:', currentTab, 'Messages count:', messages.length);
-            console.log('📝 Message senders:', messages.map((m: any) => m.sender));
-            
-            const chatContent = messages
-                .filter((msg: any) => {
-                    // Filter out system messages and welcome messages
-                    if (msg.sender === 'system') {
-                        console.log('⏭️ Filtering out system message');
-                        return false;
-                    }
-                    if (msg.sender === 'bot' && msg.text?.includes('Welcome')) {
-                        console.log('⏭️ Filtering out welcome message');
-                        return false;
-                    }
-                    
-                    // Include messages with actual content
-                    const text = msg.text || msg.content || '';
-                    const hasContent = text.trim().length > 0;
-                    if (!hasContent) {
-                        console.log('⏭️ Filtering out empty message from sender:', msg.sender);
-                    }
-                    return hasContent;
-                })
-                .map((msg: any) => {
-                    // Include all message types: user, bot, ai
-                    const sender = msg.sender === 'user' ? 'You' : 'AI';
-                    const text = msg.text || msg.content || '';
-                    console.log('✅ Including message from:', msg.sender, 'Length:', text.length);
-                    return `${sender}: ${text}`;
-                })
-                .join('\n\n');
-            
-            console.log('📝 Final chat content length:', chatContent.length, 'characters');
-            
-            const response = await fetch('/api/chat/summarize', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    chatId: currentTab,
-                    chatTitle: currentChat.title || getChatDisplayName(currentTab),
-                    messages: chatContent,
-                    courseData: currentChat.courseData,
-                    chatType: currentChat.chatType
-                }),
-            });
-            
-            const data = await response.json();
-            
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || `Failed to generate summary (${response.status})`);
-            }
-            
-            setChatSummary(data.summary || 'Unable to generate summary.');
-        } catch (error: any) {
-            console.error('Error generating summary:', error);
-            setChatSummary('Failed to generate summary. Please try again.');
-            toast.error("Summary Failed", {
-                description: "Could not generate chat summary. Please try again.",
-            });
-        } finally {
-            setIsGeneratingSummary(false);
-        }
-    };
 
     const handleResetChat = async () => {
         // Close dialog immediately
@@ -2605,15 +2527,6 @@ export default function ChatPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleGenerateSummary}
-                                                className="h-9 px-4 text-xs font-semibold bg-gradient-to-r from-sky-500/10 via-blue-500/10 to-indigo-500/10 hover:from-sky-500/20 hover:via-blue-500/20 hover:to-indigo-500/20 border border-blue-200/70 dark:border-blue-900/60 text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md transition-all duration-200 rounded-full"
-                                                disabled={isGeneratingSummary}
-                                            >
-                                                {isGeneratingSummary ? 'Generating...' : 'Generate AI Summary'}
-                                            </Button>
                                             {currentChat?.chatType === 'class' && (
                                                 <Badge variant="secondary" className="text-xs">
                                                     <UserGroupIcon className="h-3 w-3 mr-1" />
@@ -2763,7 +2676,7 @@ export default function ChatPage() {
                                                         <div key={uniqueKey} className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'} w-full px-4`}>
                                                             <div className={`flex gap-4 ${message.sender === 'user' ? 'max-w-[80%]' : 'max-w-[80%]'} min-w-0 ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                                                                 {message.sender === 'bot' ? (
-                                                                    <img src="/favicon-32x32.png" alt="AI" className="w-10 h-10 flex-shrink-0 object-contain rounded-full" />
+                                                                    null
                                                                 ) : (
                                                                     <Avatar className="w-10 h-10 flex-shrink-0">
                                                                         {message.sender === 'user' && !isGuest && userProfilePicture ? (
@@ -2804,7 +2717,7 @@ export default function ChatPage() {
                                                 <div key={uniqueKey} className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'} w-full px-4`}>
                                                     <div className={`flex gap-4 ${message.sender === 'user' ? 'max-w-[80%]' : 'max-w-[80%]'} min-w-0 ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                                                         {message.sender === 'bot' ? (
-                                                            <img src="/favicon-32x32.png" alt="AI" className="w-10 h-10 flex-shrink-0 object-contain rounded-full" />
+                                                            null
                                                         ) : (
                                                             <Avatar className="w-10 h-10 flex-shrink-0">
                                                                 {message.sender === 'user' && !isGuest && userProfilePicture ? (
@@ -3003,8 +2916,7 @@ export default function ChatPage() {
                                             })() && (
                                                 <div className={`flex gap-3 justify-start w-full px-4 ${isStreamingComplete ? '' : 'animate-in slide-in-from-bottom-2 duration-300'}`}>
                                                     <div className="flex gap-4 max-w-[80%] min-w-0 flex-row">
-                                                        {/* Avatar - always show during streaming */}
-                                                        <img src="/favicon-32x32.png" alt="AI" className="w-10 h-10 flex-shrink-0 object-contain rounded-full" />
+                                                        {/* Avatar - removed */}
                                                         <div className="text-left min-w-0 group">
                                                             {/* Name and timestamp - always show during streaming */}
                                                             <div className="flex items-center gap-2 mb-1">
@@ -3079,10 +2991,7 @@ export default function ChatPage() {
                                             className={cn(
                                                 "relative flex items-center gap-2 px-3 py-1.5 shadow-lg border-2 glassmorphism-input transition-all duration-300",
                                                 "w-full max-w-full sm:max-w-[900px] sm:w-auto sm:min-w-[600px]",
-                                                // Sentiment-based purple border for empathetic states (Agent Mode)
-                                                sentimentAnalysis.sentiment !== 'neutral' && sentimentAnalysis.confidence > 0.1
-                                                  ? "!border-purple-500 !dark:border-purple-400 !shadow-[0_0_20px_rgba(168,85,247,0.6)] !dark:shadow-[0_0_20px_rgba(192,132,252,0.6)] ring-4 ring-purple-500/30 dark:ring-purple-400/30"
-                                                  : "border-gray-200/50 dark:border-gray-700/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-xl"
+                                                "border-gray-200/50 dark:border-gray-700/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-xl"
                                             )}
                                             style={{ 
                                                 borderRadius: '24px', 
@@ -3181,7 +3090,10 @@ export default function ChatPage() {
                                                             try {
                                                                 const base64Image = e.target?.result as string;
                                                                 const base64Data = base64Image.split(',')[1];
-                                                                const analysisPrompt = userText || 'Please analyze this image. Extract any text (OCR), solve problems shown, or explain concepts in detail. Use LaTeX for math.';
+                                                                // If no specific question, use a prompt that just acknowledges and asks what they need
+                                                                const analysisPrompt = userText && userText.trim().length > 0 
+                                                                    ? userText 
+                                                                    : 'I see you uploaded an image. What do you need help with - extracting text, solving a problem, understanding a concept, or something else?';
                                                                 await fetch('/api/chat/vision', {
                                                                     method: 'POST',
                                                                     headers: { 'Content-Type': 'application/json' },
@@ -3203,25 +3115,9 @@ export default function ChatPage() {
                                                             const fileType = first.type;
                                                             let analysisPrompt = userText;
                                                             
-                                                            if (!analysisPrompt) {
-                                                                // Generate appropriate prompt based on file type
-                                                                if (fileType.includes('pdf')) {
-                                                                    analysisPrompt = 'Analyze this PDF document and provide insights about its content, structure, and key information.';
-                                                                } else if (fileType.includes('word') || fileType.includes('document')) {
-                                                                    analysisPrompt = 'Analyze this Word document and provide insights about its content, structure, and key information.';
-                                                                } else if (fileType.includes('excel') || fileType.includes('spreadsheet')) {
-                                                                    analysisPrompt = 'Analyze this Excel spreadsheet and provide insights about the data, structure, and key findings.';
-                                                                } else if (fileType.includes('text') || fileType.includes('plain')) {
-                                                                    analysisPrompt = 'Analyze this text file and provide insights about its content and key information.';
-                                                                } else if (fileType.includes('json')) {
-                                                                    analysisPrompt = 'Analyze this JSON file and provide insights about its structure, data, and key information.';
-                                                                } else if (fileType.includes('csv')) {
-                                                                    analysisPrompt = 'Analyze this CSV file and provide insights about the data, structure, and key findings.';
-                                                                } else if (fileType.includes('zip') || fileType.includes('archive')) {
-                                                                    analysisPrompt = 'I received an archive file. I can help you with questions about it, but I cannot directly analyze compressed files.';
-                                                                } else {
-                                                                    analysisPrompt = `Analyze this ${first.name} file (${fileType}) and provide insights about its content and purpose.`;
-                                                                }
+                                                            // If no specific question, pass empty string - the API will handle acknowledgment
+                                                            if (!analysisPrompt || analysisPrompt.trim().length === 0) {
+                                                                analysisPrompt = '';
                                                             }
                                                             
                                                             // Try document analysis API for supported file types (PDF, DOCX, TXT)
@@ -3406,68 +3302,6 @@ export default function ChatPage() {
             </DialogContent>
         </Dialog>
 
-        {/* AI Summary Dialog */}
-        <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>
-                        Chat Summary
-                    </DialogTitle>
-                    <DialogDescription>
-                        AI-generated summary of your conversation
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="pt-4">
-                    {isGeneratingSummary ? (
-                        <div className="flex flex-col items-center justify-center gap-4 py-12">
-                            <div className="h-8 w-8 rounded-full border-2 border-muted border-t-primary animate-spin"></div>
-                            <p className="text-sm text-muted-foreground">Generating summary...</p>
-                        </div>
-                    ) : chatSummary ? (
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                            <div className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                                {chatSummary}
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">No summary available.</p>
-                    )}
-                </div>
-                <div className="flex justify-end gap-2 pt-4">
-                    <Button
-                        variant="outline"
-                        onClick={() => setShowSummaryDialog(false)}
-                    >
-                        Close
-                    </Button>
-                    {chatSummary && (
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                navigator.clipboard.writeText(chatSummary);
-                                setCopiedSummary(true);
-                                setTimeout(() => setCopiedSummary(false), 2000);
-                                toast.success("Copied", {
-                                    description: "Summary copied to clipboard",
-                                });
-                            }}
-                        >
-                            {copiedSummary ? (
-                                <>
-                                    <CheckmarkCircle01Icon className="h-4 w-4 mr-2" />
-                                    Copied
-                                </>
-                            ) : (
-                                <>
-                                    <Copy01Icon className="h-4 w-4 mr-2" />
-                                    Copy
-                                </>
-                            )}
-                        </Button>
-                    )}
-                </div>
-            </DialogContent>
-        </Dialog>
 
         {/* Admin dashboard available at /dashboard/admin - for developers only */}
         </>

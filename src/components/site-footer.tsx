@@ -37,7 +37,7 @@ const companyLinks = [
   { name: "About Us", href: "/about" },
   { name: "Features", href: "/features" },
   { name: "Contact", href: "/contact" },
-  { name: "Site Updates & Changelog", href: "/changelog", icon: <History className="h-4 w-4" /> }
+  // { name: "Site Updates & Changelog", href: "/changelog", icon: <History className="h-4 w-4" /> } // Hidden
 ];
 
 // Simple X (Twitter) logo

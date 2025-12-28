@@ -10,20 +10,48 @@ interface LatexMathRendererProps {
 }
 
 export function LatexMathRenderer({ text, className = "" }: LatexMathRendererProps) {
+  // Function to remove markdown asterisks (bold/italic formatting)
+  const removeAsterisks = (input: string): string => {
+    // Remove **text** (bold) and *text* (italic) markdown formatting
+    return input
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold **text**
+      .replace(/\*([^*]+)\*/g, '$1'); // Remove italic *text*
+  };
+
   // Function to detect and render LaTeX math expressions
   const renderMath = (input: string) => {
+    // First, protect math expressions by replacing them with placeholders
+    const mathPlaceholders: { [key: string]: string } = {};
+    let placeholderIndex = 0;
+    
+    // Replace math delimiters with placeholders to protect them from asterisk removal
+    let processedText = input.replace(/(\$\$[\s\S]*?\$\$|\$[^$]*?\$|\\\[[\s\S]*?\\\]|\\\([^)]*?\\\))/g, (match) => {
+      const placeholder = `__MATH_${placeholderIndex}__`;
+      mathPlaceholders[placeholder] = match;
+      placeholderIndex++;
+      return placeholder;
+    });
+    
+    // Remove asterisks from the text (math is protected)
+    processedText = removeAsterisks(processedText);
+    
+    // Restore math placeholders
+    Object.keys(mathPlaceholders).forEach(placeholder => {
+      processedText = processedText.replace(placeholder, mathPlaceholders[placeholder]);
+    });
+    
     // Check if text contains any math delimiters
-    const hasMath = input.includes("$$") || (input.includes("$") && input.includes("$")) || 
-                    (input.includes("\\(") && input.includes("\\)")) || 
-                    (input.includes("\\[") && input.includes("\\]"));
+    const hasMath = processedText.includes("$$") || (processedText.includes("$") && processedText.includes("$")) || 
+                    (processedText.includes("\\(") && processedText.includes("\\)")) || 
+                    (processedText.includes("\\[") && processedText.includes("\\]"));
     
     if (!hasMath) {
-      // No math, return as regular text
-      return <span>{input}</span>;
+      // No math, return as regular text (asterisks already removed)
+      return <span>{processedText}</span>;
     }
 
     // Split by LaTeX delimiters (both $ and \( formats)
-    const parts = input.split(/(\$\$[\s\S]*?\$\$|\$[^$]*?\$|\\\[[\s\S]*?\\\]|\\\([^)]*?\\\))/);
+    const parts = processedText.split(/(\$\$[\s\S]*?\$\$|\$[^$]*?\$|\\\[[\s\S]*?\\\]|\\\([^)]*?\\\))/);
     
     return parts.map((part, index) => {
       // Block math ($$...$$)
@@ -58,7 +86,7 @@ export function LatexMathRenderer({ text, className = "" }: LatexMathRendererPro
         );
       }
       
-      // Regular text
+      // Regular text (asterisks already removed)
       return <span key={index}>{part}</span>;
     });
   };

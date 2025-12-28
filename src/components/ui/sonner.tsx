@@ -29,10 +29,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
           title: "text-white font-semibold text-sm",
           description: "text-white/90 text-sm",
           actionButton:
-            "bg-white/15 hover:bg-white/25 text-white rounded-md border-none font-medium",
+            "bg-white/15 hover:bg-white/25 text-white rounded-md border-none font-medium relative z-10",
           cancelButton:
-            "bg-transparent hover:bg-white/10 text-white rounded-md border-none font-medium",
-          closeButton: "bg-transparent border-none text-white/70 hover:text-white hover:opacity-100",
+            "bg-transparent hover:bg-white/10 text-white rounded-md border-none font-medium relative z-10",
+          closeButton: "bg-transparent border-none text-white/90 hover:text-white hover:bg-white/10 relative z-20",
         },
       }}
       {...props}

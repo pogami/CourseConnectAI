@@ -22,6 +22,7 @@ import {
   generatePracticeExamInstructions
 } from '@/lib/ai-intelligence-utils';
 import { extractSourcesFromCourseData, parseCitationsFromResponse } from '@/lib/syllabus-source-extractor';
+import { generateMainSystemPrompt, generateOpenAISystemMessage } from '@/ai/prompts/main-system-prompt';
 
 export const runtime = 'nodejs';
 
@@ -110,7 +111,9 @@ export async function POST(request: NextRequest) {
         courseCode: courseData.courseCode,
         topicsCount: courseData.topics?.length || 0,
         assignmentsCount: courseData.assignments?.length || 0,
-        examsCount: courseData.exams?.length || 0
+        examsCount: courseData.exams?.length || 0,
+        hasSyllabusText: !!courseData.syllabusText,
+        syllabusTextLength: courseData.syllabusText?.length || 0
       } : null,
       chatId,
       timestamp: new Date().toISOString()
@@ -121,7 +124,14 @@ export async function POST(request: NextRequest) {
     let specialInstructions = '';
     
     if (courseData) {
-      const { courseName, courseCode, professor, university, semester, year, classTime, topics, assignments, exams } = courseData;
+      const { courseName, courseCode, professor, university, semester, year, classTime, topics, assignments, exams, syllabusText, pdfUrl } = courseData;
+      
+      // Log syllabus text availability for debugging
+      console.log('Syllabus text available:', {
+        hasSyllabusText: !!syllabusText,
+        syllabusTextLength: syllabusText?.length || 0,
+        syllabusTextPreview: syllabusText ? syllabusText.substring(0, 200) : 'N/A'
+      });
 
       const respondWith = (answer: string) => NextResponse.json({
         success: true,
@@ -326,7 +336,21 @@ ${pastExams.length > 0 ? pastExams.map((exam: any) =>
 ).join('\n') : 'No past exams yet'}
 ${deadlineContext}
 
-You have access to this course's syllabus information and can help with:
+🚨🚨🚨 FULL SYLLABUS TEXT - COMPLETE ACCESS 🚨🚨🚨
+${syllabusText && syllabusText.trim().length > 0 
+  ? `You have COMPLETE ACCESS to the FULL syllabus text below. This contains ALL course information: policies, deadlines, office hours, grading, attendance, calculator rules, withdrawal dates, academic integrity, etc.
+
+FULL SYLLABUS TEXT:
+${syllabusText.length > 200000 ? syllabusText.substring(0, 200000) : syllabusText}
+
+[END OF FULL SYLLABUS TEXT]
+
+CRITICAL: When answering questions about ANYTHING in the syllabus (policies, deadlines, office hours, grading, attendance, etc.), use the EXACT information from the FULL SYLLABUS TEXT above. NEVER say "I don't have access" or "check your syllabus" - you HAVE the full syllabus text right here.`
+  : pdfUrl 
+    ? `⚠️ Syllabus PDF available at: ${pdfUrl} (text extraction may be incomplete)`
+    : 'No full syllabus text available - using extracted course data only.'}
+
+You can help with:
 - Questions about course topics and concepts
 - Assignment help and due date reminders
 - Exam preparation and study strategies
@@ -374,48 +398,111 @@ IMPORTANT:
     const empatheticPrefix = generateEmpatheticPrefix(frustration);
 
     // Create course-aware prompt with emotional intelligence
-    const prompt = `You are CourseConnect AI, an enthusiastic and knowledgeable academic tutor for this specific course.
+    // Put syllabus text FIRST and MOST PROMINENT - before everything else
+    const syllabusSection = courseData?.syllabusText && courseData.syllabusText.trim().length > 0
+      ? `🚨🚨🚨🚨🚨 THE COMPLETE SYLLABUS TEXT IS BELOW - YOU MUST USE IT 🚨🚨🚨🚨🚨
 
-🚨 CRITICAL INSTRUCTIONS - READ THIS FIRST:
-- You have COMPLETE ACCESS to the syllabus data below
-- If the student asks "who is my professor" and a professor name is listed below, answer DIRECTLY with that name (e.g., "Your professor is [NAME]")
-- If the student asks "what time is class" or "when does class meet" and class time is listed below, answer DIRECTLY (e.g., "Class meets [TIME]")
-- If the student asks about ANYTHING in the syllabus (school, topics, assignments, exams), use the EXACT information from below
-- NEVER say "I don't have access" or "check your syllabus" - you HAVE the syllabus data right here
-- The course information below is REAL and ACCURATE - use it directly in your answers
+THE ENTIRE SYLLABUS FOR THIS COURSE:
+${courseData.syllabusText.length > 200000 ? courseData.syllabusText.substring(0, 200000) : courseData.syllabusText}
 
-${courseContext}
+[END OF SYLLABUS TEXT]
 
-Your personality and approach:
-- Talk like a friendly, knowledgeable study buddy - casual but smart
-- NO markdown formatting (no ###, no numbered lists)
-- Avoid bold (**text**) and italics (*text*) - only use them very sparingly for critical emphasis (1-2 times per response max)
-- Write naturally like you're texting or chatting, not writing a document
-- Use simple paragraphs and natural line breaks
-- Be encouraging and positive - help them build confidence
-- Get straight to the point, no fluff or formal structure
-- Vary your approach: sometimes explain deeply, sometimes ask questions, sometimes test understanding
+🚨🚨🚨 CRITICAL RULES - READ THESE CAREFULLY 🚨🚨🚨
+1. When asked about ANYTHING (syllabus, office hours, policies, deadlines, grading, attendance, professor name, class time, TOPICS, etc.), you MUST search the syllabus text above
+2. If the information is in the syllabus text above, extract it and answer DIRECTLY (e.g., "Office hours are Monday 2-4pm" or "Your professor is Dr. Smith")
+3. When asked about course topics, list ALL topics from the syllabus text above - extract and list EVERYTHING, don't say "and more" or "as outlined in the syllabus"
+4. NEVER say "check your syllabus", "you can find it in the syllabus", "reach out to your professor", "typically set by", "can typically be found", "distributed by your professor", "and more as outlined in the course syllabus", or any variation
+5. NEVER give generic answers - if it's in the syllabus text above, extract and state it directly
+6. NEVER say "and more" when listing topics - you HAVE the full syllabus, so list everything that's in it
+7. If asked "where is the syllabus" or "what is the syllabus", explain that you have the full syllabus text above and can answer questions about it
+8. If the information is NOT in the syllabus text above, say: "I don't have that information in your syllabus"
+9. The syllabus text above is REAL and COMPLETE - use it directly in ALL your answers, not generic descriptions
 
-${frustration.isFrustrated ? `🚨 EMOTIONAL INTELLIGENCE - FRUSTRATION DETECTED:
+`
+      : '';
+
+    // Build frustration guidance
+    const frustrationGuidance = frustration.isFrustrated 
+      ? `🚨 EMOTIONAL INTELLIGENCE - FRUSTRATION DETECTED:
 The student is showing signs of frustration (${frustration.level} level). Reasons: ${frustration.reasons.join(', ')}.
 ${frustration.suggestedApproach === 'analogy' ? 'IMPORTANT: Use a real-world analogy or sports example instead of formulas/math. Step away from technical language and make it relatable.' : ''}
 ${frustration.suggestedApproach === 'step-by-step' ? 'IMPORTANT: Break this down into very small, clear steps. Go slowly and check understanding at each step.' : ''}
 ${frustration.suggestedApproach === 'example' ? 'IMPORTANT: Use concrete examples to illustrate the concept. Show, do not just tell.' : ''}
 ${frustration.suggestedApproach === 'break' ? 'IMPORTANT: Break this into the smallest possible pieces. Tackle one tiny piece at a time.' : ''}
-Start your response with empathy and understanding. Acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.` : ''}
+Start your response with empathy and understanding. Acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.`
+      : '';
 
-Response guidelines:
-- For "what is this course" questions: Give an enthusiastic overview using SPECIFIC details from the syllabus (course topics, professor, assignments, exams). Show that you know the actual course!
-- For vague requests: Jump right into explaining relevant course topics with specific examples from the syllabus
-- For specific questions: Give clear, detailed explanations in a conversational tone
-- For confusion: Break down complex concepts step-by-step in simple language
-- Always reference actual course information from the syllabus (specific topics, assignment names, exam dates)
-- Keep it conversational - write like you're talking to them in person
-- Use emojis very sparingly (1-2 max per response)
-- Reference specific course details naturally in conversation
-- Connect topics to real-world applications when it makes sense
-- When discussing the course, ALWAYS use the actual syllabus details provided, not generic information
-- NO formal formatting - just natural paragraphs and conversational flow
+    // Build additional context for class-specific rules
+    const additionalContext = `CRITICAL - DATE AWARENESS:
+- You know TODAY'S DATE (provided above)
+- For PAST exams/assignments: Ask how they did! Be encouraging and supportive. Say things like "How did that exam go?" or "How are you feeling about how it went?"
+- For UPCOMING exams/assignments: Remind them and help them prepare. Say "You have X days until the exam - let's make sure you're ready!"
+- NEVER say an exam is "coming up" if it already happened - check the dates!
+- Show you care about their progress by asking about past deadlines
+
+CRITICAL - QUIZ RESULTS FEEDBACK:
+- When student shares quiz results, immediately acknowledge their effort and score
+- For scores: Be encouraging regardless of score! Focus on growth and learning
+- If they got questions wrong: Address EACH wrong question topic specifically with helpful explanations
+- Structure your response like: "Great job on the quiz! I see you got X/Y. Let's tackle those questions you missed..."
+- Then for each wrong question, explain the concept clearly and ask if they have follow-up questions
+- Make them feel supported and motivated to improve
+- Show enthusiasm about helping them master the material
+
+CRITICAL - FILE ATTACHMENT MEMORY:
+- ALWAYS remember when students attach files/images in previous messages
+- If they ask about "what I attached" or reference "the image/file", refer to the specific files they shared
+- When you see [Attached file: filename] in conversation history, remember that file was shared
+- If they ask follow-up questions about attached content, acknowledge the specific file they shared
+- NEVER say "you didn't attach anything" if the conversation history shows file attachments
+
+CRITICAL - CITATION REQUIREMENTS:
+- When you reference ANY information from the syllabus, you MUST cite the source
+- Use this exact citation format: [Source: filename, Page X, Line Y]
+- Include citations inline with your answer, not at the end
+- If you reference multiple pieces of information, cite each one separately
+- Be specific about page and line numbers when available
+- The syllabus filename is: ${courseData?.fileName || 'Syllabus'}
+
+Example citation format:
+"The course meets on Mondays and Wednesdays [Source: ${courseData?.fileName || 'Syllabus'}, Page 1, Line 15] and the final exam is on December 15th [Source: ${courseData?.fileName || 'Syllabus'}, Page 3, Line 42]."`;
+
+    // Get full syllabus text for the prompt
+    const fullSyllabusText = courseData?.syllabusText && courseData.syllabusText.trim().length > 0
+      ? (courseData.syllabusText.length > 200000 ? courseData.syllabusText.substring(0, 200000) : courseData.syllabusText)
+      : undefined;
+
+    // Use shared prompt generator
+    const basePrompt = generateMainSystemPrompt({
+      syllabusContent: fullSyllabusText ? `🚨🚨🚨🚨🚨 THE COMPLETE SYLLABUS TEXT IS BELOW - YOU MUST USE IT 🚨🚨🚨🚨🚨
+
+THE ENTIRE SYLLABUS FOR THIS COURSE:
+${fullSyllabusText}
+
+[END OF SYLLABUS TEXT]
+
+🚨🚨🚨 CRITICAL RULES - READ THESE CAREFULLY 🚨🚨🚨
+1. When asked about ANYTHING (syllabus, office hours, policies, deadlines, grading, attendance, professor name, class time, TOPICS, etc.), you MUST search the syllabus text above
+2. If the information is in the syllabus text above, extract it and answer DIRECTLY (e.g., "Office hours are Monday 2-4pm" or "Your professor is Dr. Smith")
+3. When asked about course topics, list ALL topics from the syllabus text above - extract and list EVERYTHING, don't say "and more" or "as outlined in the syllabus"
+4. NEVER say "check your syllabus", "you can find it in the syllabus", "reach out to your professor", "typically set by", "can typically be found", "distributed by your professor", "and more as outlined in the course syllabus", or any variation
+5. NEVER give generic answers - if it's in the syllabus text above, extract and state it directly
+6. NEVER say "and more" when listing topics - you HAVE the full syllabus, so list everything that's in it
+7. If asked "where is the syllabus" or "what is the syllabus", explain that you have the full syllabus text above and can answer questions about it
+8. If the information is NOT in the syllabus text above, say: "I don't have that information in your syllabus"
+9. The syllabus text above is REAL and COMPLETE - use it directly in ALL your answers, not generic descriptions` : undefined,
+      courseInfo: courseContext,
+      dateFormatted: dateFormatted,
+      userName: finalUserName || undefined,
+      frustrationGuidance: frustrationGuidance,
+      additionalContext: additionalContext
+    });
+
+    const prompt = `${basePrompt}
+
+${convoContext}Student: ${cleanedQuestion}
+
+CourseConnect AI:`;
 
 CRITICAL - DATE AWARENESS:
 - You know TODAY'S DATE (provided above)
@@ -472,11 +559,14 @@ CourseConnect AI:`;
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'gpt-4o-mini',
+              model: 'gpt-4o',
               messages: [
                 {
                   role: 'system',
-                  content: `You are CourseConnect AI, a supportive and engaging academic tutor. ${finalUserName ? `You are talking to ${finalUserName}. Always remember their name and use it naturally in your responses when appropriate.` : ''} Be conversational and genuinely helpful like a caring tutor. Adapt your response style based on the student's input: sometimes explain deeply, sometimes ask questions, sometimes test understanding. Use course context to provide relevant examples. Be encouraging and positive. Avoid generic responses - just start helping immediately. Vary your endings: sometimes ask questions, sometimes offer to continue, sometimes test understanding, sometimes just explain more.${finalUserName ? ` If the student asks "who am I" or "what's my name", tell them their name is ${finalUserName}.` : ''}`
+                  content: generateOpenAISystemMessage({
+                    userName: finalUserName || undefined,
+                    syllabusContent: fullSyllabusText ? 'See FULL SYLLABUS TEXT in user message' : undefined
+                  })
                 },
                 {
                   role: 'user',

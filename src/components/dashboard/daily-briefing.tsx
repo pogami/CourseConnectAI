@@ -55,6 +55,7 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
   const [nudge, setNudge] = useState<NudgeSuggestion | null>(null);
   const [triageMode, setTriageMode] = useState<TriageMode | null>(null);
   const [showTriageDialog, setShowTriageDialog] = useState(false);
+  const [userName, setUserName] = useState<string>('Student');
 
   // Collect all tasks for analysis
   const allTasks = useMemo(() => {
@@ -389,20 +390,25 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
 
   // Get user name, checking localStorage for guest users
   const getUserName = (): string => {
-    // Check if it's a guest user
-    if (user?.isGuest || user?.isAnonymous) {
-      if (typeof window !== 'undefined') {
-        try {
-          const guestUser = localStorage.getItem('guestUser');
-          if (guestUser) {
-            const parsed = JSON.parse(guestUser);
-            if (parsed.displayName) {
-              return parsed.displayName.split(' ')[0];
-            }
+    // Always check localStorage first for guest users (even if user object doesn't have isGuest set)
+    if (typeof window !== 'undefined') {
+      try {
+        const guestUser = localStorage.getItem('guestUser');
+        if (guestUser) {
+          const parsed = JSON.parse(guestUser);
+          if (parsed.displayName && parsed.displayName !== 'Guest User') {
+            return parsed.displayName.split(' ')[0];
           }
-        } catch (error) {
-          console.warn('Failed to parse guest user from localStorage:', error);
         }
+      } catch (error) {
+        console.warn('Failed to parse guest user from localStorage:', error);
+      }
+    }
+    
+    // Check if it's a guest user from user object
+    if (user?.isGuest || user?.isAnonymous) {
+      if (user?.displayName && user.displayName !== 'Guest User') {
+        return user.displayName.split(' ')[0];
       }
     }
     
@@ -410,7 +416,28 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
     return user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Student';
   };
 
-  const userName = getUserName();
+  // Update userName when user changes or guest name is updated
+  useEffect(() => {
+    const updateUserName = () => {
+      const name = getUserName();
+      setUserName(name);
+    };
+    
+    updateUserName();
+    
+    // Listen for guest name updates
+    const handleGuestNameUpdate = () => {
+      updateUserName();
+    };
+    
+    window.addEventListener('guestNameUpdated', handleGuestNameUpdate);
+    window.addEventListener('guestProfileUpdated', handleGuestNameUpdate);
+    
+    return () => {
+      window.removeEventListener('guestNameUpdated', handleGuestNameUpdate);
+      window.removeEventListener('guestProfileUpdated', handleGuestNameUpdate);
+    };
+  }, [user]);
 
   return (
     <>

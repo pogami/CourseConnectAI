@@ -85,12 +85,19 @@ const SELF_HARM_INDICATORS = [
   'final solution', 'final answer', 'way out', 'escape', 'relief'
 ];
 
-// Violence indicators
+// Violence indicators (context-aware - excludes academic/historical usage)
 const VIOLENCE_INDICATORS = [
-  'kill you', 'murder', 'murdering', 'stab', 'stabbing', 'shoot', 'shooting',
-  'bomb', 'bombing', 'explosive', 'explosion', 'attack', 'attacking',
-  'harm you', 'hurt you', 'beat you', 'fight', 'fighting', 'violence',
+  'kill you', 'murder', 'murdering', 'stab', 'stabbing', 'shoot you', 'shooting you',
+  'explosive device', 'make a bomb', 'plant a bomb', 'bomb you', 'bomb the', 'bomb them',
+  'harm you', 'hurt you', 'beat you', 'fight you', 'fighting you', 'violence against',
   'threat', 'threatening', 'revenge', 'payback', 'get even'
+];
+
+// Academic/historical contexts that should be allowed (checked before violence indicators)
+const ALLOWED_ACADEMIC_CONTEXTS = [
+  'bombing a test', 'bombed the test', 'bomb the test', 'bombing the exam',
+  'bombing of', 'bombing raid', 'atomic bomb', 'nuclear bomb', 'bomb shelter',
+  'bomb squad', 'bomb disposal', 'bomb threat', 'bombing campaign', 'bombing run'
 ];
 
 // Harassment indicators
@@ -116,15 +123,20 @@ export function filterContent(text: string): ContentFilterResult {
     }
   }
   
-  // Check for violence indicators
-  for (const indicator of VIOLENCE_INDICATORS) {
-    if (lowerText.includes(indicator)) {
-      return {
-        isSafe: false,
-        category: 'violence',
-        confidence: 0.8,
-        message: "I can't help with content that promotes violence. Let's talk about harmful content instead."
-      };
+  // Check if text contains academic/historical context that should be allowed
+  const hasAcademicContext = ALLOWED_ACADEMIC_CONTEXTS.some(context => lowerText.includes(context));
+  
+  // Check for violence indicators (skip if academic context is present)
+  if (!hasAcademicContext) {
+    for (const indicator of VIOLENCE_INDICATORS) {
+      if (lowerText.includes(indicator)) {
+        return {
+          isSafe: false,
+          category: 'violence',
+          confidence: 0.8,
+          message: "I can't help with content that promotes violence. Let's talk about harmful content instead."
+        };
+      }
     }
   }
   

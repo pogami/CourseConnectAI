@@ -147,8 +147,8 @@ export default function RootLayout({
             {children}
           </StudyBreakProvider>
           <MobileDetectionPopup />
-          <Sonner />
-          <Toaster />
+          {/* <Sonner /> */}
+          {/* <Toaster /> */}
           <Analytics />
         </Providers>
       </body>

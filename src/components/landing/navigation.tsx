@@ -12,8 +12,9 @@ import { Sun, Moon, Menu, X, ArrowRight, Home, Layout, Info } from 'lucide-react
 const navigation = [
   { name: 'Features', href: '/features' },
   // { name: 'Pricing', href: '/pricing' }, // Hidden until pricing page is ready
-  { name: 'Changelog', href: '/changelog' },
+  // { name: 'Changelog', href: '/changelog' }, // Hidden
   { name: 'About', href: '/about' },
+  { name: 'Contact Us', href: '/contact' },
 ];
 
 export function Navigation() {

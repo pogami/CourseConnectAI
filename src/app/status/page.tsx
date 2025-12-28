@@ -156,7 +156,7 @@ export default function StatusPage() {
   ], [websiteHealthy, syllabusUploadHealthy, aiChatHealthy, geminiHealthy, openaiHealthy, firestoreConnected, activeUsers]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-purple-950">
+    <div className="min-h-screen bg-white dark:bg-gradient-to-br dark:from-gray-950 dark:via-gray-900 dark:to-purple-950">
       <Navigation />
       <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <MotionSection className="text-center mb-10">

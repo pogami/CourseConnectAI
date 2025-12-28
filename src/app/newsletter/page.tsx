@@ -118,7 +118,7 @@ export default function NewsletterPage() {
 
   if (isSubscribed) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen bg-white">
         <div className="container mx-auto px-4 py-16">
           <div className="max-w-2xl mx-auto text-center">
             <div className="mb-8">
@@ -170,7 +170,7 @@ export default function NewsletterPage() {
                   Back to Home
                 </Button>
               </Link>
-              <Link href="/changelog">
+              {/* <Link href="/changelog">
                 <Button variant="outline" size="lg" className="w-full sm:w-auto">
                   View Recent Updates
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -291,7 +291,7 @@ export default function NewsletterPage() {
                 Back to Home
               </Link>
             </MobileButton>
-            <MobileButton 
+            {/* <MobileButton 
               variant="ghost" 
               size="lg" 
               className="w-full sm:w-auto hover:bg-transparent"
@@ -302,7 +302,7 @@ export default function NewsletterPage() {
                 View Recent Updates
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
-            </MobileButton>
+            </MobileButton> */}
           </div>
         </div>
       </div>

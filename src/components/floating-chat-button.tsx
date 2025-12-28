@@ -1,5 +1,8 @@
 'use client';
 
+// Feature flag: Set to false to disable the floating chat button
+const FLOATING_CHAT_BUTTON_ENABLED = false;
+
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { AtSign, GraduationCap } from 'lucide-react';
@@ -24,6 +27,11 @@ const getGuestDisplayName = (): string => {
 };
 
 export function FloatingChatButton() {
+  // Component deactivated - floating pill disabled
+  if (!FLOATING_CHAT_BUTTON_ENABLED) {
+    return null;
+  }
+
   const router = useRouter();
   const pathname = usePathname();
   const [value, setValue] = useState('');
@@ -452,6 +460,10 @@ export function FloatingChatButton() {
               ? `Message ${chats[selectedChatId]?.courseData?.courseCode || chats[selectedChatId]?.title || 'course'}...`
               : 'Ask anything...'
           }
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
           className={cn(
             "w-full bg-transparent text-base border-0 outline-none focus:outline-none placeholder:opacity-60 resize-none",
             "text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"

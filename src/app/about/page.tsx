@@ -131,14 +131,14 @@ export default function AboutPage() {
               {
                 year: "Aug 2025",
                 title: "The Beginning",
-                description: "CourseConnect was born from a real classroom experience: a course with inconsistent instruction, fragmented communication where students were left on read, and low engagement due to non-mandatory attendance. Facing these challenges firsthand, I built CourseConnect to provide reliable AI-powered support, ensuring every student has access to quality tutoring and study resources regardless of class dynamics.",
+                description: "When you can't rely on your professor or classmates, you still need to understand the material. CourseConnect gives you that - AI-powered support that actually knows your syllabus and is available 24/7. CourseConnect was born from a real classroom experience: inconsistent instruction and low engagement. I built it to ensure every student has access to reliable AI-powered tutoring and study resources, regardless of their class dynamics.",
                 icon: BulbIcon,
                 side: "left"
               },
               {
-                year: "Sep-Oct 2025",
+                year: "Aug-Now",
                 title: "Development Phase",
-                description: "Worked intensively on the platform, developing core AI features, smart syllabus analysis, and intelligent chat assistance. Built the foundation for what would become a comprehensive student success platform.",
+                description: "Built the AI engine that reads and understands syllabi, provides personalized tutoring, and adapts to each student's learning style. Created intelligent chat assistance that delivers contextual help, forming the foundation for a comprehensive student success platform.",
                 icon: UserGroupIcon,
                 side: "right"
               },
@@ -192,7 +192,7 @@ export default function AboutPage() {
       </div>
 
       {/* Interactive Values Section */}
-      <div className="bg-gray-50/50 dark:bg-gray-900/50 py-20 relative overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 py-20 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.03] dark:opacity-[0.05]" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -311,32 +311,42 @@ export default function AboutPage() {
       </div>
 
       {/* Mission Section */}
-      <div className="bg-slate-950 py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.04]" />
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8 relative z-10">
+      <section className="py-32 relative overflow-hidden bg-white dark:bg-gray-950">
+        {/* Background Effects - Only visible in dark mode */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none hidden dark:block">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-900/30 to-gray-900/50" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[600px] bg-gradient-to-b from-blue-500/5 via-purple-500/5 to-transparent rounded-full blur-3xl -translate-y-1/2" />
+          <div className="absolute bottom-0 right-1/2 translate-x-1/2 w-[800px] h-[800px] bg-gradient-to-t from-gray-900/40 to-transparent blur-[180px]" />
+        </div>
+        
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="space-y-8"
           >
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-8 tracking-tight">
+            <h2 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white mb-8 tracking-tighter leading-[0.95]">
               Our Mission
             </h2>
-            <p className="text-xl md:text-2xl text-slate-100 mb-10 leading-relaxed font-medium">
-              To democratize access to quality education by building AI-powered tools that help students succeed academically.
-              Starting with intelligent chat assistance and syllabus analysis, we're creating the foundation for collaborative learning.
+            
+            <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed font-medium">
+              We're democratizing access to quality education by building AI-powered tools that help students succeed academically. Starting with intelligent chat assistance and syllabus analysis, we're creating the foundation for collaborative learning.
             </p>
-            <Button
-              size="lg"
-              className="bg-white text-blue-600 hover:bg-blue-50 px-10 py-6 text-lg font-bold rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300"
-              onClick={() => window.location.href = '/signup'}
-            >
-              Join Our Mission
-            </Button>
+
+            <div className="flex flex-col items-center justify-center gap-6">
+              <Button
+                size="lg"
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-14 py-9 text-2xl font-black rounded-[2rem] shadow-[0_20px_50px_rgba(37,99,235,0.2)] dark:shadow-[0_20px_50px_rgba(37,99,235,0.4)] transition-all duration-300 hover:scale-105 active:scale-95"
+                onClick={() => window.location.href = '/signup'}
+              >
+                Join Our Mission
+              </Button>
+            </div>
           </motion.div>
         </div>
-      </div>
+      </section>
 
       <Footer />
       <HideAISupport />

@@ -12,6 +12,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client-simple';
 import { toast } from 'sonner';
 import { generateCelebrationMessage } from '@/lib/emotional-intelligence';
+import { calculatePriorityRankings, getPriorityLabel } from '@/lib/assignment-priority';
 
 export function DashboardAgenda() {
   const { chats } = useChatStore();
@@ -44,7 +45,7 @@ export function DashboardAgenda() {
     setLocalCompletions(completions);
   }, [chats]);
 
-  // Collect all items
+  // Collect all items with priority rankings
   const allItems = React.useMemo(() => {
     const items: any[] = [];
     const now = new Date();
@@ -65,7 +66,9 @@ export function DashboardAgenda() {
           course: courseCode,
           chatId: chat.id,
           id: `${chat.id}-${a.name}`,
-          status: a.status || 'Not Started'
+          status: a.status || 'Not Started',
+          weight: a.weight,
+          description: a.description
         });
       });
 
@@ -81,13 +84,27 @@ export function DashboardAgenda() {
           course: courseCode,
           chatId: chat.id,
           id: `${chat.id}-${e.name}-exam`,
-          status: e.status || 'Upcoming'
+          status: e.status || 'Upcoming',
+          weight: e.weight,
+          description: e.description
         });
       });
     });
 
-    // Sort by date
-    return items.sort((a, b) => a.date.getTime() - b.date.getTime());
+    // Calculate priority rankings for items due this week
+    const itemsWithPriority = calculatePriorityRankings(items, chats, now);
+    
+    // Create a map of priority by item ID
+    const priorityMap = new Map<string, number>();
+    itemsWithPriority.forEach(item => {
+      priorityMap.set(item.id, item.priority);
+    });
+
+    // Add priority to all items and sort by date
+    return items.map(item => ({
+      ...item,
+      priority: priorityMap.get(item.id) || 0
+    })).sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [chats]);
 
   // Show only first 5 items in the card
@@ -227,7 +244,7 @@ export function DashboardAgenda() {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900 dark:text-white">
             <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            Upcoming Agenda
+            Upcoming Work
           </CardTitle>
           <Button 
             variant="ghost" 
@@ -235,7 +252,7 @@ export function DashboardAgenda() {
             className="text-xs text-gray-500 hover:text-blue-600"
             onClick={() => setShowAllDialog(true)}
           >
-            View All <ChevronRight className="h-3 w-3 ml-1" />
+            View All Upcoming Work <ChevronRight className="h-3 w-3 ml-1" />
           </Button>
         </div>
       </CardHeader>
@@ -294,6 +311,12 @@ export function DashboardAgenda() {
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
                       {item.course}
                     </span>
+                    {/* Priority Label */}
+                    {!isCompleted && item.priority > 0 && daysUntil <= 7 && (
+                      <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded">
+                        Priority {item.priority}
+                      </span>
+                    )}
                   </div>
                   <h4 className="text-base font-semibold text-gray-900 dark:text-white truncate flex items-center gap-2">
                     {item.type === 'exam' ? (
@@ -351,14 +374,14 @@ export function DashboardAgenda() {
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-3 text-xl font-bold">
             <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            All Upcoming Items
+            All Upcoming Work
           </DialogTitle>
         </DialogHeader>
         <ScrollArea className="flex-1 pr-4">
           <div className="space-y-2">
             {allItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                No upcoming items found.
+                No upcoming work found.
               </div>
             ) : (
               allItems.map((item, idx) => {
@@ -410,6 +433,12 @@ export function DashboardAgenda() {
                         <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                           {item.course}
                         </span>
+                        {/* Priority Label */}
+                        {!isCompleted && item.priority > 0 && daysUntil <= 7 && (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded">
+                            Priority {item.priority}
+                          </span>
+                        )}
                       </div>
                       <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         {item.type === 'exam' ? (
@@ -464,4 +493,5 @@ export function DashboardAgenda() {
     </>
   );
 }
+
 

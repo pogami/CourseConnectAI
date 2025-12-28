@@ -119,7 +119,58 @@ export async function POST(request: NextRequest) {
       ? `Course: ${courseData.courseName || courseData.courseCode || 'Unknown'}\n`
       : '';
 
-    // Create a comprehensive prompt for document analysis
+    // Check if user has a specific question or just uploaded without asking
+    const hasSpecificQuestion = userPrompt && 
+      userPrompt.trim().length > 0 && 
+      !userPrompt.toLowerCase().includes('analyze this') &&
+      !userPrompt.toLowerCase().includes('provide insights') &&
+      !userPrompt.toLowerCase().includes('analyze the document');
+
+    // If no specific question, just acknowledge and ask what they need
+    if (!hasSpecificQuestion) {
+      // Quick scan to identify document type/topic (1 sentence acknowledgment)
+      const quickScanPrompt = `You are analyzing a document that a user uploaded. Read the document and provide a ONE SENTENCE acknowledgment of what it's about. Then ask what they need help with.
+
+CRITICAL INSTRUCTIONS:
+- Read the document to understand its topic/subject
+- Give ONE sentence acknowledging what the document is about (e.g., "I see you uploaded an essay about Copland's three planes of listening" or "I see you uploaded a resume highlighting your software engineering experience")
+- DO NOT analyze, summarize, or provide feedback
+- DO NOT list strengths, weaknesses, or suggestions
+- Simply acknowledge what it is, then ask: "What do you need help with - understanding the concepts, revising your essay, or something else?"
+
+BAD response:
+"The document you've shared is an analysis of Copland's three planes of listening. The essay discusses the sensuous plane, expressive plane, and sheerly musical plane in detail. Your writing demonstrates strong understanding of the concepts, though you could strengthen the conclusion. The structure is clear and well-organized..."
+
+GOOD response:
+"I see you uploaded an essay about Copland's three planes of listening. What do you need help with - understanding the concepts, revising your essay, or something else?"
+
+Now read the document and respond:`;
+
+      const quickScanResult = await provideStudyAssistanceWithFallback({
+        question: quickScanPrompt,
+        context: `${documentContext}Document: ${fileName} (${fileType})`,
+        fileContext: {
+          fileName,
+          fileType,
+          fileContent: extractedText.substring(0, 50000) // Just enough to identify topic
+        },
+        conversationHistory: [],
+        isSearchRequest: false
+      });
+
+      if (quickScanResult && quickScanResult.answer) {
+        return NextResponse.json({
+          success: true,
+          analysis: quickScanResult.answer,
+          provider: quickScanResult.provider,
+          fileName,
+          fileType,
+          extractedTextLength: extractedText.length
+        });
+      }
+    }
+
+    // Create a comprehensive prompt for document analysis (when user has a specific question)
     const analysisPrompt = userPrompt || `You are an expert document analyst providing detailed, actionable feedback. Analyze this document thoroughly and provide:
 
 **CRITICAL - PERSPECTIVE DETECTION (READ THIS FIRST):**

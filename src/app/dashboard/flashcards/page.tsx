@@ -418,68 +418,6 @@ export default function FlashcardsPage() {
             transition={{ duration: 0.5, delay: 0.4 }}
             className="lg:col-span-4 space-y-6"
           >
-            {/* Recent Sets */}
-            <Card className="border-0 bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-sm border border-white/10 shadow-lg">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Clock className="size-4 text-muted-foreground" />
-                  Recent Sets
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {flashcardSets.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>No flashcards yet</p>
-                    <p className="text-xs mt-1">Create your first set to get started!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {flashcardSets.slice(0, 3).map((set) => (
-                      <div key={set.id} className="group flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
-                        <div className="flex-1 min-w-0 mr-3">
-                          <h4 className="font-medium truncate text-sm">{set.title}</h4>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="secondary" className="text-[10px] h-5">
-                              {set.flashcards.length} cards
-                            </Badge>
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">
-                              {set.topic}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => loadSetAnalytics(set.title, set.id)}
-                          >
-                            <BarChart3 className="size-4 text-muted-foreground hover:text-primary" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => deleteFlashcardSet(set.id, set.title)}
-                          >
-                            <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {flashcardSets.length > 3 && (
-                      <Button
-                        variant="outline"
-                        className="w-full text-xs"
-                        onClick={() => setShowAnalyticsPopup(true)}
-                      >
-                        View All ({flashcardSets.length - 3} more)
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
 
             {/* Dynamic Content: Pro Tips for new users, Weakest Concepts/Study Schedule for active users */}
             {(() => {

@@ -32,7 +32,6 @@ import {
 import DashboardHeader from "@/components/dashboard-header";
 import { WebsiteTimeTracker } from "@/components/website-time-tracker";
 import { HideAISupport } from "@/components/hide-ai-support";
-import { FloatingChatButton } from "@/components/floating-chat-button";
 import Image from "next/image";
 import type { Auth } from "firebase/auth";
 import { signInAnonymously } from "firebase/auth";
@@ -776,7 +775,7 @@ export default function DashboardLayout({
         <GlobalCommandMenu />
         
         {/* Notification Toast Listener */}
-        <NotificationToastListener />
+        {/* <NotificationToastListener /> */}
         
         {/* Website Time Tracker */}
         <WebsiteTimeTracker />
@@ -784,8 +783,6 @@ export default function DashboardLayout({
         {/* Hide AI Support */}
         <HideAISupport />
         
-        {/* Floating Chat Button */}
-        <FloatingChatButton />
         
       </SidebarProvider>
   );

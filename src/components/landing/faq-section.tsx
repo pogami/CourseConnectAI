@@ -39,8 +39,8 @@ const faqs = [
 export function FAQSection() {
   return (
     <section className="py-32 bg-white dark:bg-gray-950 relative overflow-hidden">
-      {/* Background overlay - solid white in light mode, gradient in dark mode */}
-      <div className="absolute inset-0 bg-white dark:bg-gradient-to-b dark:from-gray-900/50 dark:via-transparent dark:to-gray-900/50" />
+      {/* Background overlay - solid white in light mode, dark in dark mode */}
+      <div className="absolute inset-0 bg-white dark:bg-gray-950" />
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <motion.div
@@ -75,7 +75,7 @@ export function FAQSection() {
               <AccordionItem 
                 key={index} 
                 value={`item-${index}`}
-                className="border border-gray-200 dark:border-gray-800 rounded-2xl px-6 py-2 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors duration-200"
+                className="border border-gray-200 dark:border-gray-800 rounded-2xl px-6 py-2 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200"
               >
                 <AccordionTrigger className="text-left text-lg font-semibold text-gray-900 dark:text-white py-4 hover:no-underline [&[data-state=open]>svg]:rotate-180">
                   {faq.question}

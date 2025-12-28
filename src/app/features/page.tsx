@@ -99,11 +99,11 @@ export default function FeaturesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
+    <div className="min-h-screen bg-white dark:bg-gray-950">
       <Navigation />
 
       {/* Header */}
-      <div className="relative bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-blue-900/40 overflow-hidden">
+      <div className="relative bg-white dark:bg-gray-950 overflow-hidden">
         {/* Animated Background Elements */}
         <div className="absolute inset-0">
           <motion.div
@@ -198,10 +198,10 @@ export default function FeaturesPage() {
       </div>
 
       {/* Interactive Features Section */}
-      <div className="bg-white dark:bg-gray-900/50 py-20 relative overflow-hidden">
+      <div className="bg-white dark:bg-gray-950 py-20 relative overflow-hidden">
         {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-1/3 h-full bg-white dark:bg-gradient-to-l dark:from-blue-900/10 dark:to-transparent pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-1/3 h-full bg-white dark:bg-gradient-to-r dark:from-purple-900/10 dark:to-transparent pointer-events-none" />
+        <div className="absolute top-0 right-0 w-1/3 h-full bg-white dark:bg-gray-950 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-1/3 h-full bg-white dark:bg-gray-950 pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
@@ -214,21 +214,21 @@ export default function FeaturesPage() {
                   onClick={() => setActiveFeature(index)}
                   className={`cursor-pointer p-6 rounded-2xl transition-all duration-300 border ${
                     activeFeature === index
-                      ? 'bg-white dark:bg-gray-800 shadow-xl border-blue-200 dark:border-blue-700'
-                      : 'bg-transparent border-transparent hover:bg-white/50 dark:hover:bg-gray-800/50'
+                      ? 'bg-white dark:bg-gray-900 shadow-xl border-blue-200 dark:border-blue-800'
+                      : 'bg-transparent border-transparent hover:bg-white/50 dark:hover:bg-gray-900/50'
                   }`}
                 >
                   <div className="flex items-center gap-4">
                     <div className={`p-3 rounded-xl ${
                       activeFeature === index
                         ? 'bg-blue-600 text-white shadow-lg'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                        : 'bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400'
                     }`}>
                       <feature.icon className="h-6 w-6" />
                     </div>
                     <div>
                       <h3 className={`font-bold ${
-                        activeFeature === index ? 'text-gray-900 dark:text-white' : 'text-gray-500'
+                        activeFeature === index ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'
                       }`}>
                         {feature.title}
                       </h3>
@@ -247,7 +247,7 @@ export default function FeaturesPage() {
                 transition={{ duration: 0.5 }}
                 className="h-full"
               >
-                <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-gray-100 dark:border-gray-700 min-h-[600px] flex flex-col">
+                <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-gray-100 dark:border-gray-800 min-h-[600px] flex flex-col">
                   <div className="flex-1">
                     <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white mb-6 tracking-tight">
                       {features[activeFeature].title}
@@ -278,7 +278,7 @@ export default function FeaturesPage() {
                     </div>
                   </div>
 
-                  <div className="pt-8 border-t border-gray-100 dark:border-gray-700 mt-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div className="pt-8 border-t border-gray-100 dark:border-gray-800 mt-auto flex flex-col sm:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-4 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em]">
                       <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400">
                         <Zap className="size-3" />

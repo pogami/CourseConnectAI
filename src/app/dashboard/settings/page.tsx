@@ -22,11 +22,6 @@ import {
   CheckCircle,
   RefreshCw,
   Shield,
-  Smartphone,
-  Monitor,
-  Tablet,
-  Globe,
-  MapPin,
   LogOut,
   GraduationCap,
   BookOpen,
@@ -58,12 +53,6 @@ export default function SettingsPage() {
   const [isClearingFiles, setIsClearingFiles] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [deviceInfo, setDeviceInfo] = useState<{
-    type: 'mobile' | 'tablet' | 'desktop';
-    browser: string;
-    platform: string;
-    location: string | null;
-  } | null>(null);
   const autoSyncUnsubscribesRef = useRef<Array<() => void>>([]);
 
   const [settings, setSettings] = useState({
@@ -71,9 +60,6 @@ export default function SettingsPage() {
       autoSync: true,
       analytics: true,
     },
-    security: {
-      newDeviceAlerts: false
-    }
   });
 
 
@@ -101,116 +87,6 @@ export default function SettingsPage() {
     loadUserSettings();
   }, [user]);
 
-  // Detect device type and location
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const detectDevice = () => {
-      const userAgent = navigator.userAgent.toLowerCase();
-      const platform = navigator.platform;
-      
-      // Detect device type
-      let deviceType: 'mobile' | 'tablet' | 'desktop' = 'desktop';
-      
-      if (/tablet|ipad|playbook|silk/i.test(userAgent)) {
-        deviceType = 'tablet';
-      } else if (/mobile|iphone|ipod|android|blackberry|opera|mini|windows\sce|palm|smartphone|iemobile/i.test(userAgent)) {
-        deviceType = 'mobile';
-      }
-      
-      // Detect browser
-      let browser = 'Unknown';
-      if (userAgent.includes('chrome') && !userAgent.includes('edg')) {
-        browser = 'Chrome';
-      } else if (userAgent.includes('firefox')) {
-        browser = 'Firefox';
-      } else if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
-        browser = 'Safari';
-      } else if (userAgent.includes('edg')) {
-        browser = 'Edge';
-      } else if (userAgent.includes('opera') || userAgent.includes('opr')) {
-        browser = 'Opera';
-      }
-      
-      setDeviceInfo({
-        type: deviceType,
-        browser,
-        platform: platform || 'Unknown',
-        location: null
-      });
-    };
-
-    const getLocation = async () => {
-      try {
-        // Try to get location from browser geolocation
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              try {
-                // Use reverse geocoding to get city/country
-                const response = await fetch(
-                  `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`
-                );
-                if (response.ok) {
-                  const data = await response.json();
-                  const locationStr = data.city && data.countryName 
-                    ? `${data.city}, ${data.countryName}`
-                    : data.countryName || data.principalSubdivision || 'Unknown Location';
-                  
-                  setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
-                }
-              } catch (err) {
-                console.warn('Could not fetch location details:', err);
-              }
-            },
-            () => {
-              // User denied or error - try IP-based location as fallback
-              fetch('https://ipapi.co/json/')
-                .then(res => res.json())
-                .then(data => {
-                  const locationStr = data.city && data.country_name
-                    ? `${data.city}, ${data.country_name}`
-                    : data.country_name || 'Unknown Location';
-                  setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
-                })
-                .catch(() => {
-                  // Fallback to timezone-based location
-                  try {
-                    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                    const locationStr = tz.replace(/_/g, ' ').split('/').pop() || 'Unknown Location';
-                    setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
-                  } catch {}
-                });
-            },
-            { timeout: 5000 }
-          );
-        } else {
-          // Fallback to IP-based location
-          fetch('https://ipapi.co/json/')
-            .then(res => res.json())
-            .then(data => {
-              const locationStr = data.city && data.country_name
-                ? `${data.city}, ${data.country_name}`
-                : data.country_name || 'Unknown Location';
-              setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
-            })
-            .catch(() => {
-              // Final fallback to timezone
-              try {
-                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                const locationStr = tz.replace(/_/g, ' ').split('/').pop() || 'Unknown Location';
-                setDeviceInfo(prev => prev ? { ...prev, location: locationStr } : null);
-              } catch {}
-            });
-        }
-      } catch (err) {
-        console.warn('Error getting location:', err);
-      }
-    };
-
-    detectDevice();
-    getLocation();
-  }, []);
 
   const handleSettingChange = (category: string, setting: string, value: boolean) => {
     setSettings(prev => ({
@@ -268,6 +144,21 @@ export default function SettingsPage() {
     setIsChangingPassword(true);
     try {
       await updatePassword(user, newPassword);
+      
+      // Send confirmation email via Resend
+      if (user.email) {
+        try {
+          await fetch('/api/auth/password-changed-confirmation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: user.email }),
+          });
+        } catch (emailError) {
+          console.error('Failed to send password change confirmation email:', emailError);
+          // Don't show error to user as password change was successful
+        }
+      }
+
       toast.success("Password Updated Successfully", {
         description: "Your password has been successfully updated."
       });
@@ -395,9 +286,9 @@ export default function SettingsPage() {
       return;
     }
 
-    if (deleteConfirm !== "DELETE") {
+    if (deleteConfirm !== user.email) {
       toast.error("Error", {
-        description: "Please type 'DELETE' exactly to confirm account deletion."
+        description: "Email address does not match."
       });
       return;
     }
@@ -1230,140 +1121,60 @@ export default function SettingsPage() {
           </Card>
         </section>
 
-{/* Security & Activity */}
+        {/* Account Actions */}
         <section>
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 rounded-lg bg-primary/10">
               <Shield className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold">Security & Activity</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">Manage your account security and active sessions</p>
+              <h2 className="text-xl font-semibold">Account Actions</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Manage your account data and settings</p>
             </div>
           </div>
           <Card className="border shadow-lg bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden">
             <CardContent className="p-8 space-y-8">
-              {/* Security Settings */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Security Settings</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-br from-muted/30 to-muted/10 border-2 border-border/50">
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-primary" />
-                      <Label className="text-sm font-semibold text-foreground cursor-pointer">
-                        New Device Alerts
-                      </Label>
-                    </div>
-                    <p className="text-xs text-muted-foreground ml-6">Receive email alerts when a new device signs in</p>
-                  </div>
-                  <Switch
-                    checked={settings.security?.newDeviceAlerts ?? false}
-                    onCheckedChange={(checked) => handleSettingChange('security', 'newDeviceAlerts', checked)}
-                  />
-                </div>
-              </div>
-
-              {/* Active Sessions */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Active Sessions</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
-                </div>
-                <div className="rounded-xl border-2 border-border/50 bg-gradient-to-br from-muted/30 to-muted/10 overflow-hidden shadow-sm">
-                  <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                    <div className="flex items-center gap-5 flex-1 w-full">
-                      <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center flex-shrink-0 ring-2 ring-primary/20 shadow-md">
-                        {deviceInfo ? (
-                          deviceInfo.type === 'mobile' ? (
-                            <Smartphone className="h-7 w-7 text-primary" />
-                          ) : deviceInfo.type === 'tablet' ? (
-                            <Tablet className="h-7 w-7 text-primary" />
-                          ) : (
-                            <Monitor className="h-7 w-7 text-primary" />
-                          )
-                        ) : (
-                          <Smartphone className="h-7 w-7 text-primary" />
-                        )}
-                      </div>
-                      <div className="space-y-2 flex-1 min-w-0">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <span className="font-bold text-base">
-                            {deviceInfo ? (
-                              <>
-                                {deviceInfo.browser} on {deviceInfo.platform}
-                              </>
-                            ) : (
-                              'Current Session'
-                            )}
-                          </span>
-                          <Badge variant="secondary" className="bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30 px-3 py-1 text-xs font-bold uppercase tracking-wider shadow-sm">
-                            Active Now
-                          </Badge>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <Globe className="h-4 w-4" />
-                            <span className="font-medium">
-                              {deviceInfo ? (
-                                <>
-                                  {deviceInfo.type.charAt(0).toUpperCase() + deviceInfo.type.slice(1)} • {deviceInfo.browser}
-                                </>
-                              ) : (
-                                typeof window !== 'undefined' ? navigator.userAgent : 'Unknown Device'
-                              )}
-                            </span>
-                          </div>
-                          {deviceInfo?.location && (
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4" />
-                              <span className="font-medium">{deviceInfo.location}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 sm:pl-0">
-                      <div className="text-sm text-muted-foreground text-right hidden sm:block">
-                        <p className="font-semibold">IP: Current Device</p>
-                        <p>Last active: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10 border-2 border-destructive/30 gap-2 h-10 font-semibold shadow-sm hover:shadow-md transition-all"
-                        onClick={() => {
-                          toast({
-                            title: "Session Revoked",
-                            description: "This session has been logged out. Please sign in again to continue.",
-                          });
-                        }}
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Revoke
-                      </Button>
-                    </div>
-                  </div>
-                  {/* Mobile only details */}
-                  <div className="px-5 pb-5 sm:hidden flex justify-between text-sm text-muted-foreground border-t-2 border-border/50 pt-4 bg-muted/30">
-                    <span className="font-medium">IP: Current Device</span>
-                    <span className="font-medium">Active: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Account Actions */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Account Actions</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3">
+              <style jsx global>{`
+                button.delete-account-btn,
+                .delete-account-btn[class*="button"],
+                .delete-account-btn,
+                button.delete-account-btn:not(:hover),
+                .delete-account-btn:not(:hover) {
+                  background-color: #dc2626 !important;
+                  background: #dc2626 !important;
+                  color: #000000 !important;
+                  border-color: #dc2626 !important;
+                  border: 2px solid #dc2626 !important;
+                }
+                button.delete-account-btn:hover,
+                .delete-account-btn:hover {
+                  background-color: #b91c1c !important;
+                  background: #b91c1c !important;
+                }
+                button.delete-account-btn svg,
+                .delete-account-btn svg,
+                .delete-account-btn * {
+                  color: #000000 !important;
+                }
+                html.dark button.delete-account-btn,
+                html.dark .delete-account-btn {
+                  background-color: #dc2626 !important;
+                  background: #dc2626 !important;
+                  color: #ffffff !important;
+                  border-color: #dc2626 !important;
+                }
+                html.dark button.delete-account-btn:hover,
+                html.dark .delete-account-btn:hover {
+                  background-color: #b91c1c !important;
+                  background: #b91c1c !important;
+                }
+                html.dark button.delete-account-btn svg,
+                html.dark .delete-account-btn svg,
+                html.dark .delete-account-btn * {
+                  color: #ffffff !important;
+                }
+              `}</style>
+              <div className="flex flex-col sm:flex-row gap-3">
                   <Button onClick={handleExportData} variant="outline" className="flex-1 gap-2 h-11 font-semibold shadow-sm hover:shadow-md transition-all border-2">
                     <Download className="size-4" />
                     Export My Data
@@ -1376,8 +1187,8 @@ export default function SettingsPage() {
                   }}>
                     <DialogTrigger asChild>
                       <Button 
-                        variant="destructive" 
-                        className="flex-1 gap-2 h-11 font-semibold shadow-sm hover:shadow-md transition-all border-2"
+                        className="delete-account-btn flex-1 gap-2 h-11 font-semibold shadow-sm hover:shadow-md transition-all border-2"
+                        style={{ backgroundColor: '#dc2626', color: '#000000', borderColor: '#dc2626' }}
                       >
                         <Trash2 className="size-4" />
                         Delete Account
@@ -1394,60 +1205,62 @@ export default function SettingsPage() {
                       e.preventDefault();
                     }
                   }}>
-                    <DialogHeader>
-                      {!isDeletingAccount && (
-                        <button
-                          onClick={() => setShowDeleteAccountDialog(false)}
-                          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10"
-                        >
-                          <X className="h-4 w-4" />
-                          <span className="sr-only">Close</span>
-                        </button>
-                      )}
-                      <DialogTitle>
-                        Delete Account
-                      </DialogTitle>
-                      <DialogDescription>
+                    <DialogHeader className="pb-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
+                          <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+                        </div>
+                        <DialogTitle className="text-xl font-bold text-red-600 dark:text-red-400">
+                          Delete Account
+                        </DialogTitle>
+                      </div>
+                      <DialogDescription className="text-base pt-1">
                         {isDeletingAccount
-                          ? "Deleting your account and all data. Please wait..."
-                          : "This action cannot be undone. This will permanently delete your account and remove all your data from our servers."}
+                          ? "Processing request... This will only take a moment."
+                          : "All your data, messages, and files will be permanently erased. This action is final and cannot be reversed."}
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                        <h4 className="font-medium text-red-800 dark:text-red-200 mb-2">What will be deleted:</h4>
-                        <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
-                          <li>• All your chat conversations and messages</li>
-                          <li>• All uploaded files and syllabi</li>
-                          <li>• All notifications and settings</li>
-                          <li>• Your user profile and account data</li>
-                          <li>• Your login credentials and authentication</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <Label htmlFor="deleteConfirm">Type "DELETE" to confirm</Label>
+
+                    <div className="space-y-6 mt-2">
+                      <div className="space-y-3">
+                        <Label htmlFor="deleteConfirm" className="text-sm font-medium text-muted-foreground">
+                          To confirm, please type your email <span className="text-foreground font-bold select-none">{user?.email}</span> below:
+                        </Label>
                         <Input
                           id="deleteConfirm"
                           value={deleteConfirm}
                           onChange={(e) => setDeleteConfirm(e.target.value)}
-                          placeholder="Type DELETE to confirm"
-                          className="mt-1"
+                          placeholder="Confirm your email address"
+                          className="h-12 text-base font-medium border-red-200 focus-visible:ring-red-500/20"
+                          disabled={isDeletingAccount}
+                          autoFocus
                         />
                       </div>
-                      <div className="flex gap-2">
+
+                      <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowDeleteAccountDialog(false);
+                            setDeleteConfirm("");
+                          }}
+                          disabled={isDeletingAccount}
+                          className="flex-1 h-11 font-semibold"
+                        >
+                          Keep My Account
+                        </Button>
                         <Button
                           onClick={handleDeleteAccount}
-                          disabled={isDeletingAccount || deleteConfirm !== "DELETE"}
-                          variant="destructive"
-                          className="flex-1"
+                          disabled={isDeletingAccount || deleteConfirm !== user?.email}
+                          className="delete-account-btn flex-1 h-11 font-bold shadow-sm transition-all border-2"
+                          style={{ backgroundColor: '#dc2626', color: '#000000', borderColor: '#dc2626' }}
                         >
-                          {isDeletingAccount ? "Deleting..." : "Permanently Delete Account"}
+                          {isDeletingAccount ? "Deleting Account..." : "Permanently Delete"}
                         </Button>
                       </div>
                     </div>
                   </DialogContent>
                 </Dialog>
-                </div>
               </div>
             </CardContent>
           </Card>

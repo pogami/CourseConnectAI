@@ -2717,7 +2717,7 @@ export default function ChatPage() {
                                                 <div key={uniqueKey} className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'} w-full px-4`}>
                                                     <div className={`flex gap-4 ${message.sender === 'user' ? 'max-w-[80%]' : 'max-w-[80%]'} min-w-0 ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                                                         {message.sender === 'bot' ? (
-                                                            null
+                                                            <img src="/favicon-32x32.png" alt="CourseConnect AI" className="w-10 h-10 flex-shrink-0 object-contain rounded-full" />
                                                         ) : (
                                                             <Avatar className="w-10 h-10 flex-shrink-0">
                                                                 {message.sender === 'user' && !isGuest && userProfilePicture ? (

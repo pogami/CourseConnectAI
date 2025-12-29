@@ -197,6 +197,11 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           }
 
           let answer = aiResult.answer;
+          
+          // Ensure answer is a string
+          if (typeof answer !== 'string') {
+            answer = String(answer || '');
+          }
 
           // Post-process the response to fix formatting issues
           // Fix missing spaces after punctuation
@@ -217,6 +222,11 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           // Only fix spacing issues, don't add paragraph breaks
           // Trim and clean
           answer = answer.trim();
+          
+          // Ensure answer is not empty after processing
+          if (!answer) {
+            answer = "I apologize, but I couldn't generate a response. Please try again.";
+          }
 
           // Stream the response word by word for smooth, natural streaming
           // Split into words and spaces, preserving the original structure

@@ -157,26 +157,12 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           // Log the AI response type for debugging
           console.log('🎨 AI Response Type:', aiResponseType);
 
-          // Build response style guidance based on aiResponseType
-          let responseStyleGuidance = '';
-          if (aiResponseType === 'detailed') {
-            responseStyleGuidance = '\n\n[HIGHEST PRIORITY: Provide a DETAILED response. Include comprehensive explanations, multiple examples, step-by-step breakdowns, and thorough context. Be thorough and expansive in your answer.]';
-          } else if (aiResponseType === 'conversational') {
-            responseStyleGuidance = '\n\n[HIGHEST PRIORITY: Provide a CONVERSATIONAL response. Use a friendly, approachable tone. Write as if you are having a natural conversation with the student. Be warm, engaging, and use casual language when appropriate.]';
-          } else if (aiResponseType === 'analytical') {
-            responseStyleGuidance = '\n\n[HIGHEST PRIORITY: Provide an ANALYTICAL response. Break down the problem systematically. Use logical reasoning, identify key components, analyze relationships, and provide structured insights. Be methodical and precise.]';
-          } else {
-            // Default to concise
-            responseStyleGuidance = '\n\n[HIGHEST PRIORITY: Provide a CONCISE response. Be brief, direct, and to the point. Avoid unnecessary elaboration. Get straight to the answer.]';
-          }
-
-          // Enhance question with frustration guidance if needed
+          // Don't add response style guidance to the question - it's handled by the AI service via aiResponseType parameter
+          // This prevents the instruction from appearing in the actual response
           let finalQuestion = enhancedQuestion;
           if (frustration.isFrustrated) {
-            // Include frustration guidance in the question itself so it's part of the prompt
-            finalQuestion = `${enhancedQuestion}\n\n[IMPORTANT CONTEXT: The student is showing signs of frustration (${frustration.level} level). ${frustration.reasons.join(', ')}. ${frustration.suggestedApproach === 'analogy' ? 'Use a real-world analogy or sports example instead of formulas. Make it relatable.' : frustration.suggestedApproach === 'step-by-step' ? 'Break this down into very small, clear steps. Go slowly.' : frustration.suggestedApproach === 'example' ? 'Use concrete examples to illustrate the concept.' : frustration.suggestedApproach === 'break' ? 'Break this into the smallest possible pieces.' : ''} Start your response with empathy, acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.]${responseStyleGuidance}`;
-          } else {
-            finalQuestion = enhancedQuestion + responseStyleGuidance;
+            // Only add frustration guidance if needed (as internal context, not visible to user)
+            finalQuestion = `${enhancedQuestion}\n\n[IMPORTANT CONTEXT: The student is showing signs of frustration (${frustration.level} level). ${frustration.reasons.join(', ')}. ${frustration.suggestedApproach === 'analogy' ? 'Use a real-world analogy or sports example instead of formulas. Make it relatable.' : frustration.suggestedApproach === 'step-by-step' ? 'Break this down into very small, clear steps. Go slowly.' : frustration.suggestedApproach === 'example' ? 'Use concrete examples to illustrate the concept.' : frustration.suggestedApproach === 'break' ? 'Break this into the smallest possible pieces.' : ''} Start your response with empathy, acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.]`;
           }
 
           // Call AI service
@@ -193,6 +179,7 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           });
 
           if (!aiResult || !aiResult.answer) {
+            console.error('AI service returned invalid response:', aiResult);
             throw new Error('AI service returned invalid response');
           }
 
@@ -200,7 +187,14 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           
           // Ensure answer is a string
           if (typeof answer !== 'string') {
+            console.warn('AI answer is not a string, converting:', typeof answer);
             answer = String(answer || '');
+          }
+
+          // Check if answer is empty before processing
+          if (!answer || !answer.trim()) {
+            console.error('AI service returned empty answer');
+            throw new Error('AI service returned empty response');
           }
 
           // Post-process the response to fix formatting issues
@@ -223,49 +217,56 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           // Trim and clean
           answer = answer.trim();
           
-          // Ensure answer is not empty after processing
-          if (!answer) {
-            answer = "I apologize, but I couldn't generate a response. Please try again.";
+          // Final check - ensure answer is not empty after processing
+          if (!answer || !answer.trim()) {
+            console.error('Answer became empty after processing');
+            throw new Error('AI response became empty after processing');
           }
 
-          // Stream the response word by word for smooth, natural streaming
-          // Split into words and spaces, preserving the original structure
-          const tokens = answer.match(/\S+|\s+/g) || [answer];
+          // Stream the response in chunks for smooth, natural streaming
+          // Use larger chunks to reduce lag and glitches
+          const chunkSize = 15; // Characters per chunk for smoother streaming
+          let position = 0;
           
-          for (const token of tokens) {
-            // Skip empty strings
-            if (!token) continue;
+          while (position < answer.length) {
+            // Get next chunk
+            const chunk = answer.slice(position, position + chunkSize);
+            position += chunkSize;
             
-            // Send each token (word or space) individually
+            // Skip empty chunks
+            if (!chunk.trim() && chunk !== ' ') continue;
+            
+            // Send chunk
             controller.enqueue(encoder.encode(JSON.stringify({
               type: 'content',
-              content: token
+              content: chunk
             }) + '\n'));
 
-            // Small delay between tokens for natural streaming effect
-            // Longer delay for words, shorter for spaces/newlines
-            const isWord = token.trim().length > 0;
-            const delay = isWord ? 25 : 8;
-            await new Promise(resolve => setTimeout(resolve, delay));
+            // Smaller, more consistent delay for smoother streaming
+            await new Promise(resolve => setTimeout(resolve, 15));
           }
 
-          // Send done signal with final response
+          // Send done signal with final response (no delay needed)
           controller.enqueue(encoder.encode(JSON.stringify({
             type: 'done',
             fullResponse: answer
           }) + '\n'));
-          
-          // Small delay before closing to ensure last chunk is sent
-          await new Promise(resolve => setTimeout(resolve, 10));
 
           controller.close();
         } catch (error: any) {
           console.error('Streaming error:', error);
-          controller.enqueue(encoder.encode(JSON.stringify({
-            type: 'error',
-            message: error.message || 'Failed to generate response'
-          }) + '\n'));
-          controller.close();
+          console.error('Error stack:', error.stack);
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify({
+              type: 'error',
+              message: error.message || 'Failed to generate response',
+              error: error.message || 'Unknown error'
+            }) + '\n'));
+            controller.close();
+          } catch (closeError) {
+            // If controller is already closed or errored, just log it
+            console.error('Error closing stream controller:', closeError);
+          }
         }
       }
     });

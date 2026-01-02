@@ -276,6 +276,22 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
+  const [showGraph, setShowGraph] = useState(false);
+  
+  // Show graph after text has appeared (delay based on text length)
+  useEffect(() => {
+    if (textOnly) {
+      // Delay based on text length - longer text gets more time to read
+      const delay = Math.max(800, Math.min(textOnly.length * 30, 2000));
+      const timer = setTimeout(() => {
+        setShowGraph(true);
+      }, delay);
+      return () => clearTimeout(timer);
+    } else {
+      // If no text, show graph immediately
+      setShowGraph(true);
+    }
+  }, [textOnly]);
   
   const functions = graphData.data?.functions || (graphData.data?.function ? [{ 
     function: graphData.data.function, 
@@ -385,6 +401,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
+        {showGraph && (
         <motion.div 
           className="mt-4 p-4 bg-card border border-border rounded-xl"
           initial={{ opacity: 0, y: 20 }}
@@ -433,6 +450,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             </div>
           </div>
         </motion.div>
+        )}
       </div>
     );
   }
@@ -452,6 +470,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
+        {showGraph && (
         <motion.div 
           className="mt-4 p-4 bg-card border border-border rounded-xl"
           initial={{ opacity: 0, y: 20 }}
@@ -504,6 +523,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             </PieChart>
           </div>
         </motion.div>
+        )}
       </div>
     );
   }
@@ -523,6 +543,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
+        {showGraph && (
         <motion.div 
           className="mt-4 p-4 bg-card border border-border rounded-xl"
           initial={{ opacity: 0, y: 20 }}
@@ -570,6 +591,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             </div>
           </div>
         </motion.div>
+        )}
       </div>
     );
   }
@@ -589,6 +611,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
+        {showGraph && (
         <motion.div 
           className="mt-4 p-4 bg-card border border-border rounded-xl"
           initial={{ opacity: 0, y: 20 }}
@@ -644,6 +667,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             </div>
           </div>
         </motion.div>
+        )}
       </div>
     );
   }
@@ -664,6 +688,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             ))}
           </div>
         )}
+        {showGraph && (
         <motion.div 
           className="mt-4 p-4 bg-card border border-border rounded-xl"
           initial={{ opacity: 0, y: 20 }}
@@ -714,6 +739,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
             </div>
           </div>
         </motion.div>
+        )}
       </div>
     );
   }
@@ -780,6 +806,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
           ))}
         </div>
       )}
+      {showGraph && (
       <motion.div 
         className="mt-4 p-4 bg-card border border-border rounded-xl dark:bg-transparent dark:border-0 dark:p-0"
         initial={{ opacity: 0, y: 20 }}
@@ -889,6 +916,7 @@ export function InteractiveGraph({ graphData, cleanContent, className }: Interac
           </div>
         ) : null}
       </motion.div>
+      )}
     </div>
   );
 }

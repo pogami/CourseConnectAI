@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Text content is required' }, { status: 400 });
     }
     
-    // Use Google AI API for intelligent parsing
+    // Use Google AI Gemini 3 Flash Preview for intelligent parsing
     const googleApiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
     
     if (!googleApiKey) {
@@ -94,8 +94,8 @@ Extract the following information and return as JSON:
 
 IMPORTANT: Return ONLY the JSON object above, with actual values extracted from the syllabus text. Use null for missing information.`;
 
-    // Use Gemini o3-mini or o4-mini (fallback to flash if not available)
-    const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    // Use Gemini 3 Flash Preview for syllabus parsing
+    const model = 'gemini-3-flash-preview';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleApiKey}`, {
       method: 'POST',
       headers: {
@@ -106,12 +106,17 @@ IMPORTANT: Return ONLY the JSON object above, with actual values extracted from 
           parts: [{
             text: prompt
           }]
-        }]
+        }],
+        generationConfig: {
+          temperature: 0.3,
+          responseMimeType: 'application/json'
+        }
       })
     });
     
     if (!response.ok) {
-      throw new Error(`Google AI API failed: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Google AI API failed: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();

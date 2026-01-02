@@ -41,14 +41,20 @@ ${syllabusText}
 
 JSON:`;
 
-    // Use OpenAI directly for syllabus analysis
+    // Use Google AI Gemini 3 Flash Preview for syllabus analysis
     let aiResponse: string;
     let selectedModel: string;
     
     try {
-      console.log('🤖 Using OpenAI for syllabus analysis...', { syllabusTextLength: syllabusText.length });
+      console.log('🤖 Using Google AI Gemini 3 Flash Preview for syllabus analysis...', { syllabusTextLength: syllabusText.length });
       
-      // Add timeout to OpenAI API call (20 seconds)
+      const googleApiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
+      
+      if (!googleApiKey) {
+        throw new Error('Google AI API key not configured');
+      }
+      
+      // Add timeout to Google AI API call (20 seconds)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
@@ -56,41 +62,45 @@ JSON:`;
       
       let response: Response;
       try {
-        response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.1,
-          max_tokens: 2000,
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${googleApiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: prompt
+              }]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json'
+            }
           }),
           signal: controller.signal
-      });
+        });
         clearTimeout(timeoutId);
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
-          throw new Error('OpenAI API request timed out after 20 seconds');
+          throw new Error('Google AI API request timed out after 20 seconds');
         }
         throw fetchError;
       }
 
       if (response.ok) {
         const data = await response.json();
-        aiResponse = data.choices?.[0]?.message?.content || '';
-        selectedModel = 'openai';
-        console.log('✅ OpenAI succeeded for syllabus analysis, response length:', aiResponse.length);
+        aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        selectedModel = 'google';
+        console.log('✅ Google AI succeeded for syllabus analysis, response length:', aiResponse.length);
       } else {
         const errorData = await response.text();
-        console.log('OpenAI error response:', errorData);
-        throw new Error(`OpenAI failed: ${response.status}`);
+        console.log('Google AI error response:', errorData);
+        throw new Error(`Google AI failed: ${response.status}`);
       }
     } catch (error) {
-      console.error('OpenAI failed:', error);
+      console.error('Google AI failed:', error);
       return NextResponse.json({
         success: false,
         error: 'AI service is temporarily unavailable. Please try again later.'

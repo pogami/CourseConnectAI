@@ -22,7 +22,6 @@ import {
   generatePracticeExamInstructions
 } from '@/lib/ai-intelligence-utils';
 import { extractSourcesFromCourseData, parseCitationsFromResponse } from '@/lib/syllabus-source-extractor';
-import { generateMainSystemPrompt, generateOpenAISystemMessage } from '@/ai/prompts/main-system-prompt';
 
 export const runtime = 'nodejs';
 
@@ -118,6 +117,16 @@ export async function POST(request: NextRequest) {
       chatId,
       timestamp: new Date().toISOString()
     });
+
+    // Get current date for context awareness (needed for prompt generation)
+    const today = new Date();
+    const currentDate = today.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const dateFormatted = currentDate; // For use in prompt generation
 
     // Build course-specific context with intelligent features
     let courseContext = '';
@@ -291,15 +300,6 @@ The student is struggling with this concept.
 - Check understanding before moving forward
 - Be extra patient and encouraging`;
       }
-      
-      // Get current date for context awareness
-      const today = new Date();
-      const currentDate = today.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
 
       // Categorize exams as upcoming or past
       const upcomingExams = exams?.filter((exam: any) => calculateDaysUntil(exam.date || '') >= 0) || [];
@@ -467,218 +467,48 @@ CRITICAL - CITATION REQUIREMENTS:
 Example citation format:
 "The course meets on Mondays and Wednesdays [Source: ${courseData?.fileName || 'Syllabus'}, Page 1, Line 15] and the final exam is on December 15th [Source: ${courseData?.fileName || 'Syllabus'}, Page 3, Line 42]."`;
 
-    // Get full syllabus text for the prompt
+    // Get full syllabus text for context
     const fullSyllabusText = courseData?.syllabusText && courseData.syllabusText.trim().length > 0
       ? (courseData.syllabusText.length > 200000 ? courseData.syllabusText.substring(0, 200000) : courseData.syllabusText)
       : undefined;
 
-    // Use shared prompt generator
-    const basePrompt = generateMainSystemPrompt({
-      syllabusContent: fullSyllabusText ? `🚨🚨🚨🚨🚨 THE COMPLETE SYLLABUS TEXT IS BELOW - YOU MUST USE IT 🚨🚨🚨🚨🚨
+    // Build enriched context with course information (similar to general chat)
+    // Include course context and syllabus text so the AI can reference it naturally
+    let enrichedContext = courseContext || 'Class Chat';
+    if (fullSyllabusText) {
+      enrichedContext = `${courseContext}\n\nFULL SYLLABUS TEXT:\n${fullSyllabusText.substring(0, 100000)}`; // Limit syllabus text length
+    }
 
-THE ENTIRE SYLLABUS FOR THIS COURSE:
-${fullSyllabusText}
-
-[END OF SYLLABUS TEXT]
-
-🚨🚨🚨 CRITICAL RULES - READ THESE CAREFULLY 🚨🚨🚨
-1. When asked about ANYTHING (syllabus, office hours, policies, deadlines, grading, attendance, professor name, class time, TOPICS, etc.), you MUST search the syllabus text above
-2. If the information is in the syllabus text above, extract it and answer DIRECTLY (e.g., "Office hours are Monday 2-4pm" or "Your professor is Dr. Smith")
-3. When asked about course topics, list ALL topics from the syllabus text above - extract and list EVERYTHING, don't say "and more" or "as outlined in the syllabus"
-4. NEVER say "check your syllabus", "you can find it in the syllabus", "reach out to your professor", "typically set by", "can typically be found", "distributed by your professor", "and more as outlined in the course syllabus", or any variation
-5. NEVER give generic answers - if it's in the syllabus text above, extract and state it directly
-6. NEVER say "and more" when listing topics - you HAVE the full syllabus, so list everything that's in it
-7. If asked "where is the syllabus" or "what is the syllabus", explain that you have the full syllabus text above and can answer questions about it
-8. If the information is NOT in the syllabus text above, say: "I don't have that information in your syllabus"
-9. The syllabus text above is REAL and COMPLETE - use it directly in ALL your answers, not generic descriptions` : undefined,
-      courseInfo: courseContext,
-      dateFormatted: dateFormatted,
-      userName: finalUserName || undefined,
-      frustrationGuidance: frustrationGuidance,
-      additionalContext: additionalContext
-    });
-
-    const prompt = `${basePrompt}
-
-${additionalContext}
-
-${convoContext}Student: ${cleanedQuestion}
-
-CourseConnect AI:`;
-
-    // Use OpenAI as primary for class chat (better contextual responses)
+    // Use the same dual AI service as general chat for consistent conversational style
     let aiResponse: string;
     let selectedModel: string;
     
     try {
-      console.log('Using OpenAI for class chat (better context understanding)');
+      console.log('Using dual AI service for class chat (same as general chat)');
       
-      // Try OpenAI first with gpt-4o-mini
-      if (process.env.OPENAI_API_KEY) {
-        try {
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'gpt-4o',
-              messages: [
-                {
-                  role: 'system',
-                  content: generateOpenAISystemMessage({
+      // Use provideStudyAssistanceWithFallback for natural, conversational responses
+      const aiResult = await provideStudyAssistanceWithFallback({
+        question: cleanedQuestion,
+        context: enrichedContext,
+        conversationHistory: conversationHistory || [],
+        isSearchRequest: false,
                     userName: finalUserName || undefined,
-                    syllabusContent: fullSyllabusText ? 'See FULL SYLLABUS TEXT in user message' : undefined
-                  })
-                },
-                {
-                  role: 'user',
-                  content: prompt
-                }
-              ],
-              temperature: 0.7,
-              max_tokens: 1500,
-            })
-          });
+        userId: userId || undefined
+      });
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.log('OpenAI API error:', response.status, errorText);
-            throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
-          }
-
-          const data = await response.json();
-          aiResponse = data.choices?.[0]?.message?.content || 'No response generated';
-          selectedModel = 'openai-gpt4o';
-          
-          console.log(`Class chat AI response from OpenAI (gpt-4o-mini): ${aiResponse.substring(0, 100)}...`);
-          
-        } catch (openaiError) {
-          console.log('OpenAI failed, trying Google AI:', openaiError);
-          throw openaiError;
-        }
-      } else {
-        throw new Error('No OpenAI API key');
+      if (!aiResult || !aiResult.answer) {
+        throw new Error('AI service returned invalid response');
       }
+
+      aiResponse = aiResult.answer;
+      selectedModel = aiResult.provider || 'unknown';
+      
+      console.log(`Class chat AI response from ${selectedModel}: ${aiResponse.substring(0, 100)}...`);
       
     } catch (error) {
-      // Fallback to Google AI if OpenAI fails
-      try {
-        if (process.env.GOOGLE_AI_API_KEY) {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              contents: [{
-                parts: [{
-                  text: prompt
-                }]
-              }],
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 1500,
-              }
-            })
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.log('Google AI API error:', response.status, errorText);
-            throw new Error(`Google AI API error: ${response.status} - ${errorText}`);
-          }
-
-          const data = await response.json();
-          aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated';
-          selectedModel = 'google-gemini';
-          
-          console.log(`Class chat AI response from Google AI: ${aiResponse.substring(0, 100)}...`);
-          
-        } else {
-          throw new Error('No Google AI API key');
-        }
-        
-      } catch (googleError) {
-        console.log('AI service failed for class chat, using fallback response');
-        
-        // Enhanced fallback responses that are proactive and helpful
-        const lowerQuestion = cleanedQuestion.toLowerCase();
-        
-        if (lowerQuestion.includes('hello') || lowerQuestion.includes('hi') || lowerQuestion.includes('hey')) {
-          aiResponse = `Hello! I'm your AI assistant for ${courseData?.courseName || 'this course'}. I'm excited to help you succeed! 
-
-I can assist you with:
-• Understanding course concepts and topics
-• Assignment guidance and study strategies  
-• Exam preparation and review
-• Clarifying course requirements
-
-What would you like to dive into first?`;
-        } else if (lowerQuestion.includes('help') || lowerQuestion.includes('can you help')) {
-          if (courseData) {
-            const topics = courseData.topics?.slice(0, 3).join(', ') || 'various topics';
-            const assignmentCount = courseData.assignments?.length || 0;
-            const examCount = courseData.exams?.length || 0;
-            
-            aiResponse = `Of course! I'm excited to help you with ${courseData.courseName}. 
-
-Let me dive right in - this course covers some really interesting topics like ${topics}${courseData.topics?.length > 3 ? ' and more' : ''}. ${assignmentCount > 0 ? `You've got ${assignmentCount} assignments coming up, ` : ''}${examCount > 0 ? `and ${examCount} exams to prepare for. ` : ''}
-
-What's been challenging for you? Are you struggling with understanding any particular concepts, or do you need help with study strategies? I'm here to break things down and help you feel more confident about the material!`;
-          } else {
-            aiResponse = `Absolutely! I'm here to help you succeed. 
-
-I can help you understand course concepts, work through assignments, prepare for exams, and develop effective study strategies. 
-
-What's on your mind? What topic or concept would you like to dive into together?`;
-          }
-        } else if (lowerQuestion.includes('what is this course') || lowerQuestion.includes('tell me about this course')) {
-          if (courseData) {
-            const topics = courseData.topics?.slice(0, 3).join(', ') || 'various topics';
-            aiResponse = `Great question! ${courseData.courseName}${courseData.courseCode ? ` (${courseData.courseCode})` : ''} is an exciting course that covers ${topics}${courseData.topics?.length > 3 ? ' and more' : ''}.
-
-${courseData.professor ? `👨‍🏫 **Professor**: ${courseData.professor}` : ''}
-📚 **Topics**: ${courseData.topics?.length || 0} key concepts to master
-📝 **Assignments**: ${courseData.assignments?.length || 0} assignments to complete
-📅 **Exams**: ${courseData.exams?.length || 0} exams to prepare for
-
-This course will help you develop important skills and knowledge. What aspect interests you most?`;
-          } else {
-            aiResponse = "I'm having some trouble right now, but don't worry! 🤔\n\n**Here's what you can do:**\n\n📚 Check your syllabus details in the sidebar\n📝 Review upcoming assignments and exam dates\n🔍 Browse through your course topics\n⏰ Try asking me again in a moment\n\nI'll be back soon!";
-          }
-        } else if (lowerQuestion.includes('assignment') || lowerQuestion.includes('homework')) {
-          const assignmentCount = courseData?.assignments?.length || 0;
-          aiResponse = `I'd love to help with assignments! ${assignmentCount > 0 ? `I see you have ${assignmentCount} assignments in this course. ` : ''}
-
-Let's tackle this together! I can help you break down the requirements, understand the concepts, and structure your work effectively. 
-
-What assignment are you working on? What's the main challenge you're facing - is it understanding the topic, organizing your thoughts, or something else?`;
-        } else if (lowerQuestion.includes('exam') || lowerQuestion.includes('test')) {
-          const examCount = courseData?.exams?.length || 0;
-          aiResponse = `Exam preparation is one of my specialties! ${examCount > 0 ? `I can help you prepare for your ${examCount} exams. ` : ''}
-
-Let's create a solid study plan together! I can help you review key concepts, practice with sample questions, and develop effective study strategies that work for you.
-
-What exam are you preparing for? Which topics are you feeling less confident about?`;
-        } else {
-          if (courseData) {
-            aiResponse = `That's a great question about ${courseData.courseName}! I'm here to help you succeed.
-
-I can help you understand course concepts, work through assignments, prepare for exams, and develop effective study strategies. 
-
-What's on your mind? What topic or concept would you like to explore together?`;
-          } else {
-            aiResponse = `That's a great question! I'm here to help you succeed academically.
-
-I can help you understand complex concepts, work through assignments, prepare for exams, and develop effective study strategies.
-
-What would you like to dive into? What's challenging you right now?`;
-          }
-        }
-        selectedModel = 'fallback';
-      }
+      console.log('AI service failed for class chat:', error);
+      // Just throw the error - let the natural AI handle it or show error
+      throw error;
     }
 
     // Prepend empathetic prefix if frustration detected

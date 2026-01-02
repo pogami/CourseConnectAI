@@ -12,8 +12,6 @@ import {
   Chatting01Icon,
   UserGroupIcon,
   MoreVerticalIcon,
-  Download01Icon,
-  RotateLeft01Icon,
   Upload01Icon,
   BookOpen01Icon,
   Delete01Icon,
@@ -24,6 +22,7 @@ import {
   Book01Icon,
   SparklesIcon
 } from "hugeicons-react";
+import { RefreshCw } from "lucide-react";
 import { useChatStore } from "@/hooks/use-chat-store";
 import { useTextExtraction } from "@/hooks/use-text-extraction";
 import { useSmartDocumentAnalysis } from "@/hooks/use-smart-document-analysis";
@@ -146,7 +145,6 @@ export default function ChatPage() {
         addUserJoinMessage,
         isStoreLoading, 
         initializeAuthListener, 
-        exportChat, 
         resetChat, 
         deleteChat, 
         initializeGeneralChats,
@@ -1133,6 +1131,7 @@ export default function ChatPage() {
             let sources: any[] = [];
             let metadata: any = null;
             let searchModeEnabledBeforeAPI = false;
+            let aiMessageWritten = false; // Flag to ensure AI message is only written once
             
             try {
                 // Get AI response via API call with enhanced error handling
@@ -1282,24 +1281,20 @@ export default function ChatPage() {
 
                                 // Handle different response formats - prioritize streaming format
                                 if (data.type === "content" && data.content) {
-                                    // Stream content chunks incrementally (word by word)
+                                    // Stream content chunks incrementally
                                     fullResponse += data.content;
-                                    setStreamingResponse(fullResponse);
+                                    // Use requestAnimationFrame for smooth updates
+                                    requestAnimationFrame(() => {
+                                        setStreamingResponse(fullResponse);
+                                    });
                                 } else if (data.type === "done") {
-                                    // Ensure we have the complete response
+                                    // Use the full response from done message (most accurate)
                                     const finalResponse = data.fullResponse || fullResponse;
                                     
-                                    // Only update if we got a complete response and our accumulated one is different
-                                    if (data.fullResponse && data.fullResponse !== fullResponse) {
-                                        fullResponse = data.fullResponse;
-                                        setStreamingResponse(fullResponse);
-                                    } else if (fullResponse.trim()) {
-                                        // Use accumulated response if we have it
-                                        setStreamingResponse(fullResponse);
-                                    } else if (data.fullResponse) {
-                                        // Fallback: use done message content if we got no chunks
-                                        fullResponse = data.fullResponse;
-                                        setStreamingResponse(fullResponse);
+                                    // Final update - ensure it's clean and complete
+                                    if (finalResponse.trim()) {
+                                        setStreamingResponse(finalResponse);
+                                        fullResponse = finalResponse; // Update local var for consistency
                                     }
                                     
                                     // Collect metadata
@@ -1314,10 +1309,20 @@ export default function ChatPage() {
                                     setStreamingResponse(fullResponse);
                                     if (data.sources) sources = data.sources;
                                     if (data.metadata) metadata = data.metadata;
+                                } else if (data.type === "error") {
+                                    // Handle error responses from streaming API - set error message instead of throwing
+                                    const errorMsg = data.message || data.error || 'Failed to generate response';
+                                    console.error('Streaming API error:', errorMsg);
+                                    fullResponse = `Error: ${errorMsg}. Please check server logs for details.`;
+                                    setStreamingResponse(fullResponse);
+                                    // Don't throw - let it continue so the error message gets saved
                                 } else if (data.success === false && data.error) {
-                                    // Handle error responses
-                                    console.error('Streaming API error:', data.error);
-                                    throw new Error(data.error || 'Failed to generate response');
+                                    // Handle error responses (legacy format)
+                                    const errorMsg = data.error || 'Failed to generate response';
+                                    console.error('Streaming API error:', errorMsg);
+                                    fullResponse = `Error: ${errorMsg}. Please check server logs for details.`;
+                                    setStreamingResponse(fullResponse);
+                                    // Don't throw - let it continue so the error message gets saved
                                 }
                                 } catch (e) {
                                     // Skip invalid JSON lines, but log for debugging
@@ -1332,24 +1337,10 @@ export default function ChatPage() {
                         if (readError?.name === 'AbortError' || abortController.signal.aborted) {
                             console.log('🛑 Stream reading aborted');
                             reader.cancel().catch(() => {}); // Ensure reader is cancelled
-                            // If aborted, save what we have and return early
+                            // If aborted, DON'T write to Firestore here - let the normal completion handler do it
+                            // Just update UI state
                             if (fullResponse.trim()) {
-                                const messageId = tempMessageId || generateMessageId();
-                                const aiMessage = {
-                                    id: messageId,
-                                    text: fullResponse,
-                                    sender: 'bot' as const,
-                                    name: 'CourseConnect AI',
-                                    timestamp: Date.now(),
-                                    sources: sources || undefined,
-                                    isSearchRequest: searchModeEnabledBeforeAPI || false
-                                };
-                                await addMessage(currentTab || 'private-general-chat', aiMessage);
-                                
-                                // Clear streaming state
-                                setStreamingResponse("");
-                                setStreamingMessageId(null);
-                                setIsStreamingComplete(false);
+                                setStreamingResponse(fullResponse);
                             }
                             
                             // Clear abort controller
@@ -1411,23 +1402,33 @@ export default function ChatPage() {
                     
                     // Use exactly what was streamed word-by-word - fullResponse has been accumulating chunks
                     // Ensure we have a valid response
-                    const finalResponse = fullResponse.trim() || "I'm having some trouble processing your request right now. Please try again in a moment.";
+                    if (!fullResponse.trim()) {
+                        console.error('fullResponse is empty after streaming. This means no content chunks were received.');
+                        console.error('Check server logs to see if AI service failed.');
+                        // Instead of throwing, show a helpful error message
+                        fullResponse = 'Error: AI service returned empty response. Please check your API keys and server logs.';
+                    }
+                    const finalResponse = fullResponse.trim();
                     
                     // Use the streaming message ID if we have one, otherwise generate new one
                     const messageId = streamingMessageId || generateMessageId();
                     
-                    const aiMessage = {
-                        id: messageId,
-                        text: finalResponse,
-                        sender: 'bot' as const,
-                        name: 'CourseConnect AI',
-                        timestamp: Date.now(),
-                        sources: sources || undefined,
-                        isSearchRequest: searchModeEnabledBeforeAPI || false
-                    };
+                    // Only write AI message once after streaming completes
+                    if (!aiMessageWritten) {
+                        const aiMessage = {
+                            id: messageId,
+                            text: finalResponse,
+                            sender: 'bot' as const,
+                            name: 'CourseConnect AI',
+                            timestamp: Date.now(),
+                            sources: sources || undefined,
+                            isSearchRequest: searchModeEnabledBeforeAPI || false
+                        };
 
-                    // Add message to chat store first so it appears in the list
-                    await addMessage(currentTab || 'private-general-chat', aiMessage);
+                        // Add message to chat store - this will queue it for Firestore write
+                        await addMessage(currentTab || 'private-general-chat', aiMessage);
+                        aiMessageWritten = true;
+                    }
                     
                     // Clear streaming state immediately to prevent overlap
                     // Use requestAnimationFrame to ensure DOM has updated
@@ -1492,40 +1493,41 @@ export default function ChatPage() {
                     setStreamingResponse("");
                     setStreamingMessageId(null);
                     
-                    // Enhanced fallback based on error type
-                    let fallbackMessage = "I'm having trouble processing your request right now. Please try again in a moment.";
-                    
-                    if (apiError instanceof Error) {
-                        if (apiError.name === 'TimeoutError' || apiError.message.includes('timeout')) {
-                            fallbackMessage = "This is taking longer than usual. Please try again in a moment.";
-                        } else if (apiError.message.includes('network') || apiError.message.includes('fetch')) {
-                            fallbackMessage = "I'm temporarily unavailable. Please try again in a moment.";
-                        }
-                    }
-                    
-                    const aiMessage = {
-                        id: generateMessageId(),
-                        text: fallbackMessage,
-                        sender: 'bot' as const,
-                        name: 'CourseConnect AI',
-                        timestamp: Date.now(),
-                        sources: undefined,
-                        isSearchRequest: false
-                    };
+                    // Log the error for debugging
+                    console.error('Streaming API error:', apiError);
+                    // Show actual error to help debug
+                    // Only write error message if AI message wasn't already written
+                    if (!aiMessageWritten) {
+                        const errorText = apiError instanceof Error ? apiError.message : 'Streaming failed';
+                        const aiMessage = {
+                            id: generateMessageId(),
+                            text: `Error: ${errorText}. Please check console for details.`,
+                            sender: 'bot' as const,
+                            name: 'CourseConnect AI',
+                            timestamp: Date.now(),
+                            sources: undefined,
+                            isSearchRequest: false
+                        };
 
-                    // Add fallback AI response
-                    await addMessage(currentTab || 'private-general-chat', aiMessage);
+                        // Add error message - this will queue it for Firestore write
+                        await addMessage(currentTab || 'private-general-chat', aiMessage);
+                        aiMessageWritten = true;
+                    }
                 }
             } catch (error) {
                 console.error('AI Error:', error);
-                const errorMessage = {
-                    id: generateMessageId(),
-                    text: "I'm having trouble processing your request right now. Please try again in a moment.",
-                    sender: 'bot' as const,
-                    name: 'CourseConnect AI',
-                    timestamp: Date.now()
-                };
-                await addMessage(currentTab || 'private-general-chat', errorMessage);
+                // Only write error message if AI message wasn't already written
+                if (!aiMessageWritten) {
+                    const errorMessage = {
+                        id: generateMessageId(),
+                        text: error instanceof Error ? `Error: ${error.message}` : 'Error: Unknown. Please check console.',
+                        sender: 'bot' as const,
+                        name: 'CourseConnect AI',
+                        timestamp: Date.now()
+                    };
+                    await addMessage(currentTab || 'private-general-chat', errorMessage);
+                    aiMessageWritten = true;
+                }
             } finally {
                 console.log('Setting isLoading to false');
                 setIsLoading(false);
@@ -1712,24 +1714,9 @@ export default function ChatPage() {
                     
                     aiResponse = data;
                 } catch (apiError) {
-                    console.warn("API call failed, using enhanced fallback:", apiError);
-                    
-                    // Enhanced fallback based on error type
-                    let fallbackMessage = "I'm having trouble processing your request right now. Please try again in a moment.";
-                    
-                    if (apiError instanceof Error) {
-                        if (apiError.name === 'TimeoutError' || apiError.message.includes('timeout')) {
-                            fallbackMessage = "This is taking longer than usual. Please try again in a moment.";
-                        } else if (apiError.message.includes('network') || apiError.message.includes('fetch')) {
-                            fallbackMessage = "I'm temporarily unavailable. Please try again in a moment.";
-                        }
-                    }
-                    
-                    aiResponse = {
-                        answer: fallbackMessage,
-                        provider: 'fallback',
-                        success: true
-                    };
+                    console.error("API call failed:", apiError);
+                    // Re-throw the error so it can be handled properly
+                    throw apiError;
                 }
                 
                 // Debug logging to see what aiResponse contains
@@ -1742,8 +1729,8 @@ export default function ChatPage() {
                     const responseObj = aiResponse as any;
                     // Check for error first
                     if (responseObj.error) {
-                        // If we have an error, use a helpful message instead of the generic one
-                        responseText = `I'm having trouble processing your request right now. ${responseObj.details ? responseObj.details : 'Please try again in a moment.'}`;
+                        // If we have an error, throw it so it can be handled properly
+                        throw new Error(responseObj.message || responseObj.error || 'AI service error');
                     } else if (responseObj.answer && typeof responseObj.answer === 'string') {
                         responseText = responseObj.answer;
                     } else if (responseObj.response && typeof responseObj.response === 'string') {
@@ -1778,7 +1765,7 @@ export default function ChatPage() {
                 console.error('AI Error:', error);
                 const errorMessage = {
                     id: generateMessageId(),
-                    text: "I'm having trouble processing your request right now. Please try again in a moment.",
+                    text: error instanceof Error ? `Error: ${error.message}` : 'Error: Unknown. Please check console.',
                     sender: 'bot' as const,
                     name: 'CourseConnect AI',
                     timestamp: Date.now()
@@ -2121,20 +2108,6 @@ export default function ChatPage() {
     };
 
     // Handler functions for menu actions
-    const handleExportChat = () => {
-        try {
-            exportChat(currentTab || 'private-general-chat');
-            toast.success("Chat Exported", {
-                description: "Chat has been exported and downloaded.",
-            });
-        } catch (error) {
-            toast.error("Export Failed", {
-                description: "Could not export the chat. Please try again.",
-            });
-        }
-    };
-
-
     const handleResetChat = async () => {
         // Close dialog immediately
         setShowResetDialog(false);
@@ -2541,13 +2514,9 @@ export default function ChatPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={handleExportChat}>
-                                                    <Download01Icon className="h-4 w-4 mr-2" />
-                                                    Export Chat
-                                                </DropdownMenuItem>
                                                 {!currentChat?.disabled && (
                                                 <DropdownMenuItem onClick={() => setShowResetDialog(true)}>
-                                                    <RotateLeft01Icon className="h-4 w-4 mr-2" />
+                                                    <RefreshCw className="h-4 w-4 mr-2" />
                                                     Reset Chat
                                                 </DropdownMenuItem>
                                                 )}
@@ -3249,7 +3218,7 @@ export default function ChatPage() {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <RotateLeft01Icon className="h-5 w-5 text-orange-500" />
+                        <RefreshCw className="h-5 w-5 text-orange-500" />
                         Reset Chat
                     </DialogTitle>
                     <DialogDescription>

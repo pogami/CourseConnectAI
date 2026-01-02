@@ -152,9 +152,12 @@ export function filterContent(text: string): ContentFilterResult {
     }
   }
   
-  // Check for profanity
+  // Check for profanity (whole words only, not substrings)
   for (const word of PROFANITY_WORDS) {
-    if (lowerText.includes(word)) {
+    // Use word boundaries to match whole words only (not substrings)
+    // This prevents "hello" from matching "hell", "classic" from matching "ass", etc.
+    const wordRegex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (wordRegex.test(lowerText)) {
       return {
         isSafe: false,
         category: 'profanity',

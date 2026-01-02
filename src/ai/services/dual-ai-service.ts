@@ -3,8 +3,8 @@
 /**
  * @fileOverview Dual AI Provider Service with Automatic Fallback
  * 
- * This service tries Google AI (Gemini) first, and if it fails,
- * automatically falls back to OpenAI (ChatGPT).
+ * This service tries Claude Sonnet 4.5 first for high-quality responses,
+ * and if it fails, automatically falls back to Google AI (Gemini 3 Flash Preview).
  */
 
 import { googleAI } from '@genkit-ai/googleai';
@@ -24,8 +24,11 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 // Initialize Google AI
 const googleApiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
 
+// Initialize Anthropic (Claude)
+const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+
 // AI Provider Types
-export type AIProvider = 'google' | 'openai' | 'fallback';
+export type AIProvider = 'claude' | 'google' | 'openai' | 'fallback';
 
 export interface AIResponse {
   answer: string;
@@ -70,7 +73,333 @@ export interface StudyAssistanceInput {
 }
 
 /**
- * Try Google AI (Gemini) first
+ * Try Claude Sonnet 4.5 first
+ */
+async function tryClaude(input: StudyAssistanceInput): Promise<AIResponse> {
+  try {
+    console.log('Trying Claude Sonnet 4.5...');
+    
+    // Validate API key
+    if (!anthropicApiKey || anthropicApiKey === 'demo-key' || anthropicApiKey === 'your_anthropic_api_key_here') {
+      throw new Error('Anthropic API key not configured');
+    }
+    
+    // Build conversation history for context
+    const conversationContext = input.conversationHistory && input.conversationHistory.length > 0 
+      ? input.conversationHistory.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        }))
+      : [];
+
+    const fileContext = input.fileContext 
+      ? `\n\n[INTERNAL INSTRUCTION - DO NOT REPEAT THIS TO THE USER]
+The user has uploaded a document: "${input.fileContext.fileName}" (${input.fileContext.fileType}).
+You have access to the full document content below. Answer questions using information from this document.
+Provide specific details and references from the document when relevant.
+
+Document Content:
+${input.fileContext.fileContent || 'Document content not available.'}
+
+[END INTERNAL INSTRUCTION - Answer naturally using the document content above]`
+      : '';
+    
+    // Only search if explicitly requested
+    let currentInfo = '';
+    let searchSources: { title: string; url: string; snippet: string; }[] = [];
+    
+    if (input.isSearchRequest === true) {
+      console.log('Web search requested - fetching current information for:', input.question);
+      try {
+        const searchResults = await searchCurrentInformation(input.question);
+        if (searchResults.results && searchResults.results.length > 0) {
+          currentInfo = formatSearchResultsForAI(searchResults);
+          searchSources = searchResults.results.map(result => ({
+            title: result.title,
+            url: result.url,
+            snippet: result.snippet
+          }));
+        } else {
+          currentInfo = `\n\n⚠️ No search results found for: "${input.question}"\n`;
+        }
+      } catch (error: any) {
+        console.warn('Failed to fetch current information:', error);
+        currentInfo = `\n\n⚠️ Search failed: ${error.message || 'Unknown error'}\n`;
+      }
+    }
+    
+    // Check if the question contains URLs to scrape
+    let scrapedContent = '';
+    const urls = extractUrlsFromText(input.question || '');
+    if (urls.length > 0) {
+      console.log('Found URLs to scrape:', urls);
+      try {
+        const enhancedResults = await Promise.all(
+          urls.map(async (url) => {
+            const usePuppeteer = shouldUsePuppeteer(url);
+            const result = await enhancedWebBrowsing(url, {
+              usePuppeteer,
+              takeScreenshot: false,
+              autoSearchFallback: false
+            });
+            
+            return result.success ? {
+              url: result.url!,
+              title: result.title || 'Untitled',
+              content: result.content || '',
+              summary: result.content?.substring(0, 200) + '...' || '',
+              timestamp: new Date().toISOString(),
+              wordCount: result.content?.split(' ').length || 0
+            } : null;
+          })
+        );
+        
+        const successful = enhancedResults.filter(result => result !== null);
+        if (successful.length > 0) {
+          scrapedContent = formatScrapedContentForAI(successful);
+        }
+      } catch (error) {
+        console.warn('Failed to browse URLs:', error);
+      }
+    }
+    
+    // Prepare System Prompt
+    const userName = input.userName || 'there';
+    const userContext = input.userName 
+      ? `You are talking to ${input.userName}. Always use their name naturally in your responses when appropriate.`
+      : '';
+    
+    // Build learning profile context if available
+    let learningProfileContext = '';
+    if (input.learningProfile) {
+      learningProfileContext = `\n\nLEARNING PROFILE:
+- Major: ${input.learningProfile.major || 'Not specified'}
+- Academic Level: ${input.learningProfile.academicLevel || 'Not specified'}
+- Learning Style: ${input.learningProfile.learningStyle || 'Not specified'}
+- Explanation Depth Preference: ${input.learningProfile.explanationDepth || 'Not specified'}
+- Goals: ${input.learningProfile.goals || 'Not specified'}
+
+Adapt your responses to match this learning profile.`;
+    }
+    
+    // Get shared prompt
+    const sharedPrompt = generateMainSystemPrompt({
+      userName: input.userName || undefined
+    });
+    
+    let systemInstruction = `${sharedPrompt}${userContext}${learningProfileContext}
+
+Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
+
+    if (input.thinkingMode) {
+        systemInstruction += `
+        
+CRITICAL PRIVATE REASONING INSTRUCTIONS:
+- Think quietly before you answer.
+- NEVER expose your internal thought process, plans, or meta language.
+- NEVER output phrases such as "breaking down", "analyzing", "structuring", "deconstructing", "mapping", "retrieving", "verifying".
+- NEVER use abstract placeholders like "principle A", "mechanism B", "X causes Y". Use concrete, real examples in plain language.
+- When you reply, provide ONLY the final answer in a clear, natural, human tone.
+- Keep answers concise but complete, as if a knowledgeable tutor is speaking.
+`;
+    }
+
+    // Add response style based on aiResponseType
+    let responseStyleInstruction = '';
+    switch (input.aiResponseType) {
+      case 'concise':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONCISE MODE (HIGHEST PRIORITY):
+- Keep responses SHORT and DIRECT - maximum 2-3 sentences for simple questions
+- Get straight to the point - no fluff, no unnecessary context
+- Answer the question directly without elaboration
+- If asked to explain, give a brief explanation (1-2 paragraphs max)
+- Be efficient with words - every sentence must add value
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'detailed':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - DETAILED MODE (HIGHEST PRIORITY):
+- Provide COMPREHENSIVE explanations with full context
+- Include relevant examples, analogies, and real-world applications
+- Explain the "why" and "how" thoroughly
+- Use multiple paragraphs to cover all aspects
+- Add background information when relevant
+- Be educational and thorough - leave no stone unturned
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'conversational':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONVERSATIONAL MODE (HIGHEST PRIORITY):
+- Use a FRIENDLY, CASUAL tone like talking to a study buddy
+- Ask follow-up questions: "Does that make sense?" "Want me to break it down further?"
+- Use casual language: "So basically...", "Here's the thing...", "You know what's cool?"
+- Show enthusiasm and personality
+- Be encouraging: "You've got this!", "Great question!"
+- Use contractions and natural speech patterns
+- Make it feel like a conversation, not a lecture
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+      case 'analytical':
+        responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - ANALYTICAL MODE (HIGHEST PRIORITY):
+- Use STRUCTURED, LOGICAL reasoning
+- Break down concepts into clear steps: "First...", "Second...", "Therefore..."
+- Explain cause-and-effect relationships
+- Use systematic analysis and critical thinking
+- Focus on the "why" behind concepts
+- Use formal but clear language
+- Provide step-by-step breakdowns
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+        break;
+    }
+
+    systemInstruction += `
+CRITICAL FORMATTING RULES:
+1. NEVER use markdown formatting like **bold** or *italic* or # headers
+2. NEVER use asterisks (*) or hash symbols (#) for formatting
+3. Write in plain text only - no special formatting characters
+4. Use KaTeX delimiters $...$ and $$...$$ for math expressions only
+5. For emphasis, use CAPITAL LETTERS or say "important:" before it
+6. Use simple text formatting only - no bold, italics, or headers
+
+${responseStyleInstruction}
+
+RESPONSE STYLE RULES (Secondary - follow the style above first):
+1. Be conversational and friendly - like talking to a friend
+2. Be natural and match their vibe - if they say "hi", just say hi back naturally. No scripted responses.
+3. Get straight to the answer - no introductions or canned responses
+4. For jokes or casual comments: Play along, be funny, don't take things too seriously
+5. For random questions: Answer naturally and show interest
+6. For academic questions: Be helpful but still conversational
+7. Use natural language - "yeah", "sure", "totally", "that's cool", etc.
+8. Show personality - be enthusiastic, curious, or empathetic as appropriate
+9. Don't be overly formal - avoid "I am here to assist you" type language
+10. When student uses vague references ("that", "it", "the recent thing"), always connect to the most recent topic
+11. Show conversation continuity by referencing what was just discussed
+12. NEVER end with filler phrases like "feel free to ask", "let me know if you need help", "if you have any questions", "feel free to reach out", "don't hesitate to ask", "if you need more details or have any specific questions about these topics, feel free to ask", or any variation - just answer naturally and stop
+
+CONVERSATION CONTINUITY RULES:
+1. ALWAYS reference previous messages when relevant
+2. If the student asks about "the most recent thing" or "that", connect it to the last topic discussed
+3. Use phrases like "As I mentioned before...", "Building on what we discussed...", "Continuing from your previous question..."
+4. Don't treat each message as a completely new topic
+5. Maintain context throughout the conversation
+6. Remember what the student has asked about and build on that knowledge
+7. If the student refers to "it", "that", "this", "the recent thing", always connect it to previous context
+8. Show that you remember the conversation by referencing specific previous points
+9. When student says "what about..." or "how about...", connect to the most recent topic
+10. Keep track of the conversation flow and reference earlier parts when relevant
+
+CRITICAL INSTRUCTIONS FOR STUDENT SUCCESS:
+1. ALWAYS use current information provided below as the PRIMARY source
+2. Provide accurate, helpful answers without repetitive timestamps
+3. The current year is 2025 - acknowledge this when relevant
+4. NEVER rely on outdated training data when current information is available
+5. Students need accurate, real-time data to get good grades - provide it!
+
+🚨🚨🚨 CHART AND GRAPH GENERATION RULES 🚨🚨🚨:
+ONLY CREATE CHARTS/GRAPHS WHEN:
+1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
+2. The user says "yes" to your follow-up question asking if they want a graph/chart
+
+IMPORTANT RULES:
+- NEVER automatically create graphs without being asked
+- NEVER suggest creating a graph unless the user's question would benefit from visualization
+- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+- If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
+- NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
+- NEVER say "I can't show you" or "you can create one using"
+
+WHEN USER EXPLICITLY ASKS FOR A GRAPH:
+- Respond naturally and conversationally, then provide GRAPH_DATA format
+- EXAMPLE: User: "Can you create a pie chart for A: 30%, B: 40%, C: 20%, D: 10%?"
+  AI: "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
+
+WHEN USER SAYS YES TO YOUR GRAPH OFFER:
+- If you asked "Would you like me to create a chart for this?" and they say yes, create it immediately
+- EXAMPLE: AI: "Would you like me to create a bar chart showing this data?"
+  User: "yes"
+  AI: "Here you go! GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
+
+GRAPH DATA FORMATS:
+- Pie charts: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}]}
+- Bar charts: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}
+- Line charts: GRAPH_DATA: {"type": "data", "chartType": "line", "data": [{"x": 1, "y": 2}, {"x": 2, "y": 4}]}
+- Functions: GRAPH_DATA: {"type": "function", "function": "x^2", "label": "y = x²", "minX": -5, "maxX": 5}
+
+The system supports: pie charts, bar charts, line charts, scatter plots, area charts, and function graphs
+The system WILL automatically render any GRAPH_DATA you provide`;
+
+    // Build the user message
+    const userMessage = `Current Question: ${input.question}
+Context: ${input.context || 'General'}${fileContext}${currentInfo}${scrapedContent}
+
+WEB CONTENT ANALYSIS RULES:
+1. If web content is provided above, use it to answer questions about those specific pages
+2. Reference specific information from the scraped content when relevant
+3. If the content doesn't contain the needed information, let the student know
+4. Summarize key points from the web content when appropriate
+5. Be conversational about the content - don't just repeat it verbatim
+
+Remember: This is part of an ongoing conversation. Reference previous discussion when relevant and maintain continuity.`;
+
+    // Call Claude API
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', // Claude Sonnet 4.5
+        max_tokens: 4096,
+        system: systemInstruction,
+        messages: [
+          ...conversationContext,
+          {
+            role: 'user',
+            content: userMessage
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Claude API error:', response.status, response.statusText);
+      console.error('Error response:', errorText);
+      throw new Error(`Claude API failed: ${response.status} ${response.statusText}. Details: ${errorText.substring(0, 200)}`);
+    }
+
+    const data = await response.json();
+    
+    const answer = data.content?.[0]?.text || null;
+    
+    if (!answer) {
+      console.error('Claude returned no answer. Full response:', JSON.stringify(data, null, 2));
+      throw new Error('Claude returned no answer');
+    }
+    
+    return {
+      answer: answer.trim(),
+      provider: 'claude',
+      sources: searchSources.length > 0 ? searchSources : undefined,
+      isSearchRequest: input.isSearchRequest || false
+    };
+  } catch (error) {
+    console.warn('Claude failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Try Google AI (Gemini) as fallback
  */
 async function tryGoogleAI(input: StudyAssistanceInput): Promise<AIResponse> {
   try {
@@ -218,17 +547,31 @@ PERSONALIZATION INSTRUCTIONS:
     }
     
     // Build graph data rules (specific to dual-ai-service)
-    const graphDataRules = `🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
-WHEN USERS ASK FOR CHARTS, GRAPHS, PIE CHARTS, BAR CHARTS, OR ANY VISUALIZATION:
+    const graphDataRules = `🚨🚨🚨 GRAPH GENERATION RULES - READ THIS FIRST 🚨🚨🚨
+ONLY CREATE CHARTS/GRAPHS WHEN:
+1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
+2. The user says "yes" to your follow-up question asking if they want a graph/chart
+
+IMPORTANT RULES:
+- NEVER automatically create graphs without being asked
+- NEVER suggest creating a graph unless the user's question would benefit from visualization
+- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+- If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
-- ALWAYS respond naturally and conversationally, then provide GRAPH_DATA format
-- EXAMPLE CORRECT RESPONSES:
-  * "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
-  * "Of course! I'll create that chart for you. Here's the visualization: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
-  * "Absolutely! Here's your pie chart: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}, {"name": "Category C", "value": 20}]}"
-- EXAMPLE WRONG RESPONSE: "You can use Excel or Google Sheets to create a pie chart" ❌
-- The system WILL automatically render any GRAPH_DATA you provide - respond naturally and conversationally, then include the GRAPH_DATA
+
+WHEN USER EXPLICITLY ASKS FOR A GRAPH:
+- Respond naturally and conversationally, then provide GRAPH_DATA format
+- EXAMPLE: User: "Can you create a pie chart for A: 30%, B: 40%, C: 20%, D: 10%?"
+  AI: "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
+
+WHEN USER SAYS YES TO YOUR GRAPH OFFER:
+- If you asked "Would you like me to create a chart for this?" and they say yes, create it immediately
+- EXAMPLE: AI: "Would you like me to create a bar chart showing this data?"
+  User: "yes"
+  AI: "Here you go! GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
+
+- The system WILL automatically render any GRAPH_DATA you provide
 
 ${userContext}${learningProfileContext}
 
@@ -336,8 +679,9 @@ ${responseStyleInstruction}
 
 RESPONSE STYLE RULES (Secondary - follow the style above first):
 1. Be conversational and friendly - like talking to a friend
-2. For simple greetings (hi, hello, hey): Use the standard greeting: "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?"
-3. For jokes or casual comments: Play along, be funny, don't take things too seriously
+2. Be natural and match their vibe - if they say "hi", just say hi back naturally. No scripted responses.
+3. Get straight to the answer - no introductions or canned responses
+4. For jokes or casual comments: Play along, be funny, don't take things too seriously
 4. For random questions: Answer naturally and show interest
 5. For academic questions: Be helpful but still conversational
 6. Use natural language - "yeah", "sure", "totally", "that's cool", etc.
@@ -366,44 +710,38 @@ CRITICAL INSTRUCTIONS FOR STUDENT SUCCESS:
 4. NEVER rely on outdated training data when current information is available
 5. Students need accurate, real-time data to get good grades - provide it!
 
-🚨🚨🚨 CRITICAL CHART AND GRAPH GENERATION RULES (HIGHEST PRIORITY) 🚨🚨🚨:
-YOU CAN AND MUST CREATE CHARTS, GRAPHS, AND DIAGRAMS! THE SYSTEM WILL RENDER THEM AUTOMATICALLY!
+🚨🚨🚨 CHART AND GRAPH GENERATION RULES 🚨🚨🚨:
+ONLY CREATE CHARTS/GRAPHS WHEN:
+1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
+2. The user says "yes" to your follow-up question asking if they want a graph/chart
 
-FORBIDDEN PHRASES - NEVER USE THESE:
-❌ "You can use Excel or Google Sheets"
-❌ "Use software like Excel"
-❌ "I can't show you a pie chart"
-❌ "Unfortunately, I can't show you"
-❌ "You can create one using"
-❌ "I'm unable to display"
-❌ "I don't have the ability to show"
-❌ Any suggestion to use external software or tools
+IMPORTANT RULES:
+- NEVER automatically create graphs without being asked
+- NEVER suggest creating a graph unless the user's question would benefit from visualization
+- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+- If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
+- NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
+- NEVER say "I can't show you" or "you can create one using"
 
-REQUIRED RESPONSE FORMAT:
-✅ When asked for ANY chart/graph, respond naturally and conversationally (like "Sure thing!", "Of course!", "Absolutely!", "Here you go!", etc.)
-✅ Then immediately provide GRAPH_DATA format - the system will automatically render it
-✅ NEVER suggest external tools - ALWAYS provide GRAPH_DATA format
-✅ Be friendly and conversational - don't be robotic about it
-
-1. ALWAYS generate chart/graph data when requested - the system WILL render it automatically
-2. When students ask for pie charts, bar charts, line charts, or any visualization, IMMEDIATELY provide the data in GRAPH_DATA format
-3. For pie charts, use this EXACT format:
-   GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}, {"name": "Category C", "value": 20}]}
-4. For bar charts: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}
-5. For line charts: GRAPH_DATA: {"type": "data", "chartType": "line", "data": [{"x": 1, "y": 2}, {"x": 2, "y": 4}]}
-6. For mathematical functions: GRAPH_DATA: {"type": "function", "function": "x^2", "label": "y = x²", "minX": -5, "maxX": 5}
-7. EXAMPLE CORRECT RESPONSES (use natural, conversational language):
-   User: "Can you create a pie chart for A: 30%, B: 40%, C: 20%, D: 10%?"
+WHEN USER EXPLICITLY ASKS FOR A GRAPH:
+- Respond naturally and conversationally, then provide GRAPH_DATA format
+- EXAMPLE: User: "Can you create a pie chart for A: 30%, B: 40%, C: 20%, D: 10%?"
    AI: "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
    
-   User: "Show me a bar chart of my test scores"
-   AI: "Of course! Here's a bar chart visualizing your test scores: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Test 1", "value": 85}, {"name": "Test 2", "value": 92}]}"
-   
-   Be natural and friendly - don't sound robotic!
-8. ERROR HANDLING: If the user says your chart/graph is wrong or empty, acknowledge the mistake and recreate it with CORRECT data immediately
-9. Never give up - always provide visual content when requested
-10. The system supports: pie charts, bar charts, line charts, scatter plots, area charts, and function graphs
-11. REMEMBER: You CAN create charts. You MUST create charts when asked. The system WILL render them. NEVER suggest external software.
+WHEN USER SAYS YES TO YOUR GRAPH OFFER:
+- If you asked "Would you like me to create a chart for this?" and they say yes, create it immediately
+- EXAMPLE: AI: "Would you like me to create a bar chart showing this data?"
+  User: "yes"
+  AI: "Here you go! GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
+
+GRAPH DATA FORMATS:
+- Pie charts: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}]}
+- Bar charts: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}
+- Line charts: GRAPH_DATA: {"type": "data", "chartType": "line", "data": [{"x": 1, "y": 2}, {"x": 2, "y": 4}]}
+- Functions: GRAPH_DATA: {"type": "function", "function": "x^2", "label": "y = x²", "minX": -5, "maxX": 5}
+
+The system supports: pie charts, bar charts, line charts, scatter plots, area charts, and function graphs
+The system WILL automatically render any GRAPH_DATA you provide
 
 CODE GENERATION RULES:
 1. When students ask for code, provide complete, working code examples
@@ -480,9 +818,10 @@ ADDITIONAL GRAPH AND DIAGRAM FORMATTING DETAILS (Reference - see rules above):
 1. For simple x,y coordinates: [{"x": -2, "y": -9}, {"x": -1, "y": -3}, {"x": 0, "y": 3}, {"x": 1, "y": 9}, {"x": 2, "y": 15}]
 2. Always include the equation in LaTeX format when relevant: $y = 6x + 3$
 3. Explain what the graph/diagram represents and key features (slope, intercepts, trends, etc.)
-4. For conceptual diagrams (like geological processes), create data points that represent the concept visually, even if it's abstract
+4. For conceptual diagrams (like geological processes), create data points that represent the concept visually, even if it's abstract`;
 
-Current Question: ${input.question}
+    // Build the user message
+    const userMessage = `Current Question: ${input.question}
 Context: ${input.context || 'General'}${conversationContext}${fileContext}${currentInfo}${scrapedContent}
 
 WEB CONTENT ANALYSIS RULES:
@@ -494,15 +833,10 @@ WEB CONTENT ANALYSIS RULES:
 
 Remember: This is part of an ongoing conversation. Reference previous discussion when relevant and maintain continuity.`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${googleApiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const requestBody: any = {
         contents: [{
           parts: [
-            { text: systemInstruction },
+          { text: userMessage },
             ...(input.image ? [{
               inline_data: {
                 mime_type: input.mimeType || 'image/jpeg',
@@ -510,16 +844,48 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
               }
             }] : [])
           ]
-        }]
-      })
+      }],
+      systemInstruction: {
+        parts: [{ text: systemInstruction }]
+      }
+    };
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${googleApiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
-      throw new Error(`Google AI API failed: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('Google AI API error:', response.status, response.statusText);
+      console.error('Error response:', errorText);
+      // Log the full error for debugging
+      try {
+        const errorData = JSON.parse(errorText);
+        console.error('Parsed error:', JSON.stringify(errorData, null, 2));
+      } catch (e) {
+        // Not JSON, that's fine
+      }
+      throw new Error(`Google AI API failed: ${response.status} ${response.statusText}. Details: ${errorText.substring(0, 200)}`);
     }
 
     const data = await response.json();
-    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I apologize, but I couldn\'t generate a response.';
+    
+    // Check for API errors in response
+    if (data.error) {
+      console.error('Google AI API returned error:', data.error);
+      throw new Error(`Google AI API error: ${data.error.message || JSON.stringify(data.error)}`);
+    }
+    
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || data.candidates?.[0]?.content?.text || null;
+    
+    if (!answer) {
+      console.error('Google AI returned no answer. Full response:', JSON.stringify(data, null, 2));
+      throw new Error('Google AI returned no answer');
+    }
     
     // Check if we should automatically search for more information
     const autoSearchResult = shouldAutoSearch(input.question, answer);
@@ -560,9 +926,9 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
 /**
  * Try OpenAI (ChatGPT) as fallback
  */
-async function tryOpenAI(input: StudyAssistanceInput): Promise<AIResponse> {
+async function tryOpenAI(input: StudyAssistanceInput, model: string = 'gpt-5-mini'): Promise<AIResponse> {
   try {
-    console.log('Trying OpenAI...');
+    console.log(`Trying OpenAI with model: ${model}...`);
     
     // Build conversation history for context
     const conversationContext = input.conversationHistory && input.conversationHistory.length > 0 
@@ -705,17 +1071,31 @@ PERSONALIZATION INSTRUCTIONS:
     }
     
     // Build graph data rules (specific to dual-ai-service)
-    const graphDataRules = `🚨🚨🚨 ABSOLUTE CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
-WHEN USERS ASK FOR CHARTS, GRAPHS, PIE CHARTS, BAR CHARTS, OR ANY VISUALIZATION:
+    const graphDataRules = `🚨🚨🚨 GRAPH GENERATION RULES - READ THIS FIRST 🚨🚨🚨
+ONLY CREATE CHARTS/GRAPHS WHEN:
+1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
+2. The user says "yes" to your follow-up question asking if they want a graph/chart
+
+IMPORTANT RULES:
+- NEVER automatically create graphs without being asked
+- NEVER suggest creating a graph unless the user's question would benefit from visualization
+- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+- If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
-- ALWAYS respond naturally and conversationally, then provide GRAPH_DATA format
-- EXAMPLE CORRECT RESPONSES:
-  * "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
-  * "Of course! I'll create that chart for you. Here's the visualization: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
-  * "Absolutely! Here's your pie chart: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}, {"name": "Category C", "value": 20}]}"
-- EXAMPLE WRONG RESPONSE: "You can use Excel or Google Sheets to create a pie chart" ❌
-- The system WILL automatically render any GRAPH_DATA you provide - respond naturally and conversationally, then include the GRAPH_DATA
+
+WHEN USER EXPLICITLY ASKS FOR A GRAPH:
+- Respond naturally and conversationally, then provide GRAPH_DATA format
+- EXAMPLE: User: "Can you create a pie chart for A: 30%, B: 40%, C: 20%, D: 10%?"
+  AI: "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
+
+WHEN USER SAYS YES TO YOUR GRAPH OFFER:
+- If you asked "Would you like me to create a chart for this?" and they say yes, create it immediately
+- EXAMPLE: AI: "Would you like me to create a bar chart showing this data?"
+  User: "yes"
+  AI: "Here you go! GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
+
+- The system WILL automatically render any GRAPH_DATA you provide
 
 ${userContext}${learningProfileContext}
 
@@ -823,8 +1203,9 @@ ${responseStyleInstruction}
 
 RESPONSE STYLE RULES (Secondary - follow the style above first):
 1. Be conversational and friendly - like talking to a friend
-2. For simple greetings (hi, hello, hey): Use the standard greeting: "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?"
-3. For jokes or casual comments: Play along, be funny, don't take things too seriously
+2. Be natural and match their vibe - if they say "hi", just say hi back naturally. No scripted responses.
+3. Get straight to the answer - no introductions or canned responses
+4. For jokes or casual comments: Play along, be funny, don't take things too seriously
 4. For random questions: Answer naturally and show interest
 5. For academic questions: Be helpful but still conversational
 6. Use natural language - "yeah", "sure", "totally", "that's cool", etc.
@@ -896,8 +1277,10 @@ For mathematical expressions, use LaTeX formatting:
 - NEVER put words inside math expressions - keep ALL text OUTSIDE of $...$ delimiters
 - Write words OUTSIDE math delimiters, symbols INSIDE math delimiters`;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+    let response;
+    try {
+      response = await openai.chat.completions.create({
+        model: model,
       messages: [
         {
           role: 'system',
@@ -927,8 +1310,23 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
       max_tokens: 1000,
       temperature: 0.3,
     });
+    } catch (apiError: any) {
+      console.error('OpenAI API call failed:', apiError?.message || apiError);
+      console.error('OpenAI error details:', apiError?.error || apiError);
+      throw new Error(`OpenAI API error: ${apiError?.message || 'Unknown error'}`);
+    }
 
-    const answer = response.choices[0]?.message?.content || 'I apologize, but I couldn\'t generate a response.';
+    if (!response.choices || response.choices.length === 0) {
+      console.error('OpenAI returned no choices. Full response:', JSON.stringify(response, null, 2));
+      throw new Error('OpenAI returned no choices');
+    }
+    
+    const answer = response.choices[0]?.message?.content || null;
+    
+    if (!answer) {
+      console.error('OpenAI returned no answer. Full response:', JSON.stringify(response, null, 2));
+      throw new Error('OpenAI returned no answer');
+    }
     
     // Check if we should automatically search for more information
     const autoSearchResult = shouldAutoSearch(input.question, answer);
@@ -969,23 +1367,9 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
  * Enhanced fallback responses for when both AI providers fail
  */
 function getEnhancedFallback(input: StudyAssistanceInput): AIResponse {
-  // ... (existing fallback code remains the same) ...
-  const lowerQuestion = (input.question || '').toLowerCase();
-  
-  // Enhanced contextual responses based on question content
-  if (lowerQuestion.includes('derivative') || lowerQuestion.includes('differentiate') || lowerQuestion.includes('calculus')) {
-    return {
-      answer: `Sure! A derivative tells you how fast a function is changing at any point. Think of it as the slope of the curve. For example, if f(x) = x², then f'(x) = 2x. This means at x=3, the slope is 6.`,
-      provider: 'fallback'
-    };
-  }
-  // ... (rest of the fallback cases) ...
-  
-  // Default enhanced response with more personality
-  return {
-    answer: `Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?`,
-    provider: 'fallback'
-  };
+  // This should rarely be used - both AI providers should work
+  // If we get here, throw an error so the calling code can handle it properly
+  throw new Error('All AI providers failed. Please check API keys and network connection.');
 }
 
 /**
@@ -1174,11 +1558,11 @@ async function tryOpenAIInDepth(input: StudyAssistanceInput): Promise<AIResponse
     }
     
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini', // Use GPT-5 Mini for in-depth analysis
       messages: [
         {
           role: 'system',
-          content: `You are a course tutor and syllabus assistant. When asked "who are you" or similar questions, respond with: "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?"
+          content: `You are a course tutor and syllabus assistant. Be natural and conversational - match the student's vibe and energy. No scripted responses.
 
 You are having a NATURAL CONVERSATION with a student. Be PROACTIVE, FRIENDLY, and HELPFUL. Be friendly, conversational, and human-like. Don't be overly formal or robotic. You can:
 - Make jokes and be playful when appropriate
@@ -1269,30 +1653,32 @@ export async function provideStudyAssistanceWithFallback(input: StudyAssistanceI
   console.log('AI Service: Starting with input:', input.question);
   
   try {
-    // Try OpenAI first (Primary - GPT-4o)
-    console.log('AI Service: Trying OpenAI (GPT-4o)...');
+    // Try Claude Sonnet 4.5 first (Primary)
+    console.log('AI Service: Trying Claude Sonnet 4.5...');
     try {
-      const result = await tryOpenAI(input);
-      console.log('AI Service: OpenAI succeeded:', result.provider);
+      const result = await tryClaude(input);
+      console.log('AI Service: Claude succeeded:', result.provider);
       return result;
-    } catch (openaiError) {
-      console.warn('AI Service: OpenAI failed with error:', openaiError);
+    } catch (claudeError) {
+      console.error('AI Service: Claude failed with error:', claudeError);
+      const claudeErrorMessage = claudeError instanceof Error ? claudeError.message : 'Unknown error';
       
-      // Try Google AI as fallback
-      console.log('AI Service: Trying Google AI as fallback...');
+      // Fallback to Gemini 3 Flash Preview
+      console.log('AI Service: Falling back to Gemini 3 Flash Preview...');
       try {
         const result = await tryGoogleAI(input);
-        console.log('AI Service: Google AI succeeded:', result.provider);
+        console.log('AI Service: Gemini succeeded:', result.provider);
         return result;
-      } catch (googleError) {
-        console.warn('AI Service: Google AI failed with error:', googleError);
-        console.log('AI Service: All APIs failed, using enhanced fallback');
-        return getEnhancedFallback(input);
+      } catch (geminiError) {
+        console.error('AI Service: Gemini also failed:', geminiError);
+        const geminiErrorMessage = geminiError instanceof Error ? geminiError.message : 'Unknown error';
+        throw new Error(`Both AI providers failed. Claude error: ${claudeErrorMessage}. Gemini error: ${geminiErrorMessage}. Please check your API keys and configuration.`);
       }
     }
   } catch (error) {
-    console.warn('AI Service: Unexpected error:', error);
-    return getEnhancedFallback(input);
+    console.error('AI Service: Unexpected error:', error);
+    // Re-throw so caller can handle it properly
+    throw error;
   }
 }
 

@@ -276,22 +276,14 @@ CourseConnect AI:`;
       sources = aiResult.sources || []; // Sources come from AI service when it performs search
       
       
-    } catch (error) {
-      console.log('AI service failed, using intelligent fallback response');
-      
-      // Intelligent fallback for when AI service fails
-      const lowerQuestion = cleanedQuestion.toLowerCase();
-      
-      if (lowerQuestion.includes('hello') || lowerQuestion.includes('hi') || lowerQuestion.includes('hey')) {
-        aiResponse = "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?";
-      } else if (lowerQuestion.includes('who are you')) {
-        aiResponse = "Hey, I'm CourseConnect AI. I'm here to help you stay on top of classes, break things down when they get confusing, and answer questions as you go. I'm part of CourseConnect, built to make college life a little easier. How can I help?";
-      } else if (lowerQuestion.includes('news') || lowerQuestion.includes('current')) {
-        aiResponse = "I'd love to help with current events! Unfortunately I'm having trouble accessing real-time info right now. Feel free to ask me about academic topics, or try asking something like 'what's the latest news about...' specifically.";
-      } else {
-        aiResponse = "That's an interesting question! I'd normally chat about this with you, but I'm having some technical issues right now. Want to talk about academics, ask about homework, or try asking something else? I'm here to help once we get this sorted out!";
-      }
-      selectedModel = 'fallback';
+    } catch (error: any) {
+      console.error('AI service failed:', error);
+      // Return a proper error response instead of echoing
+      return NextResponse.json({
+        error: 'AI service unavailable',
+        message: error?.message || 'Failed to generate response. Please check your API keys and try again.',
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      }, { status: 503 });
     }
 
     // Note: Frustration guidance is already included in the prompt, so no need to prepend
@@ -311,8 +303,7 @@ CourseConnect AI:`;
     // Ensure aiResponse is always a valid string
     if (!aiResponse || typeof aiResponse !== 'string') {
       console.error('aiResponse is invalid:', aiResponse);
-      aiResponse = "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.";
-      selectedModel = 'fallback';
+      throw new Error('AI service returned invalid response');
     }
     
     aiResponse = sanitizeEmojis(aiResponse);

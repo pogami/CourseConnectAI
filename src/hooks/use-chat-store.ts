@@ -135,9 +135,9 @@ const writeQueues: Map<string, {
   lastWrite: number;
 }> = new Map();
 
-const DEBOUNCE_DELAY = 2000; // Wait 2 seconds after last message before writing
-const MAX_BATCH_SIZE = 10; // Batch up to 10 messages at once
-const MIN_WRITE_INTERVAL = 1000; // Minimum 1 second between writes
+const DEBOUNCE_DELAY = 5000; // Wait 5 seconds after last message before writing
+const MAX_BATCH_SIZE = 20; // Batch up to 20 messages at once
+const MIN_WRITE_INTERVAL = 3000; // Minimum 3 seconds between writes
 
 async function debouncedWriteToFirestore(chatId: string, message: any, replaceLast: boolean = false) {
   // Get or create queue for this chat
@@ -169,20 +169,22 @@ async function debouncedWriteToFirestore(chatId: string, message: any, replaceLa
     return;
   }
   
-  // Check if enough time has passed since last write
-  const timeSinceLastWrite = Date.now() - queue.lastWrite;
-  if (timeSinceLastWrite >= MIN_WRITE_INTERVAL && queue.messages.length > 0) {
-    // Write immediately if enough time has passed
-    queue.timeout = setTimeout(() => flushWriteQueue(chatId), 100) as any;
-  } else {
-    // Otherwise debounce
-    queue.timeout = setTimeout(() => flushWriteQueue(chatId), DEBOUNCE_DELAY) as any;
-  }
+  // Always debounce - never write immediately
+  // This prevents write exhaustion during rapid state changes
+  queue.timeout = setTimeout(() => flushWriteQueue(chatId), DEBOUNCE_DELAY) as any;
 }
 
 async function flushWriteQueue(chatId: string) {
   const queue = writeQueues.get(chatId);
   if (!queue || queue.messages.length === 0) return;
+  
+  // Check if enough time has passed since last write
+  const timeSinceLastWrite = Date.now() - queue.lastWrite;
+  if (timeSinceLastWrite < MIN_WRITE_INTERVAL) {
+    // Not enough time has passed, reschedule
+    queue.timeout = setTimeout(() => flushWriteQueue(chatId), MIN_WRITE_INTERVAL - timeSinceLastWrite) as any;
+    return;
+  }
   
   const messagesToWrite = [...queue.messages];
   queue.messages = [];
@@ -204,11 +206,14 @@ async function flushWriteQueue(chatId: string) {
       const newMessages = messagesToWrite.filter(m => !existingIds.has(m.id));
       
       if (newMessages.length > 0) {
-        // Update in one operation (Firestore handles batching internally)
-        await updateDoc(chatDocRef, { 
+        // Use writeBatch for better performance and atomicity
+        const batch = writeBatch(db as Firestore);
+        batch.update(chatDocRef, { 
           messages: [...currentMessages, ...newMessages],
           updatedAt: Date.now()
         });
+        await batch.commit();
+        console.log(`✅ Wrote ${newMessages.length} messages to Firestore for ${chatId}`);
       }
     } else {
       // Create new chat document
@@ -226,6 +231,7 @@ async function flushWriteQueue(chatId: string) {
         newChat.userId = user.uid;
       }
       await setDoc(chatDocRef, newChat);
+      console.log(`✅ Created new chat document in Firestore for ${chatId}`);
     }
   } catch (error: any) {
     // Handle rate limiting and resource exhaustion
@@ -234,7 +240,7 @@ async function flushWriteQueue(chatId: string) {
         // Firestore is rate limiting - re-queue messages with longer delay
         console.warn('Firestore write exhausted, queuing for retry:', chatId, messagesToWrite.length, 'messages');
         queue.messages = [...messagesToWrite, ...queue.messages];
-        // Retry after exponential backoff (4 seconds)
+        // Retry after exponential backoff (10 seconds)
         queue.timeout = setTimeout(() => flushWriteQueue(chatId), DEBOUNCE_DELAY * 2) as any;
       } else if (error.code === 'unavailable') {
         // Offline mode - re-queue for when connection is restored

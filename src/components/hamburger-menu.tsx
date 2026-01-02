@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { 
   MoreVertical, 
   Copy, 
-  Download, 
-  RotateCcw, 
+  FileDown, 
+  RefreshCw, 
   Trash2 
 } from 'lucide-react';
 import { 
@@ -120,13 +120,13 @@ export function HamburgerMenu({
           )}
           {showExport && (
             <DropdownMenuItem onClick={handleExport}>
-              <Download className="h-4 w-4 mr-2" />
+              <FileDown className="h-4 w-4 mr-2" />
               {exportLabel}
             </DropdownMenuItem>
           )}
           {showReset && (
             <DropdownMenuItem onClick={() => setShowResetDialog(true)}>
-              <RotateCcw className="h-4 w-4 mr-2" />
+              <RefreshCw className="h-4 w-4 mr-2" />
               {resetLabel}
             </DropdownMenuItem>
           )}

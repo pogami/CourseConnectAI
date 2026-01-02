@@ -3,6 +3,8 @@ import { getAuth } from 'firebase-admin/auth';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+export const runtime = 'nodejs';
+
 // Initialize Firebase Admin if not already initialized
 let adminAuth: any = null;
 let adminDb: any = null;

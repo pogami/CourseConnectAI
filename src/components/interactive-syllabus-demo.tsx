@@ -705,6 +705,14 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
         const chatTitle = `${courseCode} - ${courseName}`;
 
         // Create course data for the chat
+        // Filter out assignments and exams with null/empty dates
+        const validAssignments = (extractedData.assignments || []).filter((a: any) => 
+          a.dueDate && a.dueDate !== 'null' && a.dueDate.trim() !== '' && !isNaN(new Date(a.dueDate).getTime())
+        );
+        const validExams = (extractedData.exams || []).filter((e: any) => 
+          e.date && e.date !== 'null' && e.date.trim() !== '' && !isNaN(new Date(e.date).getTime())
+        );
+        
         const courseData = {
           courseName: extractedData.courseName || 'Unknown Course',
           courseCode: extractedData.courseCode || 'UNKNOWN',
@@ -715,8 +723,8 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           classTime: extractedData.classTime || 'Unknown Time',
           department: extractedData.department || 'Unknown Department',
           topics: extractedData.topics || [],
-          assignments: extractedData.assignments || [],
-          exams: extractedData.exams || [],
+          assignments: validAssignments,
+          exams: validExams,
           syllabusText: syllabusText, // Save raw text for AI context
           fileName: file?.name || 'Syllabus',
           uploadDate: new Date().toLocaleDateString()
@@ -799,8 +807,9 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           // Check for upcoming exams and assignments
           if (courseData.exams && courseData.exams.length > 0) {
             courseData.exams.forEach((exam: any) => {
-              if (exam.date) {
+              if (exam.date && exam.date !== 'null' && exam.date.trim() !== '') {
                 const examDate = new Date(exam.date);
+                if (isNaN(examDate.getTime())) return;
                 const today = new Date();
                 const daysUntil = Math.ceil((examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -821,8 +830,9 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
 
           if (courseData.assignments && courseData.assignments.length > 0) {
             courseData.assignments.forEach((assignment: any) => {
-              if (assignment.dueDate) {
+              if (assignment.dueDate && assignment.dueDate !== 'null' && assignment.dueDate.trim() !== '') {
                 const dueDate = new Date(assignment.dueDate);
+                if (isNaN(dueDate.getTime())) return;
                 const today = new Date();
                 const daysUntil = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -859,16 +869,22 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr || dateStr === 'null' || dateStr.trim() === '') {
+      return 'TBD';
+    }
     try {
       const date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        return 'TBD';
+      }
       return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       });
     } catch {
-      return dateStr;
+      return 'TBD';
     }
   };
 

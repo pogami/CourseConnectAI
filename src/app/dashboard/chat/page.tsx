@@ -38,6 +38,7 @@ import { TypingIndicator } from "@/components/typing-indicator";
 import { OnlineUsersIndicator } from "@/components/online-users-indicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Image from "next/image";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -56,7 +57,6 @@ import { MessageTimestamp } from "@/components/message-timestamp";
 import BotResponse from "@/components/bot-response";
 import { CourseConnectLogo } from "@/components/icons/courseconnect-logo";
 import { RippleText } from "@/components/ripple-text";
-import { InDepthAnalysis } from "@/components/in-depth-analysis";
 import { JoinMessage } from "@/components/join-message";
 import { createWelcomeNotification, createAIResponseNotification, createStudyEncouragementNotification, createAssignmentReminderNotification, isFirstGuestVisit, markGuestAsVisited } from "@/lib/guest-notifications";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -377,14 +377,16 @@ export default function ChatPage() {
         const now = Date.now();
         const timeSinceLastScroll = now - lastScrollTimeRef.current;
         
-        // Throttle: only scroll if at least 150ms have passed since last scroll
-        if (timeSinceLastScroll < 150) return;
+        // Throttle: only scroll if at least 100ms have passed since last scroll (reduced for smoother scrolling)
+        if (timeSinceLastScroll < 100) return;
         
         lastScrollTimeRef.current = now;
         
-        // Use requestAnimationFrame to ensure DOM is updated
+        // Double-check user hasn't scrolled up before doing any DOM work
+        if (!autoScrollRef.current) return;
+        
+        // Use requestAnimationFrame to batch DOM updates
         requestAnimationFrame(() => {
-            // Double-check user hasn't scrolled up
             if (!autoScrollRef.current) return;
             
             const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
@@ -1241,6 +1243,47 @@ export default function ChatPage() {
                     sources = [];
                     metadata = null;
                     let buffer = "";
+                    let displayedText = ""; // What's currently displayed
+                    let wordQueue: string[] = []; // Queue of words to display
+                    let isProcessingWords = false;
+                    let processingTimeout: NodeJS.Timeout | null = null;
+                    const WORD_DELAY_MS = 25; // Consistent delay between each word
+
+                    // Function to process word queue - one word at a time for consistent streaming
+                    const processWordQueue = () => {
+                        if (isProcessingWords || wordQueue.length === 0) return;
+                        isProcessingWords = true;
+
+                        const processNext = () => {
+                            // Check if aborted
+                            if (abortController.signal.aborted) {
+                                wordQueue = [];
+                                isProcessingWords = false;
+                                if (processingTimeout) clearTimeout(processingTimeout);
+                                return;
+                            }
+
+                            // Process one word at a time for consistent streaming
+                            if (wordQueue.length > 0) {
+                                const word = wordQueue.shift()!;
+                                displayedText += word; // Word already includes trailing space
+                                
+                                // Use requestAnimationFrame for smooth updates
+                                requestAnimationFrame(() => {
+                                    setStreamingResponse(displayedText);
+                                });
+
+                                // Schedule next word with consistent delay
+                                processingTimeout = setTimeout(processNext, WORD_DELAY_MS);
+                            } else {
+                                // Queue is empty, stop processing
+                                isProcessingWords = false;
+                                processingTimeout = null;
+                            }
+                        };
+
+                        processNext();
+                    };
 
                     try {
                         while (true) {
@@ -1281,17 +1324,21 @@ export default function ChatPage() {
 
                                 // Handle different response formats - prioritize streaming format
                                 if (data.type === "content" && data.content) {
-                                    // Stream content chunks incrementally
+                                    // Server now sends complete words, so just add to queue
                                     fullResponse += data.content;
-                                    // Use requestAnimationFrame for smooth updates
-                                    requestAnimationFrame(() => {
-                                        setStreamingResponse(fullResponse);
-                                    });
+                                    
+                                    // Add word to queue (server already sent complete word + space)
+                                    wordQueue.push(data.content);
+                                    
+                                    // Start processing word queue if not already processing
+                                    if (wordQueue.length > 0 && !isProcessingWords) {
+                                        processWordQueue();
+                                    }
                                 } else if (data.type === "done") {
                                     // Use the full response from done message (most accurate)
                                     const finalResponse = data.fullResponse || fullResponse;
                                     
-                                    // Final update - ensure it's clean and complete
+                                    // Final update - ensure it's clean and complete (synchronous for smooth transition)
                                     if (finalResponse.trim()) {
                                         setStreamingResponse(finalResponse);
                                         fullResponse = finalResponse; // Update local var for consistency
@@ -1331,6 +1378,27 @@ export default function ChatPage() {
                                     }
                                 }
                             }
+                        }
+                        
+                        // Wait for word queue to finish processing (with timeout)
+                        let waitCount = 0;
+                        const maxWait = 200; // Max 10 seconds (200 * 50ms)
+                        while ((isProcessingWords || wordQueue.length > 0) && waitCount < maxWait) {
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                            waitCount++;
+                        }
+                        
+                        // Clear any pending timeout
+                        if (processingTimeout) {
+                            clearTimeout(processingTimeout);
+                            processingTimeout = null;
+                        }
+                        
+                        // Final update - ensure everything is displayed
+                        const finalText = fullResponse.trim();
+                        if (finalText && displayedText !== finalText) {
+                            setStreamingResponse(finalText);
+                            displayedText = finalText;
                         }
                     } catch (readError: any) {
                         // Handle reader cancellation or errors
@@ -1430,13 +1498,10 @@ export default function ChatPage() {
                         aiMessageWritten = true;
                     }
                     
-                    // Clear streaming state immediately to prevent overlap
-                    // Use requestAnimationFrame to ensure DOM has updated
-                    requestAnimationFrame(() => {
-                        setStreamingResponse("");
-                        setStreamingMessageId(null);
-                        setIsStreamingComplete(false);
-                    });
+                    // Clear streaming state immediately to prevent overlap (synchronous for smooth transition)
+                    setStreamingResponse("");
+                    setStreamingMessageId(null);
+                    setIsStreamingComplete(false);
                     
                     // Update metadata if provided
                     if (metadata && currentTab) {
@@ -2686,7 +2751,16 @@ export default function ChatPage() {
                                                 <div key={uniqueKey} className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'} w-full px-4`}>
                                                     <div className={`flex gap-4 ${message.sender === 'user' ? 'max-w-[80%]' : 'max-w-[80%]'} min-w-0 ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                                                         {message.sender === 'bot' ? (
-                                                            <img src="/favicon-32x32.png" alt="CourseConnect AI" className="w-10 h-10 flex-shrink-0 object-contain rounded-full" />
+                                                            <div className="w-10 h-10 flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center">
+                                                                <Image 
+                                                                    src="/pageicon.png" 
+                                                                    alt="CourseConnect AI" 
+                                                                    width={40}
+                                                                    height={40}
+                                                                    className="object-contain"
+                                                                    unoptimized
+                                                                />
+                                                            </div>
                                                         ) : (
                                                             <Avatar className="w-10 h-10 flex-shrink-0">
                                                                 {message.sender === 'user' && !isGuest && userProfilePicture ? (
@@ -2754,27 +2828,6 @@ export default function ChatPage() {
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <div className="text-sm text-gray-600 font-medium flex items-center gap-1">
                                                                         {message.name}
-                                                                        {(() => {
-                                                                            // Check if this is a bot message and if the previous user message contained math
-                                                                            const previousMessage = index > 0 ? generalChat?.messages[index - 1] : null;
-                                                                            const userAskedMathQuestion = previousMessage && 
-                                                                                previousMessage.sender === 'user' && 
-                                                                                isMathOrPhysicsContent(typeof previousMessage.text === 'string' ? previousMessage.text : JSON.stringify(previousMessage.text));
-                                                                            
-                                                                            // Only show math analysis if bot responded to a math question AND response contains math
-                                                                            const shouldShowMathAnalysis = userAskedMathQuestion && 
-                                                                                isMathOrPhysicsContent(typeof message.text === 'string' ? message.text : JSON.stringify(message.text));
-                                                                            
-                                                                            return shouldShowMathAnalysis ? (
-                                                                                <InDepthAnalysis 
-                                                                                    question={typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}
-                                                                                    conversationHistory={(generalChat?.messages || []).map(msg => ({
-                                                                                        sender: msg.sender === 'system' ? 'bot' : msg.sender,
-                                                                                        text: typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text)
-                                                                                    }))}
-                                                                                />
-                                                                            ) : null;
-                                                                        })()}
                                                                     </div>
                                                                     {message.timestamp && <MessageTimestamp timestamp={message.timestamp} />}
                                                                 </div>
@@ -2850,7 +2903,16 @@ export default function ChatPage() {
                                                 <div className="flex gap-3 justify-start w-full px-4 animate-in slide-in-from-bottom-2 duration-300">
                                                     <div className="flex gap-4 max-w-[80%] min-w-0 flex-row">
                                                         {/* Avatar - show while thinking */}
-                                                        <img src="/favicon-32x32.png" alt="AI" className="w-10 h-10 flex-shrink-0 object-contain rounded-full" />
+                                                        <div className="w-10 h-10 flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center">
+                                                            <Image 
+                                                                src="/pageicon.png" 
+                                                                alt="CourseConnect AI" 
+                                                                width={40}
+                                                                height={40}
+                                                                className="object-contain"
+                                                                unoptimized
+                                                            />
+                                                        </div>
                                                         <div className="text-left min-w-0 group">
                                                             {/* Name - show while thinking */}
                                                             <div className="flex items-center gap-2 mb-1">
@@ -2885,7 +2947,17 @@ export default function ChatPage() {
                                             })() && (
                                                 <div className={`flex gap-3 justify-start w-full px-4 ${isStreamingComplete ? '' : 'animate-in slide-in-from-bottom-2 duration-300'}`}>
                                                     <div className="flex gap-4 max-w-[80%] min-w-0 flex-row">
-                                                        {/* Avatar - removed */}
+                                                        {/* Avatar - show during streaming */}
+                                                        <div className="w-10 h-10 flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center">
+                                                            <Image 
+                                                                src="/pageicon.png" 
+                                                                alt="CourseConnect AI" 
+                                                                width={40}
+                                                                height={40}
+                                                                className="object-contain"
+                                                                unoptimized
+                                                            />
+                                                        </div>
                                                         <div className="text-left min-w-0 group">
                                                             {/* Name and timestamp - always show during streaming */}
                                                             <div className="flex items-center gap-2 mb-1">

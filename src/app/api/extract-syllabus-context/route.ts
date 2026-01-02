@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import OpenAI from 'openai';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30; // 30 seconds max for AI extraction
@@ -12,6 +13,19 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { syllabusText } = SyllabusExtractionSchema.parse(body);
+    
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    
+    if (!openaiApiKey) {
+      return NextResponse.json({
+        success: false,
+        error: 'OpenAI API key not configured'
+      }, { status: 500 });
+    }
+    
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
 
 const prompt = `Extract course information from this syllabus and return ONLY valid JSON. Use null for missing fields.
 
@@ -20,6 +34,19 @@ IMPORTANT: Look carefully for the professor/instructor name. It might be listed 
 - In a header section or contact information
 - After "Dr.", "Prof.", "Mr.", "Ms.", or similar titles
 - In email addresses (extract the name before @)
+
+CRITICAL DATE EXTRACTION RULES:
+- Dates MUST be extracted in YYYY-MM-DD format (e.g., "2025-01-15", "2025-03-20")
+- Look for dates in various formats: "January 15, 2025", "1/15/2025", "15-Jan-2025", "Jan 15", etc.
+- Convert all dates to YYYY-MM-DD format
+- If only month/day is given, infer the year from the semester/year context
+- If the syllabus says "Fall 2025" and an assignment is due "October 15", use "2025-10-15"
+- If no year is specified, use the current academic year (2025)
+- DO NOT use null for dates that are clearly stated in the syllabus
+- Common date patterns to look for:
+  * "Due: [date]", "Due Date: [date]", "Deadline: [date]"
+  * "Exam on [date]", "Test on [date]", "Midterm: [date]"
+  * Assignment schedules, exam schedules, calendar sections
 
 JSON format:
 {
@@ -41,69 +68,38 @@ ${syllabusText}
 
 JSON:`;
 
-    // Use Google AI Gemini 3 Flash Preview for syllabus analysis
+    // Use OpenAI GPT-4o Mini for syllabus analysis
     let aiResponse: string;
     let selectedModel: string;
     
     try {
-      console.log('🤖 Using Google AI Gemini 3 Flash Preview for syllabus analysis...', { syllabusTextLength: syllabusText.length });
+      console.log('🤖 Using OpenAI GPT-4o Mini for syllabus analysis...', { syllabusTextLength: syllabusText.length });
       
-      const googleApiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
-      
-      if (!googleApiKey) {
-        throw new Error('Google AI API key not configured');
-      }
-      
-      // Add timeout to Google AI API call (20 seconds)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, 20000); // 20 seconds timeout
-      
-      let response: Response;
-      try {
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${googleApiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert at extracting course information from syllabi. Return ONLY valid JSON. Use null for missing fields.'
           },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: prompt
-              }]
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: 'application/json'
-            }
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        if (fetchError.name === 'AbortError') {
-          throw new Error('Google AI API request timed out after 20 seconds');
-        }
-        throw fetchError;
-      }
-
-      if (response.ok) {
-        const data = await response.json();
-        aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        selectedModel = 'google';
-        console.log('✅ Google AI succeeded for syllabus analysis, response length:', aiResponse.length);
-      } else {
-        const errorData = await response.text();
-        console.log('Google AI error response:', errorData);
-        throw new Error(`Google AI failed: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Google AI failed:', error);
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        response_format: { type: 'json_object' }
+      });
+      
+      aiResponse = completion.choices[0]?.message?.content || '';
+      selectedModel = 'openai';
+      console.log('✅ OpenAI GPT-4o Mini succeeded for syllabus analysis, response length:', aiResponse.length);
+    } catch (error: any) {
+      console.error('OpenAI failed:', error);
+      const errorMessage = error?.message || error?.error?.message || 'Unknown error';
+      console.error('OpenAI error details:', errorMessage, error?.response?.status, error?.status);
       return NextResponse.json({
         success: false,
-        error: 'AI service is temporarily unavailable. Please try again later.'
+        error: errorMessage
       }, { status: 500 });
     }
 

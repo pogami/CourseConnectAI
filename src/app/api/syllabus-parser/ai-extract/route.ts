@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,12 +9,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Text content is required' }, { status: 400 });
     }
     
-    // Use Google AI Gemini 3 Flash Preview for intelligent parsing
-    const googleApiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
+    // Use OpenAI GPT-4o Mini for intelligent parsing
+    const openaiApiKey = process.env.OPENAI_API_KEY;
     
-    if (!googleApiKey) {
-      return NextResponse.json({ error: 'Google AI API key not configured' }, { status: 500 });
+    if (!openaiApiKey) {
+      return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 });
     }
+    
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
     
     const prompt = `You are an expert at parsing academic syllabi. Extract structured information from the following syllabus text and return it as valid JSON.
 
@@ -21,6 +26,20 @@ SYLLABUS TEXT:
 ${text}
 
 CRITICAL: You must return ONLY valid JSON. No additional text, no explanations, no markdown formatting.
+
+CRITICAL DATE EXTRACTION RULES:
+- Dates MUST be extracted in YYYY-MM-DD format (e.g., "2025-01-15", "2025-03-20")
+- Look for dates in various formats: "January 15, 2025", "1/15/2025", "15-Jan-2025", "Jan 15", "10/15", etc.
+- Convert all dates to YYYY-MM-DD format
+- If only month/day is given, infer the year from the semester/year context in the syllabus
+- If the syllabus says "Fall 2025" and an assignment is due "October 15", use "2025-10-15"
+- If no year is specified, use the current academic year (2025)
+- DO NOT use null for dates that are clearly stated in the syllabus text
+- Common date patterns to look for:
+  * "Due: [date]", "Due Date: [date]", "Deadline: [date]", "Submit by: [date]"
+  * "Exam on [date]", "Test on [date]", "Midterm: [date]", "Final: [date]"
+  * Assignment schedules, exam schedules, calendar sections, timeline sections
+- Be thorough - scan the entire document for dates, not just obvious sections
 
 Extract the following information and return as JSON:
 
@@ -47,7 +66,7 @@ Extract the following information and return as JSON:
     {
       "name": "Assignment name or null",
       "type": "homework/exam/project/quiz/paper/presentation or null",
-      "dueDate": "YYYY-MM-DD format or null",
+      "dueDate": "YYYY-MM-DD format or null (MUST extract actual dates from syllabus, do not use null if date is present)",
       "weight": "Percentage as number or null",
       "description": "Description or null",
       "instructions": "Instructions or null"
@@ -94,54 +113,47 @@ Extract the following information and return as JSON:
 
 IMPORTANT: Return ONLY the JSON object above, with actual values extracted from the syllabus text. Use null for missing information.`;
 
-    // Use Gemini 3 Flash Preview for syllabus parsing
-    const model = 'gemini-3-flash-preview';
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleApiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.3,
-          responseMimeType: 'application/json'
+    // Use GPT-4o Mini for syllabus parsing
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert at parsing academic syllabi. Extract structured information and return ONLY valid JSON. No additional text, no explanations, no markdown formatting.'
+        },
+        {
+          role: 'user',
+          content: prompt
         }
-      })
+      ],
+      response_format: { type: 'json_object' }
     });
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Google AI API failed: ${response.status} - ${errorText}`);
-    }
-    
-    const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const content = completion.choices[0]?.message?.content;
     
     if (!content) {
-      throw new Error('No content returned from Google AI');
+      throw new Error('No content returned from OpenAI');
     }
     
-    // Clean up the response - remove any markdown formatting
-    let cleanContent = content.trim();
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    }
-    if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
-    
-    // Parse the JSON response
+    // Parse the JSON response (OpenAI JSON mode should return clean JSON)
     let parsedData;
     try {
-      parsedData = JSON.parse(cleanContent);
+      parsedData = JSON.parse(content);
     } catch (parseError) {
-      console.error('Failed to parse Google AI response as JSON:', cleanContent);
-      throw new Error('Invalid JSON response from AI');
+      // Fallback: try to clean up if there's any markdown
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```json')) {
+        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      }
+      if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      try {
+        parsedData = JSON.parse(cleanContent);
+      } catch (e) {
+        console.error('Failed to parse OpenAI response as JSON:', content);
+        throw new Error('Invalid JSON response from AI');
+      }
     }
     
     // Add metadata
@@ -153,11 +165,13 @@ IMPORTANT: Return ONLY the JSON object above, with actual values extracted from 
     
     return NextResponse.json(parsedData);
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('AI extraction error:', error);
+    const errorMessage = error?.message || error?.error?.message || 'Unknown error';
+    console.error('OpenAI error details:', errorMessage, error?.response?.status, error?.status);
     return NextResponse.json({ 
-      error: 'Failed to extract syllabus information',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: errorMessage,
+      details: error?.response?.data || error?.error || 'Unknown error'
     }, { status: 500 });
   }
 }

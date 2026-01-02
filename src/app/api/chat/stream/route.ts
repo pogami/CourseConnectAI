@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { provideStudyAssistanceWithFallback } from '@/ai/services/dual-ai-service';
+import { provideStudyAssistanceWithStreaming } from '@/ai/services/dual-ai-service';
 import { filterContent } from '@/lib/content-filter';
 import { db } from '@/lib/firebase/server';
 import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
@@ -165,8 +165,11 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             finalQuestion = `${enhancedQuestion}\n\n[IMPORTANT CONTEXT: The student is showing signs of frustration (${frustration.level} level). ${frustration.reasons.join(', ')}. ${frustration.suggestedApproach === 'analogy' ? 'Use a real-world analogy or sports example instead of formulas. Make it relatable.' : frustration.suggestedApproach === 'step-by-step' ? 'Break this down into very small, clear steps. Go slowly.' : frustration.suggestedApproach === 'example' ? 'Use concrete examples to illustrate the concept.' : frustration.suggestedApproach === 'break' ? 'Break this into the smallest possible pieces.' : ''} Start your response with empathy, acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.]`;
           }
 
-          // Call AI service
-          const aiResult = await provideStudyAssistanceWithFallback({
+          // Call AI service with native streaming
+          let fullAnswer = '';
+          let wordBuffer = ''; // Buffer for accumulating characters until we have complete words
+          
+          const aiResult = await provideStudyAssistanceWithStreaming({
             question: finalQuestion,
             context: enrichedContext,
             conversationHistory: conversationHistory || [],
@@ -176,6 +179,48 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             fileContext: fileContext, // Include document context so AI can reference uploaded documents
             learningProfile: learningProfile, // Include learning profile for personalization
             aiResponseType: aiResponseType // Pass response type to control AI tone
+          }, (chunk: string) => {
+            // Accumulate chunks and split into complete words before sending
+            fullAnswer += chunk;
+            wordBuffer += chunk;
+            
+            // Split into words - match words and spaces
+            const parts = wordBuffer.match(/\S+|\s+/g) || [];
+            
+            // Find complete words (word + space pairs)
+            let completeWords: string[] = [];
+            let incompletePart = '';
+            
+            // Process word + space pairs
+            for (let i = 0; i < parts.length - 1; i += 2) {
+              const word = parts[i];
+              const space = parts[i + 1];
+              
+              if (word && /\S/.test(word)) {
+                // Complete word with space
+                completeWords.push(word + (space || ' '));
+              }
+            }
+            
+            // Check if last part is incomplete
+            if (parts.length > 0) {
+              const lastPart = parts[parts.length - 1];
+              // If it's a word (not whitespace) and doesn't end with punctuation, it's incomplete
+              if (/\S/.test(lastPart) && !/[.,!?;:]$/.test(lastPart)) {
+                incompletePart = lastPart;
+              }
+            }
+            
+            // Send complete words one at a time
+            for (const word of completeWords) {
+              controller.enqueue(encoder.encode(JSON.stringify({
+                type: 'content',
+                content: word
+              }) + '\n'));
+            }
+            
+            // Keep incomplete part in buffer
+            wordBuffer = incompletePart;
           });
 
           if (!aiResult || !aiResult.answer) {
@@ -183,73 +228,26 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             throw new Error('AI service returned invalid response');
           }
 
-          let answer = aiResult.answer;
-          
-          // Ensure answer is a string
-          if (typeof answer !== 'string') {
-            console.warn('AI answer is not a string, converting:', typeof answer);
-            answer = String(answer || '');
+          // Send any remaining buffered word
+          if (wordBuffer.trim()) {
+            controller.enqueue(encoder.encode(JSON.stringify({
+              type: 'content',
+              content: wordBuffer + ' '
+            }) + '\n'));
           }
-
-          // Check if answer is empty before processing
-          if (!answer || !answer.trim()) {
+          
+          // Ensure we have the full answer (in case streaming didn't capture everything)
+          const finalAnswer = fullAnswer.trim() || aiResult.answer.trim();
+          
+          if (!finalAnswer) {
             console.error('AI service returned empty answer');
             throw new Error('AI service returned empty response');
           }
 
-          // Post-process the response to fix formatting issues
-          // Fix missing spaces after punctuation
-          answer = answer.replace(/([.!?])([A-Z])/g, '$1 $2');
-          // Fix missing spaces in numbered lists (1. 2. 3.)
-          answer = answer.replace(/(\d+)\.([A-Za-z])/g, '$1. $2');
-          // Ensure proper spacing around list items - add newline before numbered items
-          answer = answer.replace(/([.!?])\s*(\d+)\./g, '$1\n\n$2.');
-          // Fix spacing after colons in list items
-          answer = answer.replace(/(\d+\.\s+[^:]+):([A-Z])/g, '$1: $2');
-          // Add newline after list item numbers if missing
-          answer = answer.replace(/(\d+\.\s+[^:]+):\s*/g, '$1:\n');
-          // Fix multiple spaces
-          answer = answer.replace(/  +/g, ' ');
-          // Clean up multiple newlines (keep max 2)
-          answer = answer.replace(/\n{3,}/g, '\n\n');
-          // Remove the aggressive newline additions - let the AI's natural formatting stand
-          // Only fix spacing issues, don't add paragraph breaks
-          // Trim and clean
-          answer = answer.trim();
-          
-          // Final check - ensure answer is not empty after processing
-          if (!answer || !answer.trim()) {
-            console.error('Answer became empty after processing');
-            throw new Error('AI response became empty after processing');
-          }
-
-          // Stream the response in chunks for smooth, natural streaming
-          // Use larger chunks to reduce lag and glitches
-          const chunkSize = 15; // Characters per chunk for smoother streaming
-          let position = 0;
-          
-          while (position < answer.length) {
-            // Get next chunk
-            const chunk = answer.slice(position, position + chunkSize);
-            position += chunkSize;
-            
-            // Skip empty chunks
-            if (!chunk.trim() && chunk !== ' ') continue;
-            
-            // Send chunk
-            controller.enqueue(encoder.encode(JSON.stringify({
-              type: 'content',
-              content: chunk
-            }) + '\n'));
-
-            // Smaller, more consistent delay for smoother streaming
-            await new Promise(resolve => setTimeout(resolve, 15));
-          }
-
-          // Send done signal with final response (no delay needed)
+          // Send done signal with final response
           controller.enqueue(encoder.encode(JSON.stringify({
             type: 'done',
-            fullResponse: answer
+            fullResponse: finalAnswer
           }) + '\n'));
 
           controller.close();

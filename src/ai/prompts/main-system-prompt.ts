@@ -35,7 +35,7 @@ export function generateMainSystemPrompt(options: SystemPromptOptions = {}): str
     ? `You are talking to ${userName}. Always remember their name and use it naturally in your responses when appropriate. `
     : '';
 
-  let prompt = `You're a helpful tutor chatting with a student. ${userNameSection}Be completely natural - match their vibe, tone, and energy. If they're casual, be casual. If they're serious, be serious. If they're excited, match that energy. Just respond naturally like a real person would.
+  let prompt = `You are CourseConnect AI, a helpful tutor chatting with a student. ${userNameSection}Be completely natural - match their vibe, tone, and energy. If they're casual, be casual. If they're serious, be serious. If they're excited, match that energy. Just respond naturally like a real person would.
 
 ${syllabusSection}${courseInfo ? `Course: ${courseInfo}` : ''}${dateSection ? `Today: ${dateSection}` : ''}
 
@@ -63,7 +63,7 @@ export function generateOpenAISystemMessage(options: SystemPromptOptions = {}): 
     ? `You are talking to ${userName}. Always remember their name and use it naturally in your responses when appropriate. `
     : '';
 
-  let systemMessage = `You're a helpful tutor chatting with a student. ${userNameSection}Be completely natural - match their vibe, tone, and energy. If they're casual, be casual. If they're serious, be serious. If they're excited, match that energy. Just respond naturally like a real person would.
+  let systemMessage = `You are CourseConnect AI, a helpful tutor chatting with a student. ${userNameSection}Be completely natural - match their vibe, tone, and energy. If they're casual, be casual. If they're serious, be serious. If they're excited, match that energy. Just respond naturally like a real person would.
 
 ${syllabusContent ? 'The user message below contains the FULL SYLLABUS TEXT at the very top (if provided).\n\n' : ''}
 

@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no', // Disable nginx buffering (Vercel uses nginx)
         },
       });
     }
@@ -177,15 +178,16 @@ Start your response with empathy and understanding. Acknowledge their frustratio
               const db = await getDb();
               if (db && typeof db.collection === 'function') {
                 const userDoc = await db.collection('users').doc(userId).get();
-                if (userDoc.exists) {
-                  const userData = userDoc.data();
+                if (userDoc && userDoc.exists && typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists) {
+                  const userData = typeof userDoc.data === 'function' ? userDoc.data() : userDoc.data;
                   if (userData?.learningProfile) {
                     learningProfile = userData.learningProfile;
                   }
                 }
               }
-            } catch (error) {
-              console.warn('Failed to fetch learning profile:', error);
+            } catch (error: any) {
+              console.warn('Failed to fetch learning profile:', error?.message || error);
+              // Continue without learning profile - not critical
             }
           }
 
@@ -218,10 +220,16 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             fullAnswer += chunk;
             
             // Send chunk directly to client - let it stream naturally
-            controller.enqueue(encoder.encode(JSON.stringify({
-              type: 'content',
-              content: chunk
-            }) + '\n'));
+            // CRITICAL: Flush immediately for Vercel/production
+            try {
+              controller.enqueue(encoder.encode(JSON.stringify({
+                type: 'content',
+                content: chunk
+              }) + '\n'));
+            } catch (enqueueError) {
+              // If controller is closed, stop streaming
+              console.warn('Stream controller closed:', enqueueError);
+            }
           });
 
           if (!aiResult || !aiResult.answer) {
@@ -237,14 +245,17 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             throw new Error('AI service returned empty response');
           }
 
-          // Send done signal with final response - wait a tiny bit to ensure all content chunks are sent
-          await new Promise(resolve => setTimeout(resolve, 50));
+          // CRITICAL: Flush any remaining data before sending done signal
+          // On Vercel, we need to ensure all chunks are sent before closing
+          await new Promise(resolve => setTimeout(resolve, 100));
           
           controller.enqueue(encoder.encode(JSON.stringify({
             type: 'done',
             fullResponse: finalAnswer
           }) + '\n'));
 
+          // Give Vercel time to send the done message before closing
+          await new Promise(resolve => setTimeout(resolve, 50));
           controller.close();
         } catch (error: any) {
           console.error('Streaming error:', error);
@@ -267,8 +278,11 @@ Start your response with empathy and understanding. Acknowledge their frustratio
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform, no-store',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // CRITICAL: Disable nginx buffering on Vercel
+        'Transfer-Encoding': 'chunked',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error: any) {

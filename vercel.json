@@ -13,6 +13,11 @@
       "runtime": "@vercel/node@3.0.0",
       "memory": 2048,
       "maxDuration": 60
+    },
+    "src/app/api/chat/stream/route.ts": {
+      "runtime": "@vercel/node@3.0.0",
+      "memory": 1024,
+      "maxDuration": 300
     }
   },
   "rewrites": [

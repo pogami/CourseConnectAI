@@ -51,7 +51,6 @@ export const CRISIS_RESOURCES: CrisisResource[] = [
 const PROFANITY_WORDS = [
   // Explicit profanity
   'fuck', 'fucking', 'fucked', 'fucker', 'fucks',
-  'shit', 'shitting', 'shitted', 'shitter', 'shits',
   'bitch', 'bitches', 'bitching', 'bitched',
   'asshole', 'assholes', 'dick', 'dicks', 'pussy', 'pussies',
   'damn', 'damned', 'damning', 'hell', 'crap', 'crap',

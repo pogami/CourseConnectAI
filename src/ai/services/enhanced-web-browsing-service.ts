@@ -8,7 +8,6 @@
  * - Form interaction and dynamic content
  */
 
-import puppeteer, { Browser, Page } from 'puppeteer';
 import { searchCurrentInformation, formatSearchResultsForAI } from './web-search-service';
 
 export interface BrowsingResult {
@@ -47,9 +46,21 @@ export async function browseWithPuppeteer(url: string, options: {
   waitForContent?: boolean;
   timeout?: number;
 } = {}): Promise<BrowsingResult> {
-  let browser: Browser | null = null;
+  // Puppeteer is only available in Node.js runtime, not Edge
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    return {
+      success: false,
+      error: 'Puppeteer is not available in the Edge runtime.'
+    };
+  }
+
+  let browser: any = null;
   
   try {
+    // Dynamic import to avoid breaking Edge runtime
+    const puppeteerModule = await import('puppeteer');
+    const puppeteer = puppeteerModule.default || puppeteerModule;
+    
     console.log('🌐 Starting Puppeteer browsing for:', url);
     
     // Validate URL

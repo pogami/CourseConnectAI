@@ -7,8 +7,6 @@
  * and if it fails, automatically falls back to Google AI (Gemini 3 Flash Preview).
  */
 
-import { googleAI } from '@genkit-ai/googleai';
-import { ai } from '@/ai/genkit';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { searchCurrentInformation, needsCurrentInformation, formatSearchResultsForAI } from './web-search-service';
@@ -20,12 +18,6 @@ import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null;
-
-// Initialize Google AI
-const googleApiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
-
-// Initialize Anthropic (Claude)
-const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
 // AI Provider Types
 export type AIProvider = 'claude' | 'google' | 'openai' | 'fallback';
@@ -2219,16 +2211,110 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
 }
 
 /**
- * Try Google AI (Gemini) with native streaming
+ * Try Google AI (Gemini) with native streaming via direct fetch
+ * This avoids Genkit dependencies and works on Edge runtime
  */
 async function tryGoogleAINativeStreaming(
   input: StudyAssistanceInput,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void | Promise<void>
 ): Promise<AIResponse> {
-  // Similar implementation for Gemini
-  // For now, fallback to regular tryGoogleAI
-  const result = await tryGoogleAI(input);
-  return result;
+  const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
+  
+  if (!apiKey || apiKey.trim() === '' || apiKey === 'demo-key' || apiKey === 'your_google_ai_key_here') {
+    throw new Error('Google AI API key not configured');
+  }
+
+  // Build conversation history
+  const history = input.conversationHistory && input.conversationHistory.length > 0 
+    ? input.conversationHistory.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      }))
+    : [];
+
+  const fileContext = input.fileContext 
+    ? `\n\n[DOCUMENT CONTEXT: ${input.fileContext.fileName}]\n${input.fileContext.fileContent || ''}`
+    : '';
+
+  const systemInstruction = generateMainSystemPrompt({
+    userName: input.userName || undefined
+  });
+
+  const userMessage = `Question: ${input.question}\nContext: ${input.context || 'General'}${fileContext}`;
+
+  // Gemini API URL for streaming
+  const model = input.thinkingMode ? 'gemini-2.0-flash-thinking-exp' : 'gemini-2.0-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [
+        ...history,
+        {
+          role: 'user',
+          parts: [{ text: userMessage }]
+        }
+      ],
+      systemInstruction: {
+        parts: [{ text: systemInstruction }]
+      },
+      generationConfig: {
+        maxOutputTokens: 4096,
+        temperature: 1.0 // Use default for better results
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Gemini API failed: ${response.status} ${error.substring(0, 200)}`);
+  }
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  let fullAnswer = '';
+
+  if (!reader) throw new Error('No reader for Gemini stream');
+
+  try {
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        
+        try {
+          const data = JSON.parse(line.slice(6));
+          const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (chunk) {
+            fullAnswer += chunk;
+            const result = onChunk(chunk);
+            if (result instanceof Promise) await result;
+          }
+        } catch (e) {
+          // Skip partial/malformed JSON
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return {
+    answer: fullAnswer.trim(),
+    provider: 'google',
+    isSearchRequest: false
+  };
 }
 
 /**

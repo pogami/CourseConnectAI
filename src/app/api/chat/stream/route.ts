@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { provideStudyAssistanceWithStreaming } from '@/ai/services/dual-ai-service';
 import { filterContent } from '@/lib/content-filter';
-import { getDb } from '@/lib/firebase/server';
 import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
+
+export const runtime = 'edge';
 
 export async function POST(request: NextRequest) {
   try {
@@ -154,21 +155,8 @@ ${fullSyllabus}
             });
           }
 
-          // Fetch user's learning profile if userId is provided for personalization
+          // Fetch user's learning profile disabled for Edge runtime compatibility
           let learningProfile: any = undefined;
-          if (userId && userId !== 'guest') {
-            try {
-              const db = await getDb();
-              const profileDoc = await db.collection('users').doc(userId).collection('learningProfile').doc('default').get();
-              if (profileDoc && (typeof profileDoc.exists === 'function' ? profileDoc.exists() : profileDoc.exists)) {
-                learningProfile = (typeof profileDoc.data === 'function' ? profileDoc.data() : profileDoc.data);
-                console.log('✅ Stream: Loaded user learning profile');
-              }
-            } catch (profileError) {
-              console.warn('⚠️ Stream: Failed to fetch learning profile:', profileError);
-              // Continue without learning profile
-            }
-          }
 
           // Detect frustration and emotional state
           const { detectFrustration } = await import('@/lib/emotional-intelligence');

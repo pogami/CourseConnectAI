@@ -80,6 +80,13 @@ export async function POST(request: NextRequest) {
         const encoder = new TextEncoder();
 
         try {
+          // CRITICAL: Send initial chunk immediately to establish stream connection
+          // This prevents Vercel from buffering the entire response
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'status',
+            message: 'Starting...'
+          }) + '\n'));
+          
           // Send thinking status
           controller.enqueue(encoder.encode(JSON.stringify({
             type: 'thinking',
@@ -215,17 +222,23 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             fileContext: fileContext, // Include document context so AI can reference uploaded documents
             learningProfile: learningProfile, // Include learning profile for personalization
             aiResponseType: aiResponseType // Pass response type to control AI tone
-          }, (chunk: string) => {
+          }, async (chunk: string) => {
             // Stream chunks immediately as they come from AI - no buffering, no delays
             fullAnswer += chunk;
             
             // Send chunk directly to client - let it stream naturally
             // CRITICAL: Flush immediately for Vercel/production
             try {
-              controller.enqueue(encoder.encode(JSON.stringify({
+              const chunkData = encoder.encode(JSON.stringify({
                 type: 'content',
                 content: chunk
-              }) + '\n'));
+              }) + '\n');
+              
+              controller.enqueue(chunkData);
+              
+              // Force flush on Vercel by yielding control (allows nginx to send chunk)
+              // This ensures chunks are sent immediately instead of being buffered
+              await new Promise(resolve => setTimeout(resolve, 0));
             } catch (enqueueError) {
               // If controller is closed, stop streaming
               console.warn('Stream controller closed:', enqueueError);

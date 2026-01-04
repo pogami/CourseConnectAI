@@ -653,6 +653,19 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
               <p className="text-gray-500 dark:text-gray-400">
                 {isSigningUp ? "Start your academic journey today" : "Enter your details to continue"}
               </p>
+              {/* Desktop recommendation for mobile users */}
+              {typeof window !== 'undefined' && (window.innerWidth <= 768 || /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent)) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
+                >
+                  <p className="text-xs text-blue-800 dark:text-blue-200 text-center">
+                    💡 <strong>Best Experience:</strong> CourseConnect works best on desktop! Try it on your computer for the full experience.
+                  </p>
+                </motion.div>
+              )}
             </motion.div>
           </div>
 

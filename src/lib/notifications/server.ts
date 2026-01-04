@@ -1,4 +1,4 @@
-// Temporarily disabled for build
+// Lazy imports for Firebase Admin to avoid build errors
 // import { db } from '@/lib/firebase/server';
 // import { Timestamp } from 'firebase-admin/firestore';
 
@@ -35,6 +35,16 @@ export async function createNotification(params: CreateNotificationParams) {
       return null;
     }
 
+    // Lazy import Firebase Admin to avoid build errors
+    const { getDb } = await import('@/lib/firebase/server');
+    const { Timestamp } = await import('firebase-admin/firestore');
+    const db = await getDb();
+
+    if (!db || typeof db.collection !== 'function') {
+      console.warn('Firebase not configured, notification not created');
+      return null;
+    }
+
     const notificationData = {
       userId,
       title,
@@ -50,13 +60,13 @@ export async function createNotification(params: CreateNotificationParams) {
     };
 
     const notificationRef = await db.collection('notifications').add(notificationData);
-    
-    console.log(`✅ Notification created for user ${userId}: ${title}`);
-    
-    return notificationRef.id;
-  } catch (error) {
-    console.error('❌ Error creating notification:', error);
-    return null;
+    const notificationId = notificationRef.id;
+
+    console.log(`✅ Notification created: ${notificationId} for user ${userId}`);
+    return { id: notificationId, success: true };
+  } catch (error: any) {
+    console.error('Failed to create notification:', error);
+    return { id: null, success: false, error: error.message };
   }
 }
 
@@ -67,32 +77,27 @@ export async function createNotification(params: CreateNotificationParams) {
 export async function createAIResponseNotification(
   userId: string,
   aiResponse: string,
-  chatId: string,
-  chatTitle?: string
+  chatId?: string,
+  classId?: string
 ) {
-  try {
-    // Get first sentence or 100 chars of AI response for description
-    const description = aiResponse
-      .split(/[.!?]/)[0]
-      .substring(0, 100)
-      .trim() + '...';
-
-    const title = chatTitle 
-      ? `New message in ${chatTitle}`
-      : 'New message from CourseConnect AI';
-
-    return await createNotification({
-      userId,
-      title,
-      description,
-      type: 'message',
-      priority: 'medium',
-      chatId,
-      actionUrl: `/dashboard/chat?id=${chatId}`
-    });
-  } catch (error) {
-    console.error('Error creating AI response notification:', error);
+  if (!userId) {
+    console.warn('Cannot create AI response notification: userId is required');
     return null;
   }
-}
 
+  // Truncate response for notification
+  const truncatedResponse = aiResponse.length > 150 
+    ? aiResponse.substring(0, 150) + '...' 
+    : aiResponse;
+
+  return createNotification({
+    userId,
+    title: '💬 New AI Response',
+    description: truncatedResponse,
+    type: 'message',
+    priority: 'low',
+    chatId,
+    classId,
+    actionUrl: chatId ? `/dashboard/chat?tab=${chatId}` : '/dashboard/chat'
+  });
+}

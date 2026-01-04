@@ -11,13 +11,55 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { searchCurrentInformation, needsCurrentInformation, formatSearchResultsForAI } from './web-search-service';
 import { extractUrlsFromText, scrapeMultiplePages, formatScrapedContentForAI } from './web-scraping-service';
-import { shouldAutoSearch, performAutoSearch, enhancedWebBrowsing, shouldUsePuppeteer } from './enhanced-web-browsing-service';
+
+// Enhanced web browsing is only imported dynamically to avoid breaking Edge runtime
+// import { shouldAutoSearch, performAutoSearch, enhancedWebBrowsing, shouldUsePuppeteer } from './enhanced-web-browsing-service';
 import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
 
 // Initialize OpenAI client
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null;
+
+/**
+ * Helper to call enhanced browsing safely in both Edge and Node.js
+ */
+async function safeEnhancedBrowsing(url: string, options: any = {}) {
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return { success: false };
+      const html = await response.text();
+      return {
+        success: true,
+        content: html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 10000),
+        title: 'Web Page',
+        url
+      };
+    } catch (e) {
+      return { success: false };
+    }
+  }
+  const { enhancedWebBrowsing, shouldUsePuppeteer } = await import('./enhanced-web-browsing-service');
+  const usePuppeteer = options.usePuppeteer ?? shouldUsePuppeteer(url);
+  return await enhancedWebBrowsing(url, { ...options, usePuppeteer });
+}
+
+/**
+ * Helper to call auto search safely in both Edge and Node.js
+ */
+async function safeAutoSearch(question: string, aiResponse: string) {
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    return { shouldSearch: false };
+  }
+  const { shouldAutoSearch, performAutoSearch } = await import('./enhanced-web-browsing-service');
+  const autoSearchResult = shouldAutoSearch(question, aiResponse);
+  if (autoSearchResult.shouldSearch && autoSearchResult.searchQuery) {
+    const searchResults = await performAutoSearch(autoSearchResult.searchQuery);
+    return { ...autoSearchResult, results: searchResults };
+  }
+  return autoSearchResult;
+}
 
 // AI Provider Types
 export type AIProvider = 'claude' | 'google' | 'openai' | 'fallback';
@@ -129,16 +171,14 @@ ${input.fileContext.fileContent || 'Document content not available.'}
     if (urls.length > 0) {
       console.log('Found URLs to scrape:', urls);
       try {
-        const enhancedResults = await Promise.all(
-          urls.map(async (url) => {
-            const usePuppeteer = shouldUsePuppeteer(url);
-            const result = await enhancedWebBrowsing(url, {
-              usePuppeteer,
-              takeScreenshot: false,
-              autoSearchFallback: false
-            });
-            
-            return result.success ? {
+      const enhancedResults = await Promise.all(
+        urls.map(async (url) => {
+          const result = await safeEnhancedBrowsing(url, {
+            takeScreenshot: false,
+            autoSearchFallback: false
+          });
+          
+          return result.success ? {
               url: result.url!,
               title: result.title || 'Untitled',
               content: result.content || '',
@@ -525,11 +565,7 @@ ${input.fileContext.fileContent || 'Document content not available.'}
         // Use enhanced browsing for JavaScript-heavy sites
         const enhancedResults = await Promise.all(
           urls.map(async (url) => {
-            const usePuppeteer = shouldUsePuppeteer(url);
-            console.log(`Browsing ${url} with ${usePuppeteer ? 'Puppeteer' : 'regular fetch'}`);
-            
-            const result = await enhancedWebBrowsing(url, {
-              usePuppeteer,
+            const result = await safeEnhancedBrowsing(url, {
               takeScreenshot: false, // Don't take screenshots for now
               autoSearchFallback: false
             });
@@ -957,13 +993,13 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
     }
     
     // Check if we should automatically search for more information
-    const autoSearchResult = shouldAutoSearch(input.question, answer);
+    const autoSearchResult = await safeAutoSearch(input.question, answer);
     let enhancedAnswer = answer;
     
-    if (autoSearchResult.shouldSearch && autoSearchResult.searchQuery) {
+    if (autoSearchResult.shouldSearch && (autoSearchResult as any).results) {
       console.log('🤖 AI seems uncertain, performing automatic search for:', autoSearchResult.searchQuery);
       try {
-        const searchResults = await performAutoSearch(autoSearchResult.searchQuery);
+        const searchResults = (autoSearchResult as any).results;
         if (searchResults && searchResults.trim().length > 0) {
           // Only add search results if they contain actual useful information
           if (!searchResults.includes('Real-Time Search Results') && 
@@ -1049,11 +1085,7 @@ ${input.fileContext.fileContent || 'Document content not available.'}
         // Use enhanced browsing for JavaScript-heavy sites
         const enhancedResults = await Promise.all(
           urls.map(async (url) => {
-            const usePuppeteer = shouldUsePuppeteer(url);
-            console.log(`Browsing ${url} with ${usePuppeteer ? 'Puppeteer' : 'regular fetch'}`);
-            
-            const result = await enhancedWebBrowsing(url, {
-              usePuppeteer,
+            const result = await safeEnhancedBrowsing(url, {
               takeScreenshot: false, // Don't take screenshots for now
               autoSearchFallback: false
             });
@@ -1400,13 +1432,13 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
     }
     
     // Check if we should automatically search for more information
-    const autoSearchResult = shouldAutoSearch(input.question, answer);
+    const autoSearchResult = await safeAutoSearch(input.question, answer);
     let enhancedAnswer = answer;
     
-    if (autoSearchResult.shouldSearch && autoSearchResult.searchQuery) {
+    if (autoSearchResult.shouldSearch && (autoSearchResult as any).results) {
       console.log('🤖 AI seems uncertain, performing automatic search for:', autoSearchResult.searchQuery);
       try {
-        const searchResults = await performAutoSearch(autoSearchResult.searchQuery);
+        const searchResults = (autoSearchResult as any).results;
         if (searchResults && searchResults.trim().length > 0) {
           // Only add search results if they contain actual useful information
           if (!searchResults.includes('Real-Time Search Results') && 
@@ -1888,9 +1920,7 @@ ${input.fileContext.fileContent || 'Document content not available.'}
     try {
       const enhancedResults = await Promise.all(
         urls.map(async (url) => {
-          const usePuppeteer = shouldUsePuppeteer(url);
-          const result = await enhancedWebBrowsing(url, {
-            usePuppeteer,
+          const result = await safeEnhancedBrowsing(url, {
             takeScreenshot: false,
             autoSearchFallback: false
           });

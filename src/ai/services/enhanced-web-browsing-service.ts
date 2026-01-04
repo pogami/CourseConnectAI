@@ -57,9 +57,10 @@ export async function browseWithPuppeteer(url: string, options: {
   let browser: any = null;
   
   try {
-    // Dynamic import to avoid breaking Edge runtime
-    const puppeteerModule = await import('puppeteer');
-    const puppeteer = puppeteerModule.default || puppeteerModule;
+    // Dynamic import removed for Edge compatibility
+    // const puppeteerModule = await import('puppeteer');
+    // const puppeteer = puppeteerModule.default || puppeteerModule;
+    return { success: false, error: 'Puppeteer disabled for Edge runtime compatibility.' };
     
     console.log('🌐 Starting Puppeteer browsing for:', url);
     

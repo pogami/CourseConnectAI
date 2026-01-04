@@ -1318,57 +1318,6 @@ export default function ChatPage() {
                     metadata = null;
                     let buffer = "";
                     let displayedText = ""; // What's currently displayed
-                    let wordQueue: string[] = []; // Queue of words to display
-                    let isProcessingWords = false;
-                    let processingTimeout: NodeJS.Timeout | null = null;
-                    let isStreamComplete = false; // Track if stream is done
-                    const WORD_DELAY_MS = 25; // Consistent delay between each word
-
-                    // Function to process word queue - one word at a time for consistent streaming
-                    const processWordQueue = () => {
-                        if (isProcessingWords || wordQueue.length === 0) return;
-                        isProcessingWords = true;
-
-                        const processNext = () => {
-                            // Check if aborted
-                            if (abortController.signal.aborted) {
-                                wordQueue = [];
-                                isProcessingWords = false;
-                                if (processingTimeout) clearTimeout(processingTimeout);
-                                return;
-                            }
-
-                            // Process one word at a time for consistent streaming
-                            if (wordQueue.length > 0) {
-                                const word = wordQueue.shift()!;
-                                displayedText += word; // Word already includes trailing space
-                                
-                                // Use requestAnimationFrame for smooth updates
-                                requestAnimationFrame(() => {
-                                    setStreamingResponse(displayedText);
-                                });
-
-                                // Schedule next word with consistent delay
-                                processingTimeout = setTimeout(processNext, WORD_DELAY_MS);
-                            } else {
-                                // Queue is empty, stop processing
-                                isProcessingWords = false;
-                                processingTimeout = null;
-                                
-                                // If stream is complete and queue is empty, do final update
-                                if (isStreamComplete) {
-                                    // Ensure final text matches what we accumulated
-                                    const finalText = fullResponse.trim();
-                                    if (finalText && displayedText.trim() !== finalText) {
-                                        setStreamingResponse(finalText);
-                                        displayedText = finalText;
-                                    }
-                                }
-                            }
-                        };
-
-                        processNext();
-                    };
 
                     try {
                         while (true) {
@@ -1409,26 +1358,22 @@ export default function ChatPage() {
 
                                 // Handle different response formats - prioritize streaming format
                                 if (data.type === "content" && data.content) {
-                                    // Server now sends complete words, so just add to queue
+                                    // Stream chunks directly as they arrive - natural streaming
                                     fullResponse += data.content;
                                     
-                                    // Add word to queue (server already sent complete word + space)
-                                    wordQueue.push(data.content);
-                                    
-                                    // Start processing word queue if not already processing
-                                    if (wordQueue.length > 0 && !isProcessingWords) {
-                                        processWordQueue();
-                                    }
+                                    // Update UI immediately with new chunk (natural streaming)
+                                    displayedText += data.content;
+                                    setStreamingResponse(displayedText);
                                 } else if (data.type === "done") {
-                                    // Mark stream as complete - don't update yet, wait for queue to finish
-                                    isStreamComplete = true;
-                                    
-                                    // Use the full response from done message (most accurate)
+                                    // Stream complete - use final response
                                     const finalResponse = data.fullResponse || fullResponse;
-                                    fullResponse = finalResponse; // Update local var for consistency
+                                    fullResponse = finalResponse;
                                     
-                                    // Don't update UI here - let the word queue finish processing first
-                                    // The final update will happen in processWordQueue when queue is empty
+                                    // Final update to ensure everything is displayed
+                                    if (finalResponse && displayedText.trim() !== finalResponse.trim()) {
+                                        setStreamingResponse(finalResponse);
+                                        displayedText = finalResponse;
+                                    }
                                     
                                     // Collect metadata
                                     if (data.sources) sources = data.sources;
@@ -1466,35 +1411,11 @@ export default function ChatPage() {
                             }
                         }
                         
-                        // Wait for word queue to finish processing (with timeout)
-                        let waitCount = 0;
-                        const maxWait = 200; // Max 10 seconds (200 * 50ms)
-                        while ((isProcessingWords || wordQueue.length > 0) && waitCount < maxWait) {
-                            await new Promise(resolve => setTimeout(resolve, 50));
-                            waitCount++;
-                        }
-                        
-                        // Clear any pending timeout
-                        if (processingTimeout) {
-                            clearTimeout(processingTimeout);
-                            processingTimeout = null;
-                        }
-                        
-                        // Final update - ensure everything is displayed (only if stream completed)
-                        // This is a safety check in case the done message didn't arrive
-                        if (isStreamComplete) {
-                            const finalText = fullResponse.trim();
-                            if (finalText && displayedText.trim() !== finalText) {
-                                setStreamingResponse(finalText);
-                                displayedText = finalText;
-                            }
-                        } else {
-                            // Stream ended without done message - use what we have
-                            const finalText = fullResponse.trim() || displayedText.trim();
-                            if (finalText) {
-                                setStreamingResponse(finalText);
-                                displayedText = finalText;
-                            }
+                        // Final update - ensure everything is displayed
+                        const finalText = fullResponse.trim();
+                        if (finalText && displayedText.trim() !== finalText) {
+                            setStreamingResponse(finalText);
+                            displayedText = finalText;
                         }
                     } catch (readError: any) {
                         // Handle reader cancellation or errors

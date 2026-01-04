@@ -197,11 +197,8 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             finalQuestion = `${enhancedQuestion}\n\n[IMPORTANT CONTEXT: The student is showing signs of frustration (${frustration.level} level). ${frustration.reasons.join(', ')}. ${frustration.suggestedApproach === 'analogy' ? 'Use a real-world analogy or sports example instead of formulas. Make it relatable.' : frustration.suggestedApproach === 'step-by-step' ? 'Break this down into very small, clear steps. Go slowly.' : frustration.suggestedApproach === 'example' ? 'Use concrete examples to illustrate the concept.' : frustration.suggestedApproach === 'break' ? 'Break this into the smallest possible pieces.' : ''} Start your response with empathy, acknowledge their frustration, then pivot to a different approach. Be patient and encouraging.]`;
           }
 
-          // Call AI service with native streaming
+          // Call AI service with native streaming - stream chunks as they come naturally
           let fullAnswer = '';
-          let wordBuffer = ''; // Buffer for accumulating characters until we have complete words
-          let lastWordSentTime = 0; // Track when last word was sent for consistent timing
-          const WORD_INTERVAL_MS = 25; // Consistent delay between words
           
           const aiResult = await provideStudyAssistanceWithStreaming({
             question: finalQuestion,
@@ -213,56 +210,15 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             fileContext: fileContext, // Include document context so AI can reference uploaded documents
             learningProfile: learningProfile, // Include learning profile for personalization
             aiResponseType: aiResponseType // Pass response type to control AI tone
-          }, async (chunk: string) => {
-            // Accumulate chunks and split into complete words before sending
+          }, (chunk: string) => {
+            // Stream chunks immediately as they come from AI - no buffering, no delays
             fullAnswer += chunk;
-            wordBuffer += chunk;
             
-            // Split into words - match words and spaces
-            const parts = wordBuffer.match(/\S+|\s+/g) || [];
-            
-            // Find complete words (word + space pairs)
-            let completeWords: string[] = [];
-            let incompletePart = '';
-            
-            // Process word + space pairs
-            for (let i = 0; i < parts.length - 1; i += 2) {
-              const word = parts[i];
-              const space = parts[i + 1];
-              
-              if (word && /\S/.test(word)) {
-                // Complete word with space
-                completeWords.push(word + (space || ' '));
-              }
-            }
-            
-            // Check if last part is incomplete
-            if (parts.length > 0) {
-              const lastPart = parts[parts.length - 1];
-              // If it's a word (not whitespace) and doesn't end with punctuation, it's incomplete
-              if (/\S/.test(lastPart) && !/[.,!?;:]$/.test(lastPart)) {
-                incompletePart = lastPart;
-              }
-            }
-            
-            // Send complete words one at a time with consistent timing
-            // CRITICAL: Process words sequentially with delay to ensure smooth streaming
-            for (let i = 0; i < completeWords.length; i++) {
-              const word = completeWords[i];
-              
-              // Always add delay between words for smooth streaming
-              await new Promise(resolve => setTimeout(resolve, WORD_INTERVAL_MS));
-              
-              controller.enqueue(encoder.encode(JSON.stringify({
-                type: 'content',
-                content: word
-              }) + '\n'));
-              
-              lastWordSentTime = Date.now();
-            }
-            
-            // Keep incomplete part in buffer
-            wordBuffer = incompletePart;
+            // Send chunk directly to client - let it stream naturally
+            controller.enqueue(encoder.encode(JSON.stringify({
+              type: 'content',
+              content: chunk
+            }) + '\n'));
           });
 
           if (!aiResult || !aiResult.answer) {

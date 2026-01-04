@@ -394,7 +394,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', // Claude Sonnet 4.5
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 4096,
         stream: true, // Enable native streaming
         system: systemInstruction,
@@ -2141,7 +2141,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514', // Claude Sonnet 4.5
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 4096,
       stream: true, // Enable native streaming
       system: systemInstruction,

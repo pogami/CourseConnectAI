@@ -521,41 +521,6 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
         throw new Error("Failed to save guest session. Please check your browser settings.");
       }
 
-      // Sign in anonymously so Firestore rules recognize the session
-      // Wrap in try-catch to handle Firebase initialization errors gracefully
-      let anonCred = null;
-      let anonUid = null;
-
-      try {
-        // Check if auth is available
-        if (!auth) {
-          throw new Error("Authentication service is not available. Please refresh the page.");
-        }
-
-        anonCred = await signInAnonymously(auth);
-        anonUid = anonCred?.user?.uid;
-        console.log("Anonymous sign-in successful:", anonUid);
-      } catch (authError: any) {
-        console.warn("Anonymous sign-in failed, continuing with guest mode:", authError);
-        // Continue without Firebase auth - guest mode will work with localStorage only
-        // This allows the app to work even if Firebase is having issues
-      }
-
-      // Create/update minimal user profile for anonymous user (non-blocking)
-      if (anonUid && db) {
-        try {
-          await setDoc(doc(db, "users", anonUid), {
-            displayName: username,
-            isAnonymous: true,
-            createdAt: new Date().toISOString()
-          }, { merge: true });
-          console.log("Guest user profile created in Firestore");
-        } catch (e) {
-          console.warn("Failed to write anonymous user profile (non-critical):", e);
-          // Don't throw - this is not critical for guest mode
-        }
-      }
-
       // Show success message
       toast({
         title: `Welcome, ${username}!`,
@@ -565,11 +530,41 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
 
       console.log("Redirecting to dashboard...");
 
-      // Small delay to ensure state is saved before redirect
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Redirect to dashboard
+      // Redirect IMMEDIATELY - don't wait for Firebase operations
       router.push('/dashboard');
+
+      // Do Firebase operations in the background (non-blocking)
+      // Sign in anonymously so Firestore rules recognize the session
+      (async () => {
+        try {
+          // Check if auth is available
+          if (!auth) {
+            console.warn("Auth not available, skipping anonymous sign-in");
+            return;
+          }
+
+          const anonCred = await signInAnonymously(auth);
+          const anonUid = anonCred?.user?.uid;
+          console.log("Anonymous sign-in successful (background):", anonUid);
+
+          // Create/update minimal user profile for anonymous user (non-blocking)
+          if (anonUid && db) {
+            try {
+              await setDoc(doc(db, "users", anonUid), {
+                displayName: username,
+                isAnonymous: true,
+                createdAt: new Date().toISOString()
+              }, { merge: true });
+              console.log("Guest user profile created in Firestore (background)");
+            } catch (e) {
+              console.warn("Failed to write anonymous user profile (non-critical):", e);
+            }
+          }
+        } catch (authError: any) {
+          console.warn("Anonymous sign-in failed (background), continuing with guest mode:", authError);
+          // This is fine - guest mode works with localStorage only
+        }
+      })();
 
     } catch (error: any) {
       console.error("Guest login error:", error);

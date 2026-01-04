@@ -135,42 +135,40 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
   useEffect(() => {
     const checkGuestStatus = async () => {
       if (user) {
-        // Check if it's a guest user from localStorage first
+        // ALWAYS check localStorage first - it's the source of truth for guest data
         const guestData = localStorage.getItem('guestUser');
-        if (guestData && (user.isGuest || user.isAnonymous)) {
-          setIsGuest(true);
-          
-          // Load profile picture and displayName from localStorage for guest users
+        if (guestData) {
           try {
             const parsed = JSON.parse(guestData);
-            if (parsed.profilePicture) {
-              setUserProfilePicture(parsed.profilePicture);
+            
+            // If Firebase user exists, merge them (localStorage takes precedence)
+            const mergedUser = {
+              ...user,
+              ...parsed, // Spread guest data to override Firebase user properties
+              uid: user.uid || parsed.uid, // Keep Firebase uid if available
+              isGuest: true,
+              isAnonymous: user.isAnonymous || true
+            };
+            
+            setIsGuest(true);
+            
+            // Load profile picture from merged data
+            if (mergedUser.profilePicture) {
+              setUserProfilePicture(mergedUser.profilePicture);
             }
-            // Update user object with guest displayName if available
-            if (parsed.displayName && !user.displayName) {
-              user.displayName = parsed.displayName;
-            }
+            
+            // Note: We can't mutate the user prop, but getGuestDisplayName() will handle displaying the correct name
+            console.log('Dashboard header: Merged Firebase user with localStorage guest data:', mergedUser.displayName);
+            return;
           } catch (error) {
-            console.error("Error loading guest profile picture:", error);
+            console.error("Error parsing guest data during merge:", error);
           }
-          return;
         }
         
-        // Also check if user is guest even if not marked as such (for anonymous auth)
-        if (guestData && !user.displayName && !user.email) {
-          try {
-            const parsed = JSON.parse(guestData);
-            if (parsed.displayName) {
-              setIsGuest(true);
-              user.displayName = parsed.displayName;
-              if (parsed.profilePicture) {
-                setUserProfilePicture(parsed.profilePicture);
-              }
-              return;
-            }
-          } catch (error) {
-            console.error("Error parsing guest data:", error);
-          }
+        // If no guest data, check if user is anonymous/guest from Firebase
+        if (user.isGuest || user.isAnonymous || !user.email) {
+          setIsGuest(true);
+          return;
         }
         
         // For authenticated users, check Firebase document
@@ -235,10 +233,12 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
         if (guestData) {
           try {
             const parsed = JSON.parse(guestData);
-            if (parsed.displayName && user && (user.isGuest || user.isAnonymous)) {
-              setIsGuest(true);
-              user.displayName = parsed.displayName;
+            setIsGuest(true);
+            // Update profile picture if available
+            if (parsed.profilePicture) {
+              setUserProfilePicture(parsed.profilePicture);
             }
+            console.log('Dashboard header: Guest name updated from storage event:', parsed.displayName);
           } catch (error) {
             console.error('Error parsing guest data from storage event:', error);
           }
@@ -249,13 +249,15 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
     // Also listen for custom events (for same-tab updates)
     const handleCustomStorageChange = () => {
       const guestData = localStorage.getItem('guestUser');
-      if (guestData && user && (user.isGuest || user.isAnonymous)) {
+      if (guestData) {
         try {
           const parsed = JSON.parse(guestData);
-          if (parsed.displayName) {
-            setIsGuest(true);
-            user.displayName = parsed.displayName;
+          setIsGuest(true);
+          // Update profile picture if available
+          if (parsed.profilePicture) {
+            setUserProfilePicture(parsed.profilePicture);
           }
+          console.log('Dashboard header: Guest name updated from custom event:', parsed.displayName);
         } catch (error) {
           console.error('Error parsing guest data:', error);
         }
@@ -269,7 +271,7 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('guestNameUpdated', handleCustomStorageChange);
     };
-  }, [user]);
+  }, []); // Empty deps - we read from localStorage directly
 
   // Removed realtime database presence tracking
   useEffect(() => {

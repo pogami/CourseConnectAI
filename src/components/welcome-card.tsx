@@ -1,9 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { X, MessageSquare, Users, Brain, BookOpen, Sparkles, Zap, Calendar, Target, GraduationCap, Award, BookText, BarChart3, TrendingUp } from "lucide-react";
+import {
+  Cancel01Icon,
+  Chatting01Icon,
+  UserGroupIcon,
+  Brain01Icon,
+  SparklesIcon,
+  Calendar01Icon,
+  Award01Icon,
+  GraduationScrollIcon,
+  AnalyticsUpIcon,
+  ChartBarLineIcon
+} from "hugeicons-react";
 
 interface WelcomeCardProps {
   chatType: 'general' | 'community' | 'class';
@@ -48,21 +59,21 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
       return {
         title: `Welcome to ${courseName}! 🎓`,
         description: `I'm your AI assistant for ${courseName}${professor}. I know your syllabus and can help with assignments, exams, and course topics.`,
-        icon: GraduationCap,
+        icon: GraduationScrollIcon,
         iconColor: 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
       };
     } else if (isCommunity) {
       return {
         title: "Welcome to Community Chat! 👥",
         description: "Connect with fellow students, share knowledge, and study together.",
-        icon: Users,
+        icon: UserGroupIcon,
         iconColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
       };
     } else {
       return {
         title: "Welcome to General Chat! 👋",
         description: "I'm your personal AI assistant, ready to help with any academic questions.",
-        icon: Brain,
+        icon: Brain01Icon,
         iconColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
       };
     }
@@ -81,13 +92,13 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
       // Study help with course context
       if (topics.length > 0) {
         actions.push({
-          icon: GraduationCap,
+          icon: GraduationScrollIcon,
           label: "Study Help",
           action: `help me understand ${topics[0]} in ${courseName}`
         });
       } else {
         actions.push({
-          icon: GraduationCap,
+          icon: GraduationScrollIcon,
           label: "Study Help",
           action: `help me study for ${courseName}`
         });
@@ -97,13 +108,13 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
       if (exams.length > 0) {
         const nextExam = exams[0];
         actions.push({
-          icon: Award,
+          icon: Award01Icon,
           label: "Exam Prep",
           action: `help me prepare for ${nextExam.name} in ${courseName}`
         });
       } else {
         actions.push({
-          icon: Award,
+          icon: Award01Icon,
           label: "Exam Prep",
           action: `help me prepare for exams in ${courseName}`
         });
@@ -113,13 +124,13 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
       if (assignments.length > 0) {
         const nextAssignment = assignments[0];
         actions.push({
-          icon: Calendar,
+          icon: Calendar01Icon,
           label: "Assignment Help",
           action: `help me with ${nextAssignment.name} in ${courseName}`
         });
       } else {
         actions.push({
-          icon: Sparkles,
+          icon: SparklesIcon,
           label: "Ask AI",
           action: `help me with ${courseName}`
         });
@@ -200,7 +211,7 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
         }
         
         actions.push({
-          icon: BarChart3,
+          icon: AnalyticsUpIcon,
           label: chartLabel,
           action: chartAction
         });
@@ -209,16 +220,16 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
       return actions;
     } else if (isCommunity) {
       return [
-        { icon: Users, label: "Say Hi", action: "Hello everyone!" },
-        { icon: MessageSquare, label: "Ask Question", action: "Can someone help me with..." },
-        { icon: Brain, label: "Get AI Help", action: "@ai help me with" }
+        { icon: UserGroupIcon, label: "Say Hi", action: "Hello everyone!" },
+        { icon: Chatting01Icon, label: "Ask Question", action: "Can someone help me with..." },
+        { icon: Brain01Icon, label: "Get AI Help", action: "@ai help me with" }
       ];
     } else {
       return [
-        { icon: Sparkles, label: "Ask AI", action: "help me understand calculus" },
-        { icon: GraduationCap, label: "Study Help", action: "explain photosynthesis" },
-        { icon: BarChart3, label: "Create Chart", action: "graph y = x²" },
-        { icon: TrendingUp, label: "Visualize Data", action: "create a bar chart showing: Math 85, Science 90, English 78" }
+        { icon: SparklesIcon, label: "Ask AI", action: "help me understand calculus" },
+        { icon: GraduationScrollIcon, label: "Study Help", action: "explain photosynthesis" },
+        { icon: AnalyticsUpIcon, label: "Create Chart", action: "graph y = x²" },
+        { icon: ChartBarLineIcon, label: "Visualize Data", action: "create a bar chart showing: Math 85, Science 90, English 78" }
       ];
     }
   };
@@ -244,13 +255,15 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
               onClick={handleDismiss}
               className="absolute top-2 right-2 h-6 w-6 p-0 hover:bg-muted/50"
             >
-              <X className="h-3 w-3" />
+              <Cancel01Icon className="h-3 w-3" />
             </Button>
 
             {/* Header */}
             <div className="flex items-center gap-2 mb-3">
               <div className={`p-1.5 rounded-md ${welcomeContent.iconColor}`}>
-                <welcomeContent.icon className="h-4 w-4" />
+                {welcomeContent.icon ? (
+                  React.createElement(welcomeContent.icon, { className: "h-4 w-4" })
+                ) : null}
               </div>
               <h3 className="text-sm font-semibold">
                 {welcomeContent.title}
@@ -282,7 +295,9 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
                     onClick={() => handleQuickAction(action.action)}
                     className="h-7 px-3 text-xs hover:bg-primary/10 hover:border-primary/20"
                   >
-                    <action.icon className="h-3 w-3 mr-1" />
+                    {action.icon ? (
+                      React.createElement(action.icon, { className: "h-3 w-3 mr-1" })
+                    ) : null}
                     {action.label}
                   </Button>
                 </motion.div>

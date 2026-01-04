@@ -79,8 +79,11 @@ async function tryClaude(input: StudyAssistanceInput): Promise<AIResponse> {
   try {
     console.log('Trying Claude Sonnet 4.5...');
     
+    // Read API key at runtime
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    
     // Validate API key
-    if (!anthropicApiKey || anthropicApiKey === 'demo-key' || anthropicApiKey === 'your_anthropic_api_key_here') {
+    if (!apiKey || apiKey.trim() === '' || apiKey === 'demo-key' || apiKey === 'your_anthropic_api_key_here') {
       throw new Error('Anthropic API key not configured');
     }
     
@@ -353,7 +356,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': anthropicApiKey,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
@@ -375,6 +378,12 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
       const errorText = await response.text();
       console.error('Claude API error:', response.status, response.statusText);
       console.error('Error response:', errorText);
+      
+      // Check if it's a quota/rate limit error (429)
+      if (response.status === 429) {
+        throw new Error(`Claude API quota exceeded (429): ${errorText.substring(0, 200)}. Please check your Anthropic billing and quota limits.`);
+      }
+      
       throw new Error(`Claude API failed: ${response.status} ${response.statusText}. Details: ${errorText.substring(0, 200)}`);
     }
 
@@ -464,8 +473,11 @@ async function tryGoogleAI(input: StudyAssistanceInput): Promise<AIResponse> {
   try {
     console.log('Trying Google AI...');
     
+    // Read API key at runtime
+    const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE;
+    
     // Validate API key
-    if (!googleApiKey || googleApiKey === 'demo-key' || googleApiKey === 'your_google_ai_key_here') {
+    if (!apiKey || apiKey.trim() === '' || apiKey === 'demo-key' || apiKey === 'your_google_ai_key_here') {
       throw new Error('Google AI API key not configured');
     }
     
@@ -909,7 +921,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
       }
     };
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${googleApiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1722,8 +1734,21 @@ export async function provideStudyAssistanceWithFallback(input: StudyAssistanceI
       console.error('AI Service: Claude failed with error:', claudeError);
       const claudeErrorMessage = claudeError instanceof Error ? claudeError.message : 'Unknown error';
       
-      // Fallback to Gemini 3 Flash Preview
-      console.log('AI Service: Falling back to Gemini 3 Flash Preview...');
+      // Check if Claude error is quota-related - if so, don't fallback, throw directly
+      const isClaudeQuotaError = claudeErrorMessage.includes('429') || 
+                                  claudeErrorMessage.includes('quota') || 
+                                  claudeErrorMessage.includes('rate limit') ||
+                                  claudeErrorMessage.includes('billing') ||
+                                  claudeErrorMessage.toLowerCase().includes('payment');
+      
+      if (isClaudeQuotaError) {
+        // If Claude has quota issues, throw directly - user should check Anthropic billing
+        console.error('AI Service: Claude quota error detected - not falling back to Gemini');
+        throw new Error(`Claude API quota exceeded: ${claudeErrorMessage}. Please check your Anthropic billing and quota limits.`);
+      }
+      
+      // Only fallback to Gemini for non-quota errors (API key issues, network errors, etc.)
+      console.log('AI Service: Claude non-quota error, falling back to Gemini 3 Flash Preview...');
       try {
         const result = await tryGoogleAI(input);
         console.log('AI Service: Gemini succeeded:', result.provider);
@@ -1748,7 +1773,7 @@ export async function provideStudyAssistanceWithFallback(input: StudyAssistanceI
  */
 export async function provideStudyAssistanceWithStreaming(
   input: StudyAssistanceInput,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void | Promise<void>
 ): Promise<AIResponse> {
   console.log('AI Service: Starting native streaming with input:', input.question);
   
@@ -1763,8 +1788,21 @@ export async function provideStudyAssistanceWithStreaming(
       console.error('AI Service: Claude native streaming failed with error:', claudeError);
       const claudeErrorMessage = claudeError instanceof Error ? claudeError.message : 'Unknown error';
       
-      // Fallback to Gemini 3 Flash Preview with native streaming
-      console.log('AI Service: Falling back to Gemini 3 Flash Preview with native streaming...');
+      // Check if Claude error is quota-related - if so, don't fallback, throw directly
+      const isClaudeQuotaError = claudeErrorMessage.includes('429') || 
+                                  claudeErrorMessage.includes('quota') || 
+                                  claudeErrorMessage.includes('rate limit') ||
+                                  claudeErrorMessage.includes('billing') ||
+                                  claudeErrorMessage.toLowerCase().includes('payment');
+      
+      if (isClaudeQuotaError) {
+        // If Claude has quota issues, throw directly - user should check Anthropic billing
+        console.error('AI Service: Claude quota error detected - not falling back to Gemini');
+        throw new Error(`Claude API quota exceeded: ${claudeErrorMessage}. Please check your Anthropic billing and quota limits.`);
+      }
+      
+      // Only fallback to Gemini for non-quota errors (API key issues, network errors, etc.)
+      console.log('AI Service: Claude non-quota error, falling back to Gemini 3 Flash Preview with native streaming...');
       try {
         const result = await tryGoogleAINativeStreaming(input, onChunk);
         console.log('AI Service: Gemini native streaming succeeded:', result.provider);
@@ -1783,54 +1821,322 @@ export async function provideStudyAssistanceWithStreaming(
 
 /**
  * Try Claude with native streaming - forwards chunks as they arrive
+ * Uses the same full context setup as tryClaude but with proper SSE streaming
  */
 async function tryClaudeNativeStreaming(
   input: StudyAssistanceInput,
   onChunk: (chunk: string) => void
 ): Promise<AIResponse> {
-  // This will be a simplified version that reuses setup from tryClaude
-  // For now, let's implement a proper streaming version
-  // We need to extract the common setup code first
+  // Read API key at runtime
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   
   // Validate API key
-  if (!anthropicApiKey || anthropicApiKey === 'demo-key' || anthropicApiKey === 'your_anthropic_api_key_here') {
+  if (!apiKey || apiKey.trim() === '' || apiKey === 'demo-key' || apiKey === 'your_anthropic_api_key_here') {
     throw new Error('Anthropic API key not configured');
   }
   
-  // Build the same prompt setup as tryClaude (simplified for now)
+  // Reuse the same setup logic from tryClaude for context, prompts, etc.
+  // Build conversation history for context
+  const conversationContext = input.conversationHistory && input.conversationHistory.length > 0 
+    ? input.conversationHistory.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }))
+    : [];
+
+  const fileContext = input.fileContext 
+    ? `\n\n[INTERNAL INSTRUCTION - DO NOT REPEAT THIS TO THE USER]
+The user has uploaded a document: "${input.fileContext.fileName}" (${input.fileContext.fileType}).
+You have access to the full document content below. Answer questions using information from this document.
+Provide specific details and references from the document when relevant.
+
+Document Content:
+${input.fileContext.fileContent || 'Document content not available.'}
+
+[END INTERNAL INSTRUCTION - Answer naturally using the document content above]`
+    : '';
+  
+  // Only search if explicitly requested
+  let currentInfo = '';
+  let searchSources: { title: string; url: string; snippet: string; }[] = [];
+  
+  if (input.isSearchRequest === true) {
+    console.log('Web search requested - fetching current information for:', input.question);
+    try {
+      const searchResults = await searchCurrentInformation(input.question);
+      if (searchResults.results && searchResults.results.length > 0) {
+        currentInfo = formatSearchResultsForAI(searchResults);
+        searchSources = searchResults.results.map(result => ({
+          title: result.title,
+          url: result.url,
+          snippet: result.snippet
+        }));
+      } else {
+        currentInfo = `\n\n⚠️ No search results found for: "${input.question}"\n`;
+      }
+    } catch (error: any) {
+      console.warn('Failed to fetch current information:', error);
+      currentInfo = `\n\n⚠️ Search failed: ${error.message || 'Unknown error'}\n`;
+    }
+  }
+  
+  // Check if the question contains URLs to scrape
+  let scrapedContent = '';
+  const urls = extractUrlsFromText(input.question || '');
+  if (urls.length > 0) {
+    console.log('Found URLs to scrape:', urls);
+    try {
+      const enhancedResults = await Promise.all(
+        urls.map(async (url) => {
+          const usePuppeteer = shouldUsePuppeteer(url);
+          const result = await enhancedWebBrowsing(url, {
+            usePuppeteer,
+            takeScreenshot: false,
+            autoSearchFallback: false
+          });
+          
+          return result.success ? {
+            url: result.url!,
+            title: result.title || 'Untitled',
+            content: result.content || '',
+            summary: result.content?.substring(0, 200) + '...' || '',
+            timestamp: new Date().toISOString(),
+            wordCount: result.content?.split(' ').length || 0
+          } : null;
+        })
+      );
+      
+      const successful = enhancedResults.filter(result => result !== null);
+      if (successful.length > 0) {
+        scrapedContent = formatScrapedContentForAI(successful);
+      }
+    } catch (error) {
+      console.warn('Failed to browse URLs:', error);
+    }
+  }
+  
+  // Prepare System Prompt (reuse from tryClaude)
+  const userName = input.userName || 'there';
+  const userContext = input.userName 
+    ? `You are talking to ${input.userName}. Always use their name naturally in your responses when appropriate.`
+    : '';
+  
+  // Build learning profile context if available
+  let learningProfileContext = '';
+  if (input.learningProfile) {
+    learningProfileContext = `\n\nLEARNING PROFILE:
+- Major: ${input.learningProfile.major || 'Not specified'}
+- Academic Level: ${input.learningProfile.academicLevel || 'Not specified'}
+- Learning Style: ${input.learningProfile.learningStyle || 'Not specified'}
+- Explanation Depth Preference: ${input.learningProfile.explanationDepth || 'Not specified'}
+- Goals: ${input.learningProfile.goals || 'Not specified'}
+
+Adapt your responses to match this learning profile.`;
+  }
+  
+  // Get shared prompt
   const sharedPrompt = generateMainSystemPrompt({
     userName: input.userName || undefined
   });
   
-  const systemInstruction = sharedPrompt;
-  const userMessage = `Current Question: ${input.question}\nContext: ${input.context || 'General'}`;
-  
+  let systemInstruction = `${sharedPrompt}${userContext}${learningProfileContext}
+
+Always remember what you've discussed before and build on previous responses. When the student asks about "the most recent thing" or uses vague references like "that" or "it", always connect it to the most recent topic you discussed. Maintain full conversation context throughout the entire chat session.`;
+
+  if (input.thinkingMode) {
+      systemInstruction += `
+        
+CRITICAL PRIVATE REASONING INSTRUCTIONS:
+- Think quietly before you answer.
+- NEVER expose your internal thought process, plans, or meta language.
+- NEVER output phrases such as "breaking down", "analyzing", "structuring", "deconstructing", "mapping", "retrieving", "verifying".
+- NEVER use abstract placeholders like "principle A", "mechanism B", "X causes Y". Use concrete, real examples in plain language.
+- When you reply, provide ONLY the final answer in a clear, natural, human tone.
+- Keep answers concise but complete, as if a knowledgeable tutor is speaking.
+`;
+  }
+
+  // Add response style based on aiResponseType (same as tryClaude)
+  let responseStyleInstruction = '';
+  switch (input.aiResponseType) {
+    case 'concise':
+      responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONCISE MODE (HIGHEST PRIORITY):
+- Keep responses SHORT and DIRECT - maximum 2-3 sentences for simple questions
+- Get straight to the point - no fluff, no unnecessary context
+- Answer the question directly without elaboration
+- If asked to explain, give a brief explanation (1-2 paragraphs max)
+- Be efficient with words - every sentence must add value
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+      break;
+    case 'detailed':
+      responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - DETAILED MODE (HIGHEST PRIORITY):
+- Provide COMPREHENSIVE explanations with full context
+- Include relevant examples, analogies, and real-world applications
+- Explain the "why" and "how" thoroughly
+- Use multiple paragraphs to cover all aspects
+- Add background information when relevant
+- Be educational and thorough - leave no stone unturned
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+      break;
+    case 'conversational':
+      responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - CONVERSATIONAL MODE (HIGHEST PRIORITY):
+- Use a FRIENDLY, CASUAL tone like talking to a study buddy
+- Ask follow-up questions: "Does that make sense?" "Want me to break it down further?"
+- Use casual language: "So basically...", "Here's the thing...", "You know what's cool?"
+- Show enthusiasm and personality
+- Be encouraging: "You've got this!", "Great question!"
+- Use contractions and natural speech patterns
+- Make it feel like a conversation, not a lecture
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+      break;
+    case 'analytical':
+      responseStyleInstruction = `
+🚨 CRITICAL RESPONSE STYLE - ANALYTICAL MODE (HIGHEST PRIORITY):
+- Use STRUCTURED, LOGICAL reasoning
+- Break down concepts into clear steps: "First...", "Second...", "Therefore..."
+- Explain cause-and-effect relationships
+- Use systematic analysis and critical thinking
+- Focus on the "why" behind concepts
+- Use formal but clear language
+- Provide step-by-step breakdowns
+- OVERRIDE all other style instructions - this is the PRIMARY style
+`;
+      break;
+  }
+
+  systemInstruction += `
+CRITICAL FORMATTING RULES:
+1. NEVER use markdown formatting like **bold** or *italic* or # headers
+2. NEVER use asterisks (*) or hash symbols (#) for formatting
+3. Write in plain text only - no special formatting characters
+4. Use KaTeX delimiters $...$ and $$...$$ for math expressions only
+5. For emphasis, use CAPITAL LETTERS or say "important:" before it
+6. Use simple text formatting only - no bold, italics, or headers
+
+${responseStyleInstruction}
+
+RESPONSE STYLE RULES (Secondary - follow the style above first):
+1. Be conversational and friendly - like talking to a friend
+2. Be natural and match their vibe - if they say "hi", just say hi back naturally. No scripted responses.
+3. Get straight to the answer - no introductions or canned responses
+4. For jokes or casual comments: Play along, be funny, don't take things too seriously
+5. For random questions: Answer naturally and show interest
+6. For academic questions: Be helpful but still conversational
+7. Use natural language - "yeah", "sure", "totally", "that's cool", etc.
+8. Show personality - be enthusiastic, curious, or empathetic as appropriate
+9. Don't be overly formal - avoid "I am here to assist you" type language
+10. When student uses vague references ("that", "it", "the recent thing"), always connect to the most recent topic
+11. Show conversation continuity by referencing what was just discussed
+12. NEVER end with filler phrases like "feel free to ask", "let me know if you need help", "if you have any questions", "feel free to reach out", "don't hesitate to ask", "if you need more details or have any specific questions about these topics, feel free to ask", or any variation - just answer naturally and stop
+
+CONVERSATION CONTINUITY RULES:
+1. ALWAYS reference previous messages when relevant
+2. If the student asks about "the most recent thing" or "that", connect it to the last topic discussed
+3. Use phrases like "As I mentioned before...", "Building on what we discussed...", "Continuing from your previous question..."
+4. Don't treat each message as a completely new topic
+5. Maintain context throughout the conversation
+6. Remember what the student has asked about and build on that knowledge
+7. If the student refers to "it", "that", "this", "the recent thing", always connect it to previous context
+8. Show that you remember the conversation by referencing specific previous points
+9. When student says "what about..." or "how about...", connect to the most recent topic
+10. Keep track of the conversation flow and reference earlier parts when relevant
+
+CRITICAL INSTRUCTIONS FOR STUDENT SUCCESS:
+1. ALWAYS use current information provided below as the PRIMARY source
+2. Provide accurate, helpful answers without repetitive timestamps
+3. The current year is 2025 - acknowledge this when relevant
+4. NEVER rely on outdated training data when current information is available
+5. Students need accurate, real-time data to get good grades - provide it!
+
+🚨🚨🚨 CHART AND GRAPH GENERATION RULES 🚨🚨🚨:
+ONLY CREATE CHARTS/GRAPHS WHEN:
+1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
+2. The user says "yes" to your follow-up question asking if they want a graph/chart
+
+IMPORTANT RULES:
+- NEVER automatically create graphs without being asked
+- NEVER suggest creating a graph unless the user's question would benefit from visualization
+- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+- If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
+- NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
+- NEVER say "I can't show you" or "you can create one using"
+
+WHEN USER EXPLICITLY ASKS FOR A GRAPH:
+- Respond naturally and conversationally, then provide GRAPH_DATA format
+- EXAMPLE: User: "Can you create a pie chart for A: 30%, B: 40%, C: 20%, D: 10%?"
+  AI: "Sure thing! Here's a pie chart showing your grade distribution: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "A", "value": 30}, {"name": "B", "value": 40}, {"name": "C", "value": 20}, {"name": "D", "value": 10}]}"
+
+WHEN USER SAYS YES TO YOUR GRAPH OFFER:
+- If you asked "Would you like me to create a chart for this?" and they say yes, create it immediately
+- EXAMPLE: AI: "Would you like me to create a bar chart showing this data?"
+  User: "yes"
+  AI: "Here you go! GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}"
+
+GRAPH DATA FORMATS:
+- Pie charts: GRAPH_DATA: {"type": "data", "chartType": "pie", "data": [{"name": "Category A", "value": 30}, {"name": "Category B", "value": 50}]}
+- Bar charts: GRAPH_DATA: {"type": "data", "chartType": "bar", "data": [{"name": "Jan", "value": 30}, {"name": "Feb", "value": 50}]}
+- Line charts: GRAPH_DATA: {"type": "data", "chartType": "line", "data": [{"x": 1, "y": 2}, {"x": 2, "y": 4}]}
+- Functions: GRAPH_DATA: {"type": "function", "function": "x^2", "label": "y = x²", "minX": -5, "maxX": 5}
+
+The system supports: pie charts, bar charts, line charts, scatter plots, area charts, and function graphs
+The system WILL automatically render any GRAPH_DATA you provide`;
+
+  // Build the user message
+  const userMessage = `Current Question: ${input.question}
+Context: ${input.context || 'General'}${fileContext}${currentInfo}${scrapedContent}
+
+WEB CONTENT ANALYSIS RULES:
+1. If web content is provided above, use it to answer questions about those specific pages
+2. Reference specific information from the scraped content when relevant
+3. If the content doesn't contain the needed information, let the student know
+4. Summarize key points from the web content when appropriate
+5. Be conversational about the content - don't just repeat it verbatim
+
+Remember: This is part of an ongoing conversation. Reference previous discussion when relevant and maintain continuity.`;
+
   // Call Claude API with streaming enabled
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': anthropicApiKey,
+      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-20250514', // Claude Sonnet 4.5
       max_tokens: 4096,
       stream: true, // Enable native streaming
       system: systemInstruction,
-      messages: [{
-        role: 'user',
-        content: userMessage
-      }]
+      messages: [
+        ...conversationContext,
+        {
+          role: 'user',
+          content: userMessage
+        }
+      ]
     })
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Claude API failed: ${response.status} ${response.statusText}`);
+    console.error('Claude API error:', response.status, response.statusText);
+    console.error('Error response:', errorText);
+    
+    // Check if it's a quota/rate limit error (429)
+    if (response.status === 429) {
+      throw new Error(`Claude API quota exceeded (429): ${errorText.substring(0, 200)}. Please check your Anthropic billing and quota limits.`);
+    }
+    
+    throw new Error(`Claude API failed: ${response.status} ${response.statusText}. Details: ${errorText.substring(0, 200)}`);
   }
 
-  // Handle streaming response
+  // Handle SSE streaming response
   const reader = response.body?.getReader();
   const decoder = new TextDecoder();
   let fullAnswer = '';
@@ -1850,26 +2156,39 @@ async function tryClaudeNativeStreaming(
       buffer = lines.pop() || ''; // Keep incomplete line
 
       for (const line of lines) {
-        if (!line.trim() || !line.startsWith('data: ')) continue;
+        if (!line.trim()) continue;
         
-        try {
-          const jsonStr = line.slice(6); // Remove 'data: ' prefix
-          if (jsonStr === '[DONE]') continue;
-          
-          const data = JSON.parse(jsonStr);
-          
-          // Handle content_block_delta events - these contain the actual text chunks
-          if (data.type === 'content_block_delta' && data.delta?.text) {
-            const chunk = data.delta.text;
-            fullAnswer += chunk;
-            onChunk(chunk); // Forward chunk in real-time
-          } else if (data.type === 'message_stop') {
-            // Stream complete
-            break;
-          }
-        } catch (e) {
-          // Skip invalid JSON lines
+        // Handle SSE format: "event: <type>" and "data: <json>"
+        if (line.startsWith('event: ')) {
+          // Event type - we'll use it with the next data line
           continue;
+        }
+        
+        if (line.startsWith('data: ')) {
+          try {
+            const jsonStr = line.slice(6); // Remove 'data: ' prefix
+            if (jsonStr === '[DONE]') continue;
+            
+            const data = JSON.parse(jsonStr);
+            
+            // Handle content_block_delta events - these contain the actual text chunks
+            if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta' && data.delta?.text) {
+              const chunk = data.delta.text;
+              fullAnswer += chunk;
+              const result = onChunk(chunk); // Forward chunk in real-time
+              // If callback is async, wait for it
+              if (result instanceof Promise) {
+                await result;
+              }
+            } else if (data.type === 'message_stop') {
+              // Stream complete
+              break;
+            }
+          } catch (e) {
+            // Skip invalid JSON lines
+            console.warn('Failed to parse SSE data:', line.substring(0, 100));
+            continue;
+          }
         }
       }
     }
@@ -1884,8 +2203,8 @@ async function tryClaudeNativeStreaming(
   return {
     answer: fullAnswer.trim(),
     provider: 'claude',
-    sources: undefined,
-    isSearchRequest: false
+    sources: searchSources.length > 0 ? searchSources : undefined,
+    isSearchRequest: input.isSearchRequest || false
   };
 }
 

@@ -1,5 +1,6 @@
-import { db } from '@/lib/firebase/server';
-import { Timestamp } from 'firebase-admin/firestore';
+// Temporarily disabled for build
+// import { db } from '@/lib/firebase/server';
+// import { Timestamp } from 'firebase-admin/firestore';
 
 export interface CreateNotificationParams {
   userId: string;

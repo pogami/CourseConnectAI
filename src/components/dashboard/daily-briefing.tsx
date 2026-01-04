@@ -390,12 +390,14 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
 
   // Get user name, checking localStorage for guest users
   const getUserName = (): string => {
-    // Always check localStorage first for guest users (even if user object doesn't have isGuest set)
+    // ALWAYS check localStorage first - it's the source of truth for guest data
     if (typeof window !== 'undefined') {
       try {
         const guestUser = localStorage.getItem('guestUser');
         if (guestUser) {
           const parsed = JSON.parse(guestUser);
+          // If we have a displayName in localStorage, use it (even if it's "Guest User")
+          // But only return it if it's not the default "Guest User"
           if (parsed.displayName && parsed.displayName !== 'Guest User') {
             return parsed.displayName.split(' ')[0];
           }
@@ -405,11 +407,13 @@ export function DailyBriefing({ user, stats }: DailyBriefingProps) {
       }
     }
     
-    // Check if it's a guest user from user object
-    if (user?.isGuest || user?.isAnonymous) {
+    // Check if it's a guest user from user object (fallback)
+    if (user?.isGuest || user?.isAnonymous || !user?.email) {
       if (user?.displayName && user.displayName !== 'Guest User') {
         return user.displayName.split(' ')[0];
       }
+      // If no displayName but it's a guest, return 'Student' (will be updated when guest name is set)
+      return 'Student';
     }
     
     // Fallback to regular user displayName or email

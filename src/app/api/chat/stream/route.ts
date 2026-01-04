@@ -32,12 +32,44 @@ export async function POST(request: NextRequest) {
     // Content filtering for safety
     const filterResult = filterContent(question);
     if (!filterResult.isSafe) {
-      return new Response(JSON.stringify({
-        type: 'error',
-        message: filterResult.message || 'Content filtered for safety'
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
+      // Stream the safety message instead of returning an error
+      const safetyMessage = filterResult.message || 'Content filtered for safety';
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          
+          // Split safety message into words and stream them
+          const words = safetyMessage.split(/(\s+)/);
+          for (let i = 0; i < words.length; i += 2) {
+            const word = words[i] || '';
+            const space = words[i + 1] || '';
+            
+            if (word.trim()) {
+              const completeWord = word + (space || ' ');
+              controller.enqueue(encoder.encode(JSON.stringify({
+                type: 'content',
+                content: completeWord
+              }) + '\n'));
+              await new Promise(resolve => setTimeout(resolve, 25));
+            }
+          }
+          
+          // Send done signal
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'done',
+            fullResponse: safetyMessage
+          }) + '\n'));
+          
+          controller.close();
+        }
+      });
+      
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
       });
     }
 
@@ -168,6 +200,8 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           // Call AI service with native streaming
           let fullAnswer = '';
           let wordBuffer = ''; // Buffer for accumulating characters until we have complete words
+          let lastWordSentTime = 0; // Track when last word was sent for consistent timing
+          const WORD_INTERVAL_MS = 25; // Consistent delay between words
           
           const aiResult = await provideStudyAssistanceWithStreaming({
             question: finalQuestion,
@@ -179,7 +213,7 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             fileContext: fileContext, // Include document context so AI can reference uploaded documents
             learningProfile: learningProfile, // Include learning profile for personalization
             aiResponseType: aiResponseType // Pass response type to control AI tone
-          }, (chunk: string) => {
+          }, async (chunk: string) => {
             // Accumulate chunks and split into complete words before sending
             fullAnswer += chunk;
             wordBuffer += chunk;
@@ -211,12 +245,25 @@ Start your response with empathy and understanding. Acknowledge their frustratio
               }
             }
             
-            // Send complete words one at a time
-            for (const word of completeWords) {
+            // Send complete words one at a time with consistent timing
+            for (let i = 0; i < completeWords.length; i++) {
+              const word = completeWords[i];
+              
+              // Calculate delay to maintain consistent word interval
+              const now = Date.now();
+              const timeSinceLastWord = now - lastWordSentTime;
+              const delayNeeded = Math.max(0, WORD_INTERVAL_MS - timeSinceLastWord);
+              
+              if (delayNeeded > 0) {
+                await new Promise(resolve => setTimeout(resolve, delayNeeded));
+              }
+              
               controller.enqueue(encoder.encode(JSON.stringify({
                 type: 'content',
                 content: word
               }) + '\n'));
+              
+              lastWordSentTime = Date.now();
             }
             
             // Keep incomplete part in buffer
@@ -228,12 +275,23 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             throw new Error('AI service returned invalid response');
           }
 
-          // Send any remaining buffered word
+          // Send any remaining buffered word or characters
           if (wordBuffer.trim()) {
-            controller.enqueue(encoder.encode(JSON.stringify({
-              type: 'content',
-              content: wordBuffer + ' '
-            }) + '\n'));
+            // Check if it's a complete word or just trailing characters
+            const trimmed = wordBuffer.trim();
+            // If it ends with punctuation or is a complete word, send it
+            if (/[.,!?;:]$/.test(trimmed) || !/\s/.test(trimmed)) {
+              controller.enqueue(encoder.encode(JSON.stringify({
+                type: 'content',
+                content: wordBuffer
+              }) + '\n'));
+            } else {
+              // Incomplete word - send it anyway at the end
+              controller.enqueue(encoder.encode(JSON.stringify({
+                type: 'content',
+                content: wordBuffer
+              }) + '\n'));
+            }
           }
           
           // Ensure we have the full answer (in case streaming didn't capture everything)
@@ -244,7 +302,14 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             throw new Error('AI service returned empty response');
           }
 
-          // Send done signal with final response
+          if (!aiResult || !aiResult.answer) {
+            console.error('AI service returned invalid response:', aiResult);
+            throw new Error('AI service returned invalid response');
+          }
+
+          // Send done signal with final response - wait a tiny bit to ensure all content chunks are sent
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
           controller.enqueue(encoder.encode(JSON.stringify({
             type: 'done',
             fullResponse: finalAnswer

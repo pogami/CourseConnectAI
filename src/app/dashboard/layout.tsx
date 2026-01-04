@@ -136,7 +136,41 @@ export default function DashboardLayout({
               return;
             }
             
-            setUser(user);
+            // ALWAYS check localStorage first - it's the source of truth for guest data
+            const guestData = typeof window !== 'undefined' ? localStorage.getItem('guestUser') : null;
+            
+            // If we have guest data in localStorage, merge it with Firebase user (if exists)
+            if (guestData) {
+              try {
+                const parsedGuest = JSON.parse(guestData);
+                
+                // If Firebase user exists (anonymous or otherwise), merge them
+                if (user) {
+                  // Merge: Firebase user properties + localStorage guest data (localStorage takes precedence for displayName)
+                  const mergedUser = {
+                    ...user,
+                    ...parsedGuest, // Spread guest data to override Firebase user properties
+                    uid: user.uid || parsedGuest.uid, // Keep Firebase uid if available
+                    isGuest: true,
+                    isAnonymous: user.isAnonymous || true
+                  };
+                  setUser(mergedUser);
+                  console.log('Dashboard layout: Merged Firebase user with localStorage guest data:', mergedUser.displayName);
+                } else {
+                  // No Firebase user, use localStorage guest data directly
+                  setUser(parsedGuest);
+                  console.log('Dashboard layout: Using localStorage guest data (no Firebase user):', parsedGuest.displayName);
+                }
+              } catch (parseError) {
+                console.warn('Dashboard layout: Failed to parse guest data during merge:', parseError);
+                // Fallback: use Firebase user if available
+                setUser(user);
+              }
+            } else {
+              // No guest data in localStorage - use Firebase user as-is
+              setUser(user);
+            }
+            
             setLoading(false);
             setError(null);
 
@@ -179,6 +213,45 @@ export default function DashboardLayout({
       setLoading(false);
       setError(authError);
     }
+  }, [mounted]);
+
+  // Listen for guest name updates
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const handleGuestNameUpdate = () => {
+      const guestData = typeof window !== 'undefined' ? localStorage.getItem('guestUser') : null;
+      if (guestData) {
+        try {
+          const parsedGuest = JSON.parse(guestData);
+          // Get current Firebase user (if exists) to merge with guest data
+          const { auth } = require("@/lib/firebase/client-simple") as { auth: Auth };
+          const currentFirebaseUser = auth?.currentUser;
+          
+          if (currentFirebaseUser) {
+            // Merge: Firebase user + localStorage guest data (localStorage takes precedence)
+            const mergedUser = {
+              ...currentFirebaseUser,
+              ...parsedGuest, // Spread guest data to override Firebase user properties
+              uid: currentFirebaseUser.uid || parsedGuest.uid, // Keep Firebase uid
+              isGuest: true,
+              isAnonymous: currentFirebaseUser.isAnonymous || true
+            };
+            setUser(mergedUser);
+            console.log('Dashboard layout: Merged Firebase user with updated guest data:', mergedUser.displayName);
+          } else {
+            // No Firebase user, use localStorage guest data directly
+            setUser(parsedGuest);
+            console.log('Dashboard layout: Updated guest data (no Firebase user):', parsedGuest.displayName);
+          }
+        } catch (parseError) {
+          console.warn('Dashboard layout: Failed to parse guest user data:', parseError);
+        }
+      }
+    };
+
+    window.addEventListener('guestNameUpdated', handleGuestNameUpdate);
+    return () => window.removeEventListener('guestNameUpdated', handleGuestNameUpdate);
   }, [mounted]);
   
   // Close sidebar on navigation (mobile)

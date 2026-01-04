@@ -1,35 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
 
-// Initialize Firebase Admin if not already initialized
-let adminAuth: any = null;
-let adminDb: any = null;
-
-try {
-  let app;
-  if (getApps().length === 0) {
-    if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-      app = initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        }),
-      });
+// Lazy initialization function for Firebase Admin (only import when needed)
+async function getAdminAuth() {
+  try {
+    const { getAuth } = await import('firebase-admin/auth');
+    const { initializeApp, getApps, cert } = await import('firebase-admin/app');
+    
+    let app;
+    if (getApps().length === 0) {
+      if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        app = initializeApp({
+          credential: cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          }),
+        });
+      } else {
+        app = initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID || 'courseconnect-61eme' });
+      }
     } else {
-      app = initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID || 'courseconnect-61eme' });
+      app = getApps()[0];
     }
-  } else {
-    app = getApps()[0];
+    return getAuth(app);
+  } catch (error) {
+    console.error('Firebase Admin initialization error:', error);
+    return null;
   }
-  adminAuth = getAuth(app);
-  adminDb = getFirestore(app);
-} catch (error) {
-  console.error('Firebase Admin initialization error:', error);
+}
+
+async function getAdminDb() {
+  try {
+    const { getFirestore } = await import('firebase-admin/firestore');
+    const { initializeApp, getApps, cert } = await import('firebase-admin/app');
+    
+    let app;
+    if (getApps().length === 0) {
+      if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        app = initializeApp({
+          credential: cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          }),
+        });
+      } else {
+        app = initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID || 'courseconnect-61eme' });
+      }
+    } else {
+      app = getApps()[0];
+    }
+    return getFirestore(app);
+  } catch (error) {
+    console.error('Firebase Admin initialization error:', error);
+    return null;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -41,6 +68,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'User ID and ID token are required' },
         { status: 400 }
+      );
+    }
+
+    // Initialize Firebase Admin (lazy)
+    const adminAuth = await getAdminAuth();
+    const adminDb = await getAdminDb();
+
+    if (!adminAuth || !adminDb) {
+      return NextResponse.json(
+        { error: 'Firebase Admin not initialized' },
+        { status: 500 }
       );
     }
 
@@ -59,13 +97,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
         { status: 401 }
-      );
-    }
-
-    if (!adminAuth || !adminDb) {
-      return NextResponse.json(
-        { error: 'Firebase Admin not initialized' },
-        { status: 500 }
       );
     }
 

@@ -738,6 +738,43 @@ export default function ChatPage() {
         };
     }, [initializeAuthListener]);
 
+    // Listen for guest name updates
+    useEffect(() => {
+        const handleGuestNameUpdate = () => {
+            const guestData = typeof window !== 'undefined' ? localStorage.getItem('guestUser') : null;
+            if (guestData) {
+                try {
+                    const parsedGuest = JSON.parse(guestData);
+                    // Get current Firebase user (if exists) to merge with guest data
+                    const currentFirebaseUser = auth.currentUser;
+                    
+                    if (currentFirebaseUser) {
+                        // Merge: Firebase user + localStorage guest data (localStorage takes precedence)
+                        const mergedUser = {
+                            ...currentFirebaseUser,
+                            ...parsedGuest, // Spread guest data to override Firebase user properties
+                            uid: currentFirebaseUser.uid || parsedGuest.uid, // Keep Firebase uid
+                            isGuest: true,
+                            isAnonymous: currentFirebaseUser.isAnonymous || true
+                        };
+                        setUser(mergedUser);
+                        console.log('Merged Firebase user with updated guest data:', mergedUser.displayName);
+                    } else {
+                        // No Firebase user, use localStorage guest data directly
+                        setUser(parsedGuest);
+                        console.log('Updated guest data (no Firebase user):', parsedGuest.displayName);
+                    }
+                    setIsGuest(true);
+                } catch (parseError) {
+                    console.warn('Failed to parse guest user data:', parseError);
+                }
+            }
+        };
+
+        window.addEventListener('guestNameUpdated', handleGuestNameUpdate);
+        return () => window.removeEventListener('guestNameUpdated', handleGuestNameUpdate);
+    }, []);
+
     // Safely handle auth state
     useEffect(() => {
         try {
@@ -758,11 +795,44 @@ export default function ChatPage() {
                 const unsubscribe = auth.onAuthStateChanged(
                     async (user: any) => {
                         try {
-                            setUser(user);
-                            // Check if user is guest/anonymous - also check localStorage for guest data
+                            // ALWAYS check localStorage first - it's the source of truth for guest data
                             const guestData = typeof window !== 'undefined' ? localStorage.getItem('guestUser') : null;
-                            const isGuestUser = user?.isAnonymous || user?.isGuest || (guestData !== null);
-                            setIsGuest(isGuestUser);
+                            
+                            // If we have guest data in localStorage, merge it with Firebase user (if exists)
+                            if (guestData) {
+                                try {
+                                    const parsedGuest = JSON.parse(guestData);
+                                    
+                                    // If Firebase user exists (anonymous or otherwise), merge them
+                                    if (user) {
+                                        // Merge: Firebase user properties + localStorage guest data (localStorage takes precedence for displayName)
+                                        const mergedUser = {
+                                            ...user,
+                                            ...parsedGuest, // Spread guest data to override Firebase user properties
+                                            uid: user.uid || parsedGuest.uid, // Keep Firebase uid if available
+                                            isGuest: true,
+                                            isAnonymous: user.isAnonymous || true
+                                        };
+                                        setUser(mergedUser);
+                                        setIsGuest(true);
+                                        console.log('Merged Firebase user with localStorage guest data:', mergedUser.displayName);
+                                    } else {
+                                        // No Firebase user, use localStorage guest data directly
+                                        setUser(parsedGuest);
+                                        setIsGuest(true);
+                                        console.log('Using localStorage guest data (no Firebase user):', parsedGuest.displayName);
+                                    }
+                                } catch (parseError) {
+                                    console.warn('Failed to parse guest data during merge:', parseError);
+                                    // Fallback: use Firebase user if available
+                                    setUser(user);
+                                    setIsGuest(user?.isAnonymous || user?.isGuest || false);
+                                }
+                            } else {
+                                // No guest data in localStorage - use Firebase user as-is
+                                setUser(user);
+                                setIsGuest(user?.isAnonymous || user?.isGuest || false);
+                            }
                             
                             // Load profile picture for authenticated users (Firestore first, then auth.photoURL fallback)
                             if (user && !user.isGuest && !user.isAnonymous) {
@@ -994,9 +1064,13 @@ export default function ChatPage() {
     }, [chats, currentTab, setCurrentTab]);
 
     const handleSendMessage = async (shouldCallAI: boolean = true, aiResponseType: 'concise' | 'detailed' | 'conversational' | 'analytical' = 'concise') => {
-        if (!inputValue.trim()) return;
-
-        const messageText = inputValue.trim();
+        // Remove any OCR-extracted text patterns that shouldn't be visible in the message bubble
+        // Pattern: [Text from filename]: extracted text
+        // The extracted text will still be sent to the AI as document context, just not shown to the user
+        let messageText = inputValue.trim().replace(/\[Text from [^\]]+\]:\s*\n?[^\n]*(?:\n[^\n]*)*/gi, '').trim();
+        
+        // Return early if no text (file uploads are handled separately via onFileProcessed)
+        if (!messageText) return;
 
         // If this chat was opened with a ?prefill= param (e.g. from the dashboard),
         // clear that query param as soon as the user sends the first message so
@@ -1247,6 +1321,7 @@ export default function ChatPage() {
                     let wordQueue: string[] = []; // Queue of words to display
                     let isProcessingWords = false;
                     let processingTimeout: NodeJS.Timeout | null = null;
+                    let isStreamComplete = false; // Track if stream is done
                     const WORD_DELAY_MS = 25; // Consistent delay between each word
 
                     // Function to process word queue - one word at a time for consistent streaming
@@ -1279,6 +1354,16 @@ export default function ChatPage() {
                                 // Queue is empty, stop processing
                                 isProcessingWords = false;
                                 processingTimeout = null;
+                                
+                                // If stream is complete and queue is empty, do final update
+                                if (isStreamComplete) {
+                                    // Ensure final text matches what we accumulated
+                                    const finalText = fullResponse.trim();
+                                    if (finalText && displayedText.trim() !== finalText) {
+                                        setStreamingResponse(finalText);
+                                        displayedText = finalText;
+                                    }
+                                }
                             }
                         };
 
@@ -1335,14 +1420,15 @@ export default function ChatPage() {
                                         processWordQueue();
                                     }
                                 } else if (data.type === "done") {
+                                    // Mark stream as complete - don't update yet, wait for queue to finish
+                                    isStreamComplete = true;
+                                    
                                     // Use the full response from done message (most accurate)
                                     const finalResponse = data.fullResponse || fullResponse;
+                                    fullResponse = finalResponse; // Update local var for consistency
                                     
-                                    // Final update - ensure it's clean and complete (synchronous for smooth transition)
-                                    if (finalResponse.trim()) {
-                                        setStreamingResponse(finalResponse);
-                                        fullResponse = finalResponse; // Update local var for consistency
-                                    }
+                                    // Don't update UI here - let the word queue finish processing first
+                                    // The final update will happen in processWordQueue when queue is empty
                                     
                                     // Collect metadata
                                     if (data.sources) sources = data.sources;
@@ -1394,11 +1480,21 @@ export default function ChatPage() {
                             processingTimeout = null;
                         }
                         
-                        // Final update - ensure everything is displayed
-                        const finalText = fullResponse.trim();
-                        if (finalText && displayedText !== finalText) {
-                            setStreamingResponse(finalText);
-                            displayedText = finalText;
+                        // Final update - ensure everything is displayed (only if stream completed)
+                        // This is a safety check in case the done message didn't arrive
+                        if (isStreamComplete) {
+                            const finalText = fullResponse.trim();
+                            if (finalText && displayedText.trim() !== finalText) {
+                                setStreamingResponse(finalText);
+                                displayedText = finalText;
+                            }
+                        } else {
+                            // Stream ended without done message - use what we have
+                            const finalText = fullResponse.trim() || displayedText.trim();
+                            if (finalText) {
+                                setStreamingResponse(finalText);
+                                displayedText = finalText;
+                            }
                         }
                     } catch (readError: any) {
                         // Handle reader cancellation or errors
@@ -2718,7 +2814,7 @@ export default function ChatPage() {
                                                                         ) : null}
                                                                         <AvatarFallback className="text-sm font-medium">
                                                                             {message.sender === 'user' ? (
-                                                                                isGuest ? 'G' : (user?.displayName?.[0] || user?.email?.[0] || 'U')
+                                                                                isGuest ? (getGuestDisplayName()[0]?.toUpperCase() || 'G') : (message.name ? message.name[0].toUpperCase() : (user?.displayName?.[0] || user?.email?.[0] || 'U'))
                                                                             ) : null}
                                                                         </AvatarFallback>
                                                                     </Avatar>
@@ -2768,7 +2864,7 @@ export default function ChatPage() {
                                                                 ) : null}
                                                                 <AvatarFallback className="text-sm font-medium">
                                                                     {message.sender === 'user' ? (
-                                                                        message.name ? message.name[0].toUpperCase() : 'U'
+                                                                        isGuest ? (getGuestDisplayName()[0]?.toUpperCase() || 'G') : (message.name ? message.name[0].toUpperCase() : (user?.displayName?.[0] || user?.email?.[0] || 'U'))
                                                                     ) : null}
                                                                 </AvatarFallback>
                                                             </Avatar>
@@ -2779,7 +2875,13 @@ export default function ChatPage() {
                                                             <div className="text-right min-w-0 group">
                                                                 <div className="flex items-center justify-end gap-2 mb-1">
                                                                     <div className="text-sm text-gray-600 font-medium">
-                                                                        {message.name}
+                                                                        {(() => {
+                                                                            // For guest users, always use current guest name (even if old message says "Guest User")
+                                                                            if (isGuest) {
+                                                                                return getGuestDisplayName();
+                                                                            }
+                                                                            return message.name || user?.displayName || 'Anonymous';
+                                                                        })()}
                                                                     </div>
                                                                     <MessageTimestamp timestamp={message.timestamp} />
                                                                 </div>

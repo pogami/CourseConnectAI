@@ -461,8 +461,13 @@ export const useChatStore = create<ChatState>()(
             if (user) {
               // User is signed in.
               console.log("User signed in, loading chats...");
-              // CRITICAL: Clear guest data when user signs in to prevent data leakage
-              if (typeof window !== 'undefined') {
+              
+              // CRITICAL: Only clear guest data if this is a REAL authenticated user (not anonymous)
+              // Anonymous users are still guests and should keep their guest data
+              const isRealUser = !user.isAnonymous && user.email;
+              
+              if (isRealUser && typeof window !== 'undefined') {
+                // Only clear guest data for real authenticated users
                 localStorage.removeItem('uploaded-syllabi');
                 // Clear guest chat storage
                 localStorage.removeItem('chat-storage');
@@ -477,32 +482,47 @@ export const useChatStore = create<ChatState>()(
                     localStorage.removeItem(key);
                   }
                 });
-                console.log('✅ Cleared all guest data from localStorage');
-              }
-              // Clear guest chats from store state
-              set({ 
-                isGuest: false, 
-                isStoreLoading: false,
-                chats: {} // Clear all chats - will be reloaded from Firestore
-              });
-              
-              // Create user-specific private general chat
-              const privateGeneralChatId = `private-general-chat-${user.uid}`;
-              initializeGeneralChats(user.uid);
-              
-              // Set join time for user-specific chat BEFORE subscribing
-              const userChatJoinTimeKey = `chat-join-time-${privateGeneralChatId}`;
-              if (!localStorage.getItem(userChatJoinTimeKey)) {
-                localStorage.setItem(userChatJoinTimeKey, Date.now().toString());
-                console.log(`⏰ Set default join time for ${privateGeneralChatId}`);
+                console.log('✅ Cleared all guest data from localStorage (real user signed in)');
+              } else if (user.isAnonymous) {
+                // Anonymous user - preserve guest data in localStorage
+                console.log('Anonymous user detected, preserving guest data');
               }
               
-              // Switch to user-specific chat
-              set({ currentTab: privateGeneralChatId });
-              
-              // Subscribe to user-specific chat
-              get().subscribeToChat(privateGeneralChatId);
-              console.log(`✅ Switched to user-specific chat: ${privateGeneralChatId}`);
+              // Only clear guest chats and switch to user-specific chat for REAL authenticated users
+              // (reuse isRealUser from above)
+              if (isRealUser) {
+                // Clear guest chats from store state for real users
+                set({ 
+                  isGuest: false, 
+                  isStoreLoading: false,
+                  chats: {} // Clear all chats - will be reloaded from Firestore
+                });
+                
+                // Create user-specific private general chat
+                const privateGeneralChatId = `private-general-chat-${user.uid}`;
+                initializeGeneralChats(user.uid);
+                
+                // Set join time for user-specific chat BEFORE subscribing
+                const userChatJoinTimeKey = `chat-join-time-${privateGeneralChatId}`;
+                if (!localStorage.getItem(userChatJoinTimeKey)) {
+                  localStorage.setItem(userChatJoinTimeKey, Date.now().toString());
+                  console.log(`⏰ Set default join time for ${privateGeneralChatId}`);
+                }
+                
+                // Switch to user-specific chat
+                set({ currentTab: privateGeneralChatId });
+                
+                // Subscribe to user-specific chat
+                get().subscribeToChat(privateGeneralChatId);
+                console.log(`✅ Switched to user-specific chat: ${privateGeneralChatId}`);
+              } else if (user.isAnonymous) {
+                // Anonymous user - keep guest mode and preserve guest data
+                set({ 
+                  isGuest: true, 
+                  isStoreLoading: false
+                });
+                console.log('Anonymous user detected, keeping guest mode');
+              }
               
               try {
                 const userDocRef = doc(db as Firestore, 'users', user.uid);

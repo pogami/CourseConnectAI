@@ -367,26 +367,14 @@ export function EnhancedChatInput({
     setSelectedFiles(prev => [...prev, ...valid]);
     setFilePreviews(prev => [...prev, ...previews]);
     
-    // Process OCR for images
+    // Process OCR for images (extract text but don't show it in input)
+    // The extracted text will be sent as document context, not as visible message text
     for (const file of valid) {
       if (file.type.startsWith('image/')) {
-        const extractedText = await processOCR(file);
-        if (extractedText && extractedText.trim()) {
-          // Append extracted text to input value
-          const currentValue = value.trim();
-          const separator = currentValue ? '\n\n' : '';
-          const newValue = `${currentValue}${separator}[Text from ${file.name}]:\n${extractedText.trim()}`;
-          
-          // Update input value
-          if (inputRef.current) {
-            inputRef.current.value = newValue;
-            // Trigger onChange event
-            const event = new Event('input', { bubbles: true });
-            inputRef.current.dispatchEvent(event);
-            // Manually call onChange if it exists
-            onChange({ target: { value: newValue } } as any);
-          }
-        }
+        // Extract text silently - it will be used as context for the AI
+        // but won't appear in the user's message bubble
+        await processOCR(file);
+        // Don't append to input - let the chat page handle it as document context
       }
     }
     

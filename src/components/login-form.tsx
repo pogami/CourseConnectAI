@@ -353,6 +353,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
         // Use popup instead of redirect for better UX - user stays on page
         console.log('🔐 Attempting Google sign-in with popup...');
         console.log('🔐 Auth domain:', auth?.config?.authDomain || 'not set');
+        console.log('🔐 Current origin:', window.location.origin);
         
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
@@ -411,19 +412,24 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
         console.error('Google Sign-in Error:', error);
         setIsSubmittingGoogle(false);
 
+        // If user closed popup, don't show error - just silently cancel
+        if (error?.code === 'auth/popup-closed-by-user') {
+          console.log('User closed Google sign-in popup');
+          return; // Don't show error toast
+        }
+
         let description = "Could not sign in with Google. Please try again or use another method.";
 
         if (error?.code === 'auth/operation-not-allowed') {
           description = "Google sign-in is not enabled. Please enable it in your Firebase console's Authentication settings.";
         } else if (error?.code === 'auth/unauthorized-domain') {
-          description = `This domain (${window.location.hostname}:${window.location.port}) is not authorized. Please add it to authorized domains in Firebase Console → Authentication → Settings.`;
+          description = `This domain (${window.location.hostname}) is not authorized. Please add it to authorized domains in Firebase Console → Authentication → Settings.`;
         } else if (error?.code === 'auth/invalid-action' || error?.message?.includes('invalid_request')) {
           description = `Invalid action/request. Please check your OAuth configuration:
           1. Add '${window.location.hostname}' to Firebase Console → Authentication → Settings → Authorized domains
-          2. Add '${window.location.origin}' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized JavaScript origins
-          3. Current URL: ${window.location.href}`;
+          2. Add '${window.location.origin}' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized JavaScript origins`;
         } else if (error?.message?.includes('redirect_uri_mismatch')) {
-          description = `Redirect URI mismatch. Please add '${window.location.origin}/login' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized redirect URIs`;
+          description = `Redirect URI mismatch. Please add '${window.location.origin}' to Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized redirect URIs`;
         } else if (error?.code === 'auth/network-request-failed') {
           description = "Network error. Please check your internet connection and try again.";
         } else if (error?.code === 'auth/too-many-requests') {

@@ -225,25 +225,6 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             console.error('AI service returned invalid response:', aiResult);
             throw new Error('AI service returned invalid response');
           }
-
-          // Send any remaining buffered word or characters
-          if (wordBuffer.trim()) {
-            // Check if it's a complete word or just trailing characters
-            const trimmed = wordBuffer.trim();
-            // If it ends with punctuation or is a complete word, send it
-            if (/[.,!?;:]$/.test(trimmed) || !/\s/.test(trimmed)) {
-              controller.enqueue(encoder.encode(JSON.stringify({
-                type: 'content',
-                content: wordBuffer
-              }) + '\n'));
-            } else {
-              // Incomplete word - send it anyway at the end
-              controller.enqueue(encoder.encode(JSON.stringify({
-                type: 'content',
-                content: wordBuffer
-              }) + '\n'));
-            }
-          }
           
           // Ensure we have the full answer (in case streaming didn't capture everything)
           const finalAnswer = fullAnswer.trim() || aiResult.answer.trim();
@@ -251,11 +232,6 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           if (!finalAnswer) {
             console.error('AI service returned empty answer');
             throw new Error('AI service returned empty response');
-          }
-
-          if (!aiResult || !aiResult.answer) {
-            console.error('AI service returned invalid response:', aiResult);
-            throw new Error('AI service returned invalid response');
           }
 
           // Send done signal with final response - wait a tiny bit to ensure all content chunks are sent

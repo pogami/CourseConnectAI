@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { provideStudyAssistanceWithStreaming } from '@/ai/services/dual-ai-service';
 import { filterContent } from '@/lib/content-filter';
-import { db } from '@/lib/firebase/server';
+import { getDb } from '@/lib/firebase/server';
 import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
 
 export const runtime = 'nodejs';
@@ -174,11 +174,14 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           let learningProfile: any = undefined;
           if (userId) {
             try {
-              const userDoc = await db.collection('users').doc(userId).get();
-              if (userDoc.exists) {
-                const userData = userDoc.data();
-                if (userData?.learningProfile) {
-                  learningProfile = userData.learningProfile;
+              const db = await getDb();
+              if (db && typeof db.collection === 'function') {
+                const userDoc = await db.collection('users').doc(userId).get();
+                if (userDoc.exists) {
+                  const userData = userDoc.data();
+                  if (userData?.learningProfile) {
+                    learningProfile = userData.learningProfile;
+                  }
                 }
               }
             } catch (error) {

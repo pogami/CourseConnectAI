@@ -310,10 +310,12 @@ ONLY CREATE CHARTS/GRAPHS WHEN:
 1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
 2. The user says "yes" to your follow-up question asking if they want a graph/chart
 
-IMPORTANT RULES:
-- NEVER automatically create graphs without being asked
-- NEVER suggest creating a graph unless the user's question would benefit from visualization
-- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+CRITICAL RESTRICTIONS:
+- NEVER suggest creating a graph unless the topic is clearly math, statistics, data analysis, economics, or science-related
+- NEVER suggest graphs for: casual conversations, general questions, non-numerical topics, random topics (like laundry detergent, games, stories, characters, etc.)
+- ONLY suggest graphs for: mathematical functions, statistical data, numerical comparisons, scientific data, financial data, or quantitative analysis
+- If the user asks about something non-mathematical (like laundry detergent, characters in a game, stories, etc.), NEVER suggest creating a chart - just answer their question normally
+- You CAN ask: "Would you like me to create a chart/graph for this?" ONLY if the topic involves numbers, data, statistics, or mathematical concepts
 - If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
@@ -623,10 +625,12 @@ ONLY CREATE CHARTS/GRAPHS WHEN:
 1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
 2. The user says "yes" to your follow-up question asking if they want a graph/chart
 
-IMPORTANT RULES:
-- NEVER automatically create graphs without being asked
-- NEVER suggest creating a graph unless the user's question would benefit from visualization
-- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+CRITICAL RESTRICTIONS:
+- NEVER suggest creating a graph unless the topic is clearly math, statistics, data analysis, economics, or science-related
+- NEVER suggest graphs for: casual conversations, general questions, non-numerical topics, random topics (like laundry detergent, games, stories, characters, etc.)
+- ONLY suggest graphs for: mathematical functions, statistical data, numerical comparisons, scientific data, financial data, or quantitative analysis
+- If the user asks about something non-mathematical (like laundry detergent, characters in a game, stories, etc.), NEVER suggest creating a chart - just answer their question normally
+- You CAN ask: "Would you like me to create a chart/graph for this?" ONLY if the topic involves numbers, data, statistics, or mathematical concepts
 - If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
@@ -786,10 +790,12 @@ ONLY CREATE CHARTS/GRAPHS WHEN:
 1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
 2. The user says "yes" to your follow-up question asking if they want a graph/chart
 
-IMPORTANT RULES:
-- NEVER automatically create graphs without being asked
-- NEVER suggest creating a graph unless the user's question would benefit from visualization
-- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+CRITICAL RESTRICTIONS:
+- NEVER suggest creating a graph unless the topic is clearly math, statistics, data analysis, economics, or science-related
+- NEVER suggest graphs for: casual conversations, general questions, non-numerical topics, random topics (like laundry detergent, games, stories, characters, etc.)
+- ONLY suggest graphs for: mathematical functions, statistical data, numerical comparisons, scientific data, financial data, or quantitative analysis
+- If the user asks about something non-mathematical (like laundry detergent, characters in a game, stories, etc.), NEVER suggest creating a chart - just answer their question normally
+- You CAN ask: "Would you like me to create a chart/graph for this?" ONLY if the topic involves numbers, data, statistics, or mathematical concepts
 - If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
@@ -1147,10 +1153,12 @@ ONLY CREATE CHARTS/GRAPHS WHEN:
 1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
 2. The user says "yes" to your follow-up question asking if they want a graph/chart
 
-IMPORTANT RULES:
-- NEVER automatically create graphs without being asked
-- NEVER suggest creating a graph unless the user's question would benefit from visualization
-- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+CRITICAL RESTRICTIONS:
+- NEVER suggest creating a graph unless the topic is clearly math, statistics, data analysis, economics, or science-related
+- NEVER suggest graphs for: casual conversations, general questions, non-numerical topics, random topics (like laundry detergent, games, stories, characters, etc.)
+- ONLY suggest graphs for: mathematical functions, statistical data, numerical comparisons, scientific data, financial data, or quantitative analysis
+- If the user asks about something non-mathematical (like laundry detergent, characters in a game, stories, etc.), NEVER suggest creating a chart - just answer their question normally
+- You CAN ask: "Would you like me to create a chart/graph for this?" ONLY if the topic involves numbers, data, statistics, or mathematical concepts
 - If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"
@@ -2059,10 +2067,12 @@ ONLY CREATE CHARTS/GRAPHS WHEN:
 1. The user EXPLICITLY asks for a chart, graph, pie chart, bar chart, visualization, or diagram
 2. The user says "yes" to your follow-up question asking if they want a graph/chart
 
-IMPORTANT RULES:
-- NEVER automatically create graphs without being asked
-- NEVER suggest creating a graph unless the user's question would benefit from visualization
-- You CAN ask: "Would you like me to create a chart/graph for this?" as a follow-up question
+CRITICAL RESTRICTIONS:
+- NEVER suggest creating a graph unless the topic is clearly math, statistics, data analysis, economics, or science-related
+- NEVER suggest graphs for: casual conversations, general questions, non-numerical topics, random topics (like laundry detergent, games, stories, characters, etc.)
+- ONLY suggest graphs for: mathematical functions, statistical data, numerical comparisons, scientific data, financial data, or quantitative analysis
+- If the user asks about something non-mathematical (like laundry detergent, characters in a game, stories, etc.), NEVER suggest creating a chart - just answer their question normally
+- You CAN ask: "Would you like me to create a chart/graph for this?" ONLY if the topic involves numbers, data, statistics, or mathematical concepts
 - If the user says "yes", "sure", "okay", "yeah", or similar to your graph offer, THEN create the graph
 - NEVER say "use Excel", "use Google Sheets", "use software", or suggest external tools
 - NEVER say "I can't show you" or "you can create one using"

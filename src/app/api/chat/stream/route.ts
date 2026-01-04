@@ -246,17 +246,12 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             }
             
             // Send complete words one at a time with consistent timing
+            // CRITICAL: Process words sequentially with delay to ensure smooth streaming
             for (let i = 0; i < completeWords.length; i++) {
               const word = completeWords[i];
               
-              // Calculate delay to maintain consistent word interval
-              const now = Date.now();
-              const timeSinceLastWord = now - lastWordSentTime;
-              const delayNeeded = Math.max(0, WORD_INTERVAL_MS - timeSinceLastWord);
-              
-              if (delayNeeded > 0) {
-                await new Promise(resolve => setTimeout(resolve, delayNeeded));
-              }
+              // Always add delay between words for smooth streaming
+              await new Promise(resolve => setTimeout(resolve, WORD_INTERVAL_MS));
               
               controller.enqueue(encoder.encode(JSON.stringify({
                 type: 'content',

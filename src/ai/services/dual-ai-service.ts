@@ -113,8 +113,8 @@ async function tryClaude(input: StudyAssistanceInput): Promise<AIResponse> {
   try {
     console.log('Trying Claude Sonnet 4.5...');
     
-    // Read API key at runtime
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Read API key at runtime - check both common names
+    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_KEY;
     
     // Validate API key
     if (!apiKey || apiKey.trim() === '' || apiKey === 'demo-key' || apiKey === 'your_anthropic_api_key_here') {
@@ -1859,8 +1859,8 @@ async function tryClaudeNativeStreaming(
   input: StudyAssistanceInput,
   onChunk: (chunk: string) => void
 ): Promise<AIResponse> {
-  // Read API key at runtime
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  // Read API key at runtime - check both common names
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_KEY;
   
   // Validate API key
   if (!apiKey || apiKey.trim() === '' || apiKey === 'demo-key' || apiKey === 'your_anthropic_api_key_here') {

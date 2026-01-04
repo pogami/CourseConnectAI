@@ -250,7 +250,10 @@ export function EnhancedChatInput({
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      // Only send if not currently sending/thinking
+      if (!isSending) {
+        handleSend();
+      }
     }
   };
 

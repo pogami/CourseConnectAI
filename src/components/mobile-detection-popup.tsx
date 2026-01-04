@@ -55,52 +55,53 @@ export function MobileDetectionPopup() {
             <div className="flex justify-center">
               <div className="relative group">
                 {/* Multi-layered icon glow */}
-                <div className="absolute inset-0 bg-blue-500/20 rounded-[1.5rem] blur-2xl group-hover:bg-blue-500/30 transition-colors duration-500" />
+                <div className="absolute inset-0 bg-blue-500/20 rounded-3xl blur-2xl group-hover:bg-blue-500/30 transition-colors duration-500" />
                 
-                <div className="relative bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 p-5 rounded-[1.5rem] shadow-xl shadow-blue-500/20 transform group-hover:scale-105 transition-transform duration-500">
-                  <Smartphone className="h-10 w-10 text-white" strokeWidth={1.5} />
+                <div className="relative bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 p-6 rounded-3xl shadow-xl shadow-blue-500/20 transform group-hover:scale-105 transition-transform duration-500">
+                  <Smartphone className="h-12 w-12 text-white" strokeWidth={1.5} />
                   
                   {/* Floating Desktop element */}
-                  <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 p-1.5 rounded-lg shadow-lg border border-blue-100 dark:border-blue-900 animate-bounce-subtle">
-                    <Monitor className="h-5 w-5 text-blue-500" strokeWidth={2} />
+                  <div className="absolute -bottom-2 -right-2 bg-white dark:bg-gray-800 p-2 rounded-xl shadow-lg border border-blue-100 dark:border-blue-900 animate-bounce-subtle">
+                    <Monitor className="h-6 w-6 text-blue-600" strokeWidth={2} />
                   </div>
                 </div>
               </div>
             </div>
             
-            <div className="space-y-1">
-              <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">
-                Mobile Device Detected
+            <div className="space-y-2">
+              <DialogTitle className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">
+                Mobile Beta
               </DialogTitle>
             </div>
           </DialogHeader>
           
-          <div className="text-center space-y-6 mt-6">
-            <p className="text-gray-600 dark:text-gray-300 text-base font-medium leading-relaxed px-2">
-              Welcome! Mobile is in Beta. <br/>
-              Tap <span className="text-blue-600 dark:text-blue-400 font-bold">Continue</span> to start.
+          <div className="text-center space-y-8 mt-8">
+            <p className="text-gray-600 dark:text-gray-300 text-lg font-medium leading-relaxed px-4">
+              CourseConnect is currently optimized for <span className="text-blue-600 dark:text-blue-400 font-bold">desktop use</span>. 
             </p>
             
-            <div className="bg-blue-50/50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/50 relative overflow-hidden group">
-              <div className="flex items-start gap-3 relative z-10">
-                <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/30">
-                  <Monitor className="h-4 w-4" />
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 p-5 rounded-3xl border border-blue-100/50 dark:border-blue-800/30 relative overflow-hidden shadow-inner">
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white dark:bg-gray-800 text-blue-600 flex items-center justify-center shadow-md">
+                  <Monitor className="h-6 w-6" />
                 </div>
-                <div className="text-left space-y-0.5">
-                  <p className="text-xs font-bold text-blue-900 dark:text-blue-100">Pro Tip</p>
-                  <p className="text-[11px] text-blue-800/70 dark:text-blue-200/70 leading-relaxed font-medium">
-                    Try CourseConnect on desktop for the full experience with a larger screen and advanced features.
+                <div className="text-left">
+                  <p className="text-sm font-bold text-blue-900 dark:text-blue-100">💡 Best Experience</p>
+                  <p className="text-xs text-blue-800/80 dark:text-blue-200/80 leading-snug mt-0.5">
+                    Try it on your computer for the full, uninhibited experience.
                   </p>
                 </div>
               </div>
             </div>
 
-            <Button 
-              onClick={handleContinue}
-              className="w-full h-12 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-[0_12px_24px_-4px_rgba(37,99,235,0.3)] hover:shadow-[0_16px_32px_-4px_rgba(37,99,235,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border-b-4 border-blue-800 active:border-b-0 active:translate-y-[2px]"
-            >
-              Continue to Dashboard
-            </Button>
+            <div className="space-y-4">
+              <Button 
+                onClick={handleContinue}
+                className="w-full h-14 text-lg font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-[0_20px_40px_-12px_rgba(37,99,235,0.4)] hover:shadow-[0_24px_48px_-12px_rgba(37,99,235,0.5)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Continue to Mobile Beta
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

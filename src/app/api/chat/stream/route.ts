@@ -4,8 +4,6 @@ import { filterContent } from '@/lib/content-filter';
 import { getDb } from '@/lib/firebase/server';
 import { generateMainSystemPrompt } from '@/ai/prompts/main-system-prompt';
 
-export const runtime = 'nodejs';
-
 export async function POST(request: NextRequest) {
   try {
     const {
@@ -67,7 +65,7 @@ export async function POST(request: NextRequest) {
       return new Response(stream, {
         headers: {
           'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-transform, no-store',
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no', // Disable nginx buffering (Vercel uses nginx)
         },
@@ -80,8 +78,12 @@ export async function POST(request: NextRequest) {
         const encoder = new TextEncoder();
 
         try {
-          // CRITICAL: Send initial chunk immediately to establish stream connection
-          // This prevents Vercel from buffering the entire response
+          // CRITICAL: Send a "primer" chunk of whitespace/comments
+          // This forces Vercel/Nginx to start the stream immediately
+          // Some layers buffer up to 1024 or 2048 bytes
+          controller.enqueue(encoder.encode(' ' + ' '.repeat(1024) + '\n'));
+
+          // Send initial chunk immediately to establish stream connection
           controller.enqueue(encoder.encode(JSON.stringify({
             type: 'status',
             message: 'Starting...'
@@ -152,6 +154,22 @@ ${fullSyllabus}
             });
           }
 
+          // Fetch user's learning profile if userId is provided for personalization
+          let learningProfile: any = undefined;
+          if (userId && userId !== 'guest') {
+            try {
+              const db = await getDb();
+              const profileDoc = await db.collection('users').doc(userId).collection('learningProfile').doc('default').get();
+              if (profileDoc && (typeof profileDoc.exists === 'function' ? profileDoc.exists() : profileDoc.exists)) {
+                learningProfile = (typeof profileDoc.data === 'function' ? profileDoc.data() : profileDoc.data);
+                console.log('✅ Stream: Loaded user learning profile');
+              }
+            } catch (profileError) {
+              console.warn('⚠️ Stream: Failed to fetch learning profile:', profileError);
+              // Continue without learning profile
+            }
+          }
+
           // Detect frustration and emotional state
           const { detectFrustration } = await import('@/lib/emotional-intelligence');
           const frustration = detectFrustration(question, conversationHistory || []);
@@ -177,26 +195,6 @@ Start your response with empathy and understanding. Acknowledge their frustratio
           const enhancedQuestion = isLandingPageDemo
             ? `${question}\n\nIMPORTANT: Format your response as a structured study guide. Start with an introductory sentence mentioning the course name and key topics. Then provide a numbered list (1., 2., 3.) of the main topics to focus on, with brief explanations. Be professional but helpful. Use proper spacing and formatting.${frustrationGuidance}`
             : question + frustrationGuidance;
-
-          // Fetch learning profile if userId is available
-          let learningProfile: any = undefined;
-          if (userId) {
-            try {
-              const db = await getDb();
-              if (db && typeof db.collection === 'function') {
-                const userDoc = await db.collection('users').doc(userId).get();
-                if (userDoc && userDoc.exists && typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists) {
-                  const userData = typeof userDoc.data === 'function' ? userDoc.data() : userDoc.data;
-                  if (userData?.learningProfile) {
-                    learningProfile = userData.learningProfile;
-                  }
-                }
-              }
-            } catch (error: any) {
-              console.warn('Failed to fetch learning profile:', error?.message || error);
-              // Continue without learning profile - not critical
-            }
-          }
 
           // Log the AI response type for debugging
           console.log('🎨 AI Response Type:', aiResponseType);
@@ -293,7 +291,7 @@ Start your response with empathy and understanding. Acknowledge their frustratio
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform, no-store',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // CRITICAL: Disable nginx buffering on Vercel
+        'X-Accel-Buffering': 'no', // Disable nginx buffering on Vercel
         'Transfer-Encoding': 'chunked',
         'X-Content-Type-Options': 'nosniff',
       },

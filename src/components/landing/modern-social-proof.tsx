@@ -5,15 +5,15 @@ import { motion } from 'framer-motion';
 
 const scenarios = [
   "3 exams in 48 hours",
-  "Professors who don't use Canvas",
+  "Turning a 4-page PDF",
   "Group projects with 'ghost' partners",
   "That 11:59 PM deadline panic",
   "Assignments that weren't on the syllabus",
-  "$200 access codes for homework",
+  "Mandatory attendance for a recorded lecture",
   "Study sessions fueled by sheer panic",
   "Calculus homework at 2 AM",
   "Missing a submission by 10 seconds",
-  "Profs who change the schedule last minute",
+  "Syllabus changes on a Sunday night",
   "18 credits and a part-time job",
   "Finals week chaos",
 ];
@@ -32,7 +32,7 @@ export function SocialProofSection() {
         }
         @media (max-width: 768px) {
           .animate-marquee {
-            animation-duration: 20s;
+            animation-duration: 40s;
           }
         }
       `}} />

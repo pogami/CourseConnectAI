@@ -83,6 +83,8 @@ const getGuestDisplayName = (): string => {
   return 'Guest User';
 };
 
+const GUEST_MESSAGE_LIMIT = 4;
+
 function getSmartThinkingSteps(message: string): string[] {
   const msg = (message || "").toLowerCase();
   const steps = ["Analyzing request context..."];
@@ -1064,6 +1066,9 @@ export default function ChatPage() {
     }, [chats, currentTab, setCurrentTab]);
 
     const handleSendMessage = async (shouldCallAI: boolean = true, aiResponseType: 'concise' | 'detailed' | 'conversational' | 'analytical' = 'concise') => {
+        // Prevent sending multiple messages while AI is thinking/streaming
+        if (isLoading) return;
+
         // Remove any OCR-extracted text patterns that shouldn't be visible in the message bubble
         // Pattern: [Text from filename]: extracted text
         // The extracted text will still be sent to the AI as document context, just not shown to the user
@@ -1097,6 +1102,14 @@ export default function ChatPage() {
             searchModeEnabled = bodyAttr === 'true' || storageFlag === 'true';
         }
 
+        // Determine if this message mentions AI
+        const hasAIMention = messageText.includes('@ai') || messageText.includes('@AI');
+        
+        // For public chats, only call AI if explicitly mentioned
+        // For class chats (syllabus-based), always call AI
+        // For private chats, use shouldCallAI setting
+        const shouldCallAIFinal = isClassChat ? true : (isPublicChat ? hasAIMention : shouldCallAI);
+
         // Check if AI chat is disabled
         if (!isFeatureEnabled('aiChat') && shouldCallAI) {
             const userMessage = {
@@ -1123,6 +1136,43 @@ export default function ChatPage() {
             
             setInputValue('');
             return;
+        }
+
+        // Enforce Guest Message Limit
+        if (isGuest && shouldCallAIFinal) {
+            const guestStatsKey = `guest-total-message-count`;
+            const currentCount = parseInt(localStorage.getItem(guestStatsKey) || '0');
+            
+            if (currentCount >= GUEST_MESSAGE_LIMIT) {
+                // Add the user message first
+                const userMessage = {
+                    id: generateMessageId(),
+                    text: messageText,
+                    sender: 'user' as const,
+                    name: getGuestDisplayName(),
+                    userId: 'guest',
+                    timestamp: Date.now()
+                };
+                addMessage(currentTab || 'private-general-chat', userMessage);
+                
+                // Show the sign-up wall message
+                setTimeout(() => {
+                    const wallMessage = {
+                        id: `wall-${Date.now()}`,
+                        text: `✨ **You've reached your guest message limit!**\n\nI hope I've been helpful! To continue our conversation and unlock the full power of CourseConnect, please create a free account.\n\n**When you sign up, you'll get:**\n✅ **Unlimited Messaging** — Talk to me as much as you need\n✅ **Syllabus Memory** — I'll remember every detail of your courses forever\n✅ **Deeper Analysis** — Unlock advanced AI reasoning for complex academic topics\n✅ **Personalized Study Tools** — Create custom study plans and practice quizzes\n✅ **Student Networking** — Automatically connect with classmates in your courses\n\nIt takes less than 30 seconds and **all your current progress is already saved** and waiting for you!\n\n[**Create Your Free Account Now**](/login?state=signup)`,
+                        sender: 'bot' as const,
+                        name: 'CourseConnect AI',
+                        timestamp: Date.now(),
+                    };
+                    addMessage(currentTab || 'private-general-chat', wallMessage);
+                }, 500);
+                
+                setInputValue('');
+                return;
+            }
+            
+            // Increment count for guests
+            localStorage.setItem(guestStatsKey, (currentCount + 1).toString());
         }
 
         // Check if community chat is disabled
@@ -1152,14 +1202,6 @@ export default function ChatPage() {
             setInputValue('');
             return;
         }
-
-        // Determine if this message mentions AI
-        const hasAIMention = messageText.includes('@ai') || messageText.includes('@AI');
-        
-        // For public chats, only call AI if explicitly mentioned
-        // For class chats (syllabus-based), always call AI
-        // For private chats, use shouldCallAI setting
-        const shouldCallAIFinal = isClassChat ? true : (isPublicChat ? hasAIMention : shouldCallAI);
 
         console.log('Chat type detection:', {
             chatType: currentChat?.chatType,

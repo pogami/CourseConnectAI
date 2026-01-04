@@ -110,7 +110,7 @@ export function Navigation() {
                   Sign In
                 </Button>
                 <Button 
-                  className="bg-sky-600 hover:bg-sky-700 text-white text-sm px-5 py-2 h-9 shadow-md hover:shadow-lg transition-all"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 h-9 shadow-md hover:shadow-lg transition-all"
                   onClick={() => window.location.href = '/login?state=signup'}
                 >
                   Get Started
@@ -160,7 +160,7 @@ export function Navigation() {
                   Sign In
                 </Button>
                 <Button 
-                  className="bg-sky-600 hover:bg-sky-700 text-white shadow-md hover:shadow-lg transition-all"
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all"
                   onClick={() => window.location.href = '/login?state=signup'}
                 >
                   Get Started

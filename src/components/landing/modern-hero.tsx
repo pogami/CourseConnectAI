@@ -15,44 +15,24 @@ export function HeroSection() {
     target: containerRef,
     offset: ["start start", "end end"]
   });
-  
-  // Track when demo section is leaving viewport
-  const { scrollYProgress: demoScrollProgress } = useScroll({
-    target: demoRef,
-    offset: ["end end", "start start"]
-  });
-  
-  // Parallax effects - different speeds for depth
-  const backgroundY = useTransform(scrollY, [0, 1000], [0, 300]);
-  const contentY = useTransform(scrollY, [0, 1000], [0, 100]);
-  // Only fade out when demo section is actually leaving viewport
-  const demoOpacity = useTransform(demoScrollProgress, [0, 0.5, 1], [1, 1, 0]);
-  const demoY = useTransform(demoScrollProgress, [0, 0.5, 1], [0, 0, 50]);
-  
-  // Large background text parallax (like GTA VI)
-  const largeTextY = useTransform(scrollY, [0, 1000], [0, 400]);
-  const largeTextOpacity = useTransform(scrollY, [0, 500], [0.03, 0.08]);
 
   return (
     <div 
       ref={containerRef}
-      className="relative overflow-hidden bg-white dark:bg-gray-950 min-h-screen flex items-center"
+      className="relative overflow-x-hidden bg-white dark:bg-gray-950 min-h-screen flex items-center"
     >
       
-      {/* Background Layers with Parallax - subtle, non-flashy */}
+      {/* Background Layers - subtle, non-flashy */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div 
-          style={{ y: useTransform(scrollY, [0, 1000], [0, 120]) }}
+        <div 
           className="absolute top-[-20%] left-[10%] w-[480px] h-[480px] bg-sky-500/6 rounded-full blur-[120px]"
         />
-        <motion.div 
-          style={{ y: useTransform(scrollY, [0, 1000], [0, 160]) }}
+        <div 
           className="absolute bottom-[-20%] right-[5%] w-[420px] h-[420px] bg-indigo-500/6 rounded-full blur-[120px]"
         />
       </div>
 
-      <motion.div 
-        style={{ y: contentY }}
+      <div 
         className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-40 z-10"
       >
         <div className="text-center max-w-4xl mx-auto">
@@ -74,7 +54,7 @@ export function HeroSection() {
             className="text-6xl md:text-7xl lg:text-8xl font-black text-gray-900 dark:text-white mb-6 tracking-tight leading-[1.05]"
           >
             Don't just study.{' '}
-            <span className="bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-sky-600 to-blue-600 bg-clip-text text-transparent">
               Outperform.
             </span>
           </motion.h1>
@@ -140,19 +120,14 @@ export function HeroSection() {
         </div>
 
         {/* Demo Section */}
-        <motion.div
+        <div
           ref={demoRef}
           id="upload"
-          style={{ opacity: demoOpacity, y: demoY }}
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           className="relative mx-auto max-w-5xl mt-20"
         >
           <InteractiveSyllabusDemo />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
   );
 }

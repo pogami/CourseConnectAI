@@ -360,54 +360,45 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
         
         console.log('✅ Google sign-in successful:', user.email);
         
-        // Check if user exists in Firestore
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        const isNewUser = !userDoc.exists();
+        // Redirect IMMEDIATELY to avoid loading hang
+        router.push('/dashboard');
 
-        if (isNewUser) {
-          await setDoc(doc(db, "users", user.uid), {
-            displayName: user.displayName || "Google User",
-            email: user.email,
-            profilePicture: user.photoURL || null,
-            graduationYear: "",
-            school: "",
-            major: "",
-            provider: "google",
-            createdAt: new Date().toISOString()
-          });
+        // Check if user exists in Firestore (background)
+        (async () => {
+          try {
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            const isNewUser = !userDoc.exists();
 
-          // Store flags to show onboarding for new users
-          localStorage.setItem('showOnboarding', 'true');
-          sessionStorage.setItem('justSignedUp', 'true');
-        } else {
-          // Existing user - update profile picture if needed
-          const userData = userDoc.data();
-          if (user.photoURL && (!userData.profilePicture || userData.profilePicture !== user.photoURL)) {
-            await setDoc(doc(db, "users", user.uid), {
-              profilePicture: user.photoURL
-            }, { merge: true });
+            if (isNewUser) {
+              await setDoc(doc(db, "users", user.uid), {
+                displayName: user.displayName || "Google User",
+                email: user.email,
+                profilePicture: user.photoURL || null,
+                graduationYear: "",
+                school: "",
+                major: "",
+                provider: "google",
+                createdAt: new Date().toISOString()
+              });
+
+              localStorage.setItem('showOnboarding', 'true');
+              sessionStorage.setItem('justSignedUp', 'true');
+            } else {
+              const userData = userDoc.data();
+              if (user.photoURL && (!userData.profilePicture || userData.profilePicture !== user.photoURL)) {
+                await setDoc(doc(db, "users", user.uid), {
+                  profilePicture: user.photoURL
+                }, { merge: true });
+              }
+            }
+
+            migrateGuestData(user.uid).catch(console.error);
+          } catch (e) {
+            console.error('Background user sync failed:', e);
           }
-        }
-
-        // Migrate guest data
-        migrateGuestData(user.uid).catch(error => {
-          console.error('Guest data migration failed:', error);
-        });
-
-        // Clear guest data
-        localStorage.removeItem('guestUser');
-        localStorage.removeItem('guest-notifications');
-        localStorage.removeItem('guest-onboarding-completed');
+        })();
 
         setIsSubmittingGoogle(false);
-        
-        // Redirect to dashboard
-        toast({
-          title: "Signed In!",
-          description: "Welcome back.",
-        });
-        
-        router.push('/dashboard');
       } catch (error: any) {
         console.error('Google Sign-in Error:', error);
         setIsSubmittingGoogle(false);
@@ -635,7 +626,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
               className="mb-6 flex justify-center"
             >
               <div className="relative group cursor-pointer">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
                 <div className="relative rounded-2xl bg-white/50 dark:bg-gray-800/50 p-4 border border-white/50 dark:border-gray-700/50 backdrop-blur-md shadow-lg group-hover:scale-105 transition-transform duration-500">
                   <CCLogo className="h-12 w-auto" />
                 </div>
@@ -647,7 +638,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.3 }}
             >
-              <h1 className="text-3xl font-bold tracking-tight mb-2 bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+              <h1 className="text-3xl font-bold tracking-tight mb-2 text-gray-900 dark:text-white">
                 {isSigningUp ? "Create Account" : "Welcome Back"}
               </h1>
               <p className="text-gray-500 dark:text-gray-400">
@@ -659,10 +650,11 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
+                  className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/50 dark:border-blue-800/30 rounded-2xl shadow-inner"
                 >
-                  <p className="text-xs text-blue-800 dark:text-blue-200 text-center">
-                    💡 <strong>Best Experience:</strong> CourseConnect works best on desktop! Try it on your computer for the full experience.
+                  <p className="text-xs text-blue-900 dark:text-blue-100 text-center font-medium leading-relaxed">
+                    💡 <strong>Best Experience:</strong> CourseConnect is optimized for desktop. 
+                    <span className="block mt-1 opacity-75">Mobile is in Beta—try it on your computer for the full experience.</span>
                   </p>
                 </motion.div>
               )}
@@ -679,15 +671,15 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
               >
                 <Button
                   variant="outline"
-                  className="w-full h-14 text-base font-medium border-2 border-dashed border-purple-200 dark:border-purple-800 hover:border-purple-400 dark:hover:border-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 group relative overflow-hidden"
+                  className="w-full h-14 text-base font-medium border-2 border-dashed border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 group relative overflow-hidden"
                   onClick={handleGuestLogin}
                   disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   {isSubmittingGuest ? (
                     <Loader2 className="animate-spin mr-2 h-5 w-5" />
                   ) : (
-                    <User className="mr-2 h-5 w-5 text-purple-500 group-hover:scale-110 transition-transform" />
+                    <User className="mr-2 h-5 w-5 text-blue-500 group-hover:scale-110 transition-transform" />
                   )}
                   <span className="relative z-10">Try as Guest <span className="text-gray-400 mx-1">•</span> No Account Needed</span>
                 </Button>
@@ -713,7 +705,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
-                      className="h-12 pl-4 bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-purple-500 focus:ring-purple-500/20 rounded-xl transition-all duration-300"
+                      className="h-12 pl-4 bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl transition-all duration-300"
                     />
                   </div>
                 </div>
@@ -724,7 +716,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                       <button
                         type="button"
                         onClick={() => setShowForgotPassword(true)}
-                        className="text-xs font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 hover:underline transition-colors"
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline transition-colors"
                         disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
                       >
                         Forgot password?
@@ -739,14 +731,14 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
-                    className="h-12 pl-4 bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-purple-500 focus:ring-purple-500/20 rounded-xl transition-all duration-300"
+                    className="h-12 pl-4 bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl transition-all duration-300"
                   />
                 </div>
               </div>
 
               <Button
                 type="submit"
-                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 rounded-xl transition-all duration-300 hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 rounded-xl transition-all duration-300 hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
                 disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
               >
                 {isSubmitting ? (
@@ -787,7 +779,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                     Already have an account?{" "}
                     <button
                       onClick={() => setIsSigningUp(false)}
-                      className="font-semibold text-purple-600 hover:text-purple-700 dark:text-purple-400 hover:underline transition-colors"
+                      className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline transition-colors"
                       disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
                     >
                       Sign In
@@ -798,7 +790,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                     Don&apos;t have an account?{" "}
                     <button
                       onClick={() => setIsSigningUp(true)}
-                      className="font-semibold text-purple-600 hover:text-purple-700 dark:text-purple-400 hover:underline transition-colors"
+                      className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline transition-colors"
                       disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
                     >
                       Create one
@@ -818,7 +810,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                   <button
                     onClick={handleGuestLogin}
                     disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
-                    className="text-xs font-medium text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center justify-center gap-2 mx-auto group"
+                    className="text-xs font-medium text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center justify-center gap-2 mx-auto group"
                   >
                     {isSubmittingGuest ? (
                       <Loader2 className="animate-spin h-3 w-3" />
@@ -884,7 +876,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                   <Button
                     onClick={handleForgotPassword}
                     disabled={isResettingPassword || !resetEmail}
-                    className="flex-1 h-12 rounded-xl bg-purple-600 hover:bg-purple-700 text-white"
+                    className="flex-1 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {isResettingPassword ? (
                       <Loader2 className="animate-spin mr-2 h-4 w-4" />

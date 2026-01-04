@@ -95,10 +95,10 @@ export function GuestUsernamePopup({ isOpen, onClose, onUsernameSet }: GuestUser
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md border-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-2xl">
         <DialogHeader>
-          <div className="mx-auto w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/10 to-purple-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+          <div className="mx-auto w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
             <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           </div>
-          <DialogTitle className="text-center text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <DialogTitle className="text-center text-xl font-bold text-blue-600 dark:text-blue-400">
             Choose Your Alias
           </DialogTitle>
           <DialogDescription className="text-center text-gray-500 dark:text-gray-400">
@@ -157,7 +157,7 @@ export function GuestUsernamePopup({ isOpen, onClose, onUsernameSet }: GuestUser
             <Button
               type="submit"
               disabled={!isValid}
-              className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+              className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
             >
               Join Chat
             </Button>

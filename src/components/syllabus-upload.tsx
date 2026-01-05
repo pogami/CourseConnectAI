@@ -333,7 +333,7 @@ export default function SyllabusUpload() {
 
             // Process the parsed result
             if (result.success && result.data) {
-                await processParsedSyllabus(result.data);
+                await processParsedSyllabus(result.data, documentText.text);
             } else {
                 // Handle parsing errors or low confidence
                 if (result.errors && result.errors.length > 0) {
@@ -358,11 +358,26 @@ export default function SyllabusUpload() {
         }
     };
 
-    const processParsedSyllabus = async (parsedData: any) => {
+    const processParsedSyllabus = async (parsedData: any, syllabusText: string) => {
             // Extract course information from parsed data
             const courseInfo = parsedData.courseInfo || {};
         const className = courseInfo.title || file?.name.replace(/\.[^/.]+$/, "") || "Unknown Course";
             const classCode = courseInfo.courseCode || "UNKNOWN";
+            
+            // Create courseData with full syllabus text for AI context
+            const courseData = {
+                courseName: className,
+                courseCode: classCode,
+                professor: courseInfo.instructor || null,
+                university: courseInfo.university || null,
+                semester: courseInfo.semester || null,
+                year: courseInfo.year || null,
+                topics: parsedData.topics || [],
+                assignments: parsedData.assignments || [],
+                exams: parsedData.exams || [],
+                syllabusText: syllabusText, // CRITICAL: Include full syllabus text for AI context
+                fileName: file?.name || 'Syllabus'
+            };
 
             // Create syllabus data
             const syllabusData: SyllabusData = {
@@ -397,7 +412,9 @@ export default function SyllabusUpload() {
                         text: `Welcome to your personal ${chatName} AI chat! 🤖\n\nQuick Start: Ask questions about course topics, get AI homework help, or request study materials. Be specific and detailed for better assistance!\n\nSubjects: Course topics, assignments, concepts & more.`, 
                         timestamp: Date.now() 
                     },
-                    chatId
+                    chatId,
+                    'class',
+                    courseData // CRITICAL: Pass courseData with syllabusText
                 );
 
                 toast({
@@ -464,7 +481,8 @@ export default function SyllabusUpload() {
                     timestamp: Date.now() 
                 },
                 chatId,
-                'class'
+                'class',
+                courseData // CRITICAL: Pass courseData with syllabusText
             );
 
             // Create class group

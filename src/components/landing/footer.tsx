@@ -46,7 +46,7 @@ const socialLinks = [
   { 
     name: 'X', 
     icon: XIcon,
-    href: 'https://twitter.com/courseconnect'
+    href: 'https://x.com/CourseConnectAI'
   },
   { 
     name: 'LinkedIn', 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Navigation } from '@/components/landing/navigation';
 import { Footer } from '@/components/landing/footer';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,9 @@ import {
   Zap,
   Globe,
   ArrowRight,
-  Upload
+  Upload,
+  ImageIcon,
+  X
 } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { HideAISupport } from '@/components/hide-ai-support';
@@ -84,6 +86,9 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [messageSent, setMessageSent] = useState(false);
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { scrollYProgress } = useScroll();
   const y = useTransform(scrollYProgress, [0, 1], [0, -50]);
@@ -93,12 +98,20 @@ export default function ContactPage() {
     setIsSubmitting(true);
 
     try {
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('email', formData.email);
+      formDataToSend.append('subject', formData.subject);
+      formDataToSend.append('category', formData.category);
+      formDataToSend.append('message', formData.message);
+      
+      images.forEach((image, index) => {
+        formDataToSend.append(`image-${index}`, image);
+      });
+
       const response = await fetch('/api/contact', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+        body: formDataToSend,
       });
 
       const data = await response.json();
@@ -118,6 +131,9 @@ export default function ContactPage() {
         category: "",
         message: ""
       });
+      setImages([]);
+      imagePreviews.forEach(preview => URL.revokeObjectURL(preview));
+      setImagePreviews([]);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -133,14 +149,60 @@ export default function ContactPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const imageFiles = files.filter(file => file.type.startsWith('image/') || file.type === 'application/pdf');
+    
+    if (imageFiles.length < files.length) {
+      toast({
+        title: "Invalid files",
+        description: "Only images and PDFs are allowed.",
+        variant: "destructive"
+      });
+    }
+
+    if (images.length + imageFiles.length > 5) {
+      toast({
+        title: "Too many files",
+        description: "You can only upload up to 5 files.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setImages(prev => [...prev, ...imageFiles]);
+    const newPreviews = imageFiles.map(file => {
+      if (file.type.startsWith('image/')) {
+        return URL.createObjectURL(file);
+      }
+      return null;
+    }).filter(Boolean) as string[];
+    setImagePreviews(prev => [...prev, ...newPreviews]);
+  };
+
+  const removeImage = (index: number) => {
+    const newImages = [...images];
+    newImages.splice(index, 1);
+    setImages(newImages);
+
+    const newPreviews = [...imagePreviews];
+    if (newPreviews[index]) {
+      URL.revokeObjectURL(newPreviews[index]);
+    }
+    newPreviews.splice(index, 1);
+    setImagePreviews(newPreviews);
+  };
+
   return (
       <div className="min-h-screen bg-white dark:bg-gray-950 font-sans selection:bg-sky-500/30">
       <Navigation />
       
       {/* Otherworldly Background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-sky-500/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-sky-500/10 rounded-full blur-[120px] animate-pulse delay-1000" />
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-sky-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-sky-500/10 rounded-full blur-[120px]" />
         <div className="absolute top-[40%] left-[40%] w-[20%] h-[20%] bg-pink-500/10 rounded-full blur-[100px] animate-float" />
         <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-[0.02] dark:opacity-[0.05]" />
       </div>
@@ -264,7 +326,7 @@ export default function ContactPage() {
               className="lg:col-span-7"
             >
               <div className="relative">
-                <div className="absolute inset-0 bg-sky-500 rounded-[2.5rem] blur-2xl opacity-20 dark:opacity-40 animate-pulse" />
+                <div className="absolute inset-0 bg-sky-500 rounded-[2.5rem] blur-2xl opacity-20 dark:opacity-40" />
                 <div className="relative bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl rounded-[2.5rem] p-8 md:p-12 border border-white/50 dark:border-gray-700/50 shadow-2xl">
                   {messageSent ? (
                     <motion.div
@@ -386,14 +448,72 @@ export default function ContactPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="message" className="text-gray-700 dark:text-gray-300">Message</Label>
-                      <Textarea
-                        id="message"
-                        placeholder="Tell us how we can help..."
-                        className="min-h-[150px] bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-sky-500 dark:focus:border-sky-500 rounded-xl resize-none transition-all p-4"
-                        value={formData.message}
-                        onChange={(e) => handleInputChange("message", e.target.value)}
-                        required
-                      />
+                      <div className="relative">
+                        <Textarea
+                          id="message"
+                          placeholder="Describe the issue (include error messages)…"
+                          className="min-h-[150px] bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 focus:border-sky-500 dark:focus:border-sky-500 rounded-xl resize-none transition-all p-4"
+                          style={{ paddingRight: '44px', paddingBottom: '44px' }}
+                          value={formData.message}
+                          onChange={(e) => handleInputChange("message", e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="absolute right-2 bottom-2 border-none bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg p-1.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+                          aria-label="Attach image or screenshot"
+                        >
+                          <ImageIcon className="w-5 h-5" />
+                        </button>
+                        <input
+                          id="file-input"
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.pdf"
+                          multiple
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                      {imagePreviews.length > 0 && (
+                        <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+                          {imagePreviews.map((preview, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 flex-shrink-0">
+                              <img src={preview} alt="" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeImage(i)}
+                                className="absolute top-0 right-0 p-1 bg-black/50 text-white rounded-bl-lg hover:bg-black/70"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {images.filter(img => !img.type.startsWith('image/')).length > 0 && (
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          {images
+                            .map((img, i) => ({ img, i }))
+                            .filter(({ img }) => !img.type.startsWith('image/'))
+                            .map(({ img, i }) => (
+                              <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                                <span className="text-sm text-gray-700 dark:text-gray-300">{img.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const index = images.indexOf(img);
+                                    removeImage(index);
+                                  }}
+                                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      )}
                     </div>
 
                     <Button 

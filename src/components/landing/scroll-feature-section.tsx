@@ -616,7 +616,7 @@ export function ScrollFeatureSection() {
                     <div className="space-y-3">
                       <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Across Institutions</div>
                       
-                      {/* Georgia State University */}
+                      {/* Main Institution */}
                       <motion.div
                         initial={{ opacity: 0, x: -10 }}
                         whileInView={{ opacity: 1, x: 0 }}
@@ -627,7 +627,7 @@ export function ScrollFeatureSection() {
                         <div className="flex items-center gap-3">
                           <MapPin className="w-4 h-4 text-gray-400" />
                           <div>
-                            <div className="text-sm font-semibold text-gray-900 dark:text-white">Georgia State University</div>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-white">Any University</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">CS 1301 - Intro to Computer Science</div>
                           </div>
                         </div>

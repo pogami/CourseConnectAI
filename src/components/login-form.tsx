@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, updateProfile, signInAnonymously, sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client-simple";
 import { doc, setDoc, getDoc, writeBatch, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { GoogleLogo } from "@/components/icons/google-logo";
 import { Loader2, User, ArrowRight } from "lucide-react";
 import { useAnimatedToast } from "@/hooks/use-animated-toast";
@@ -25,6 +27,7 @@ interface LoginFormProps {
 export function LoginForm({ initialState = 'login' }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmittingGoogle, setIsSubmittingGoogle] = useState(false);
   const [isSubmittingGuest, setIsSubmittingGuest] = useState(false);
@@ -673,7 +676,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                   variant="outline"
                   className="w-full h-14 text-base font-medium border-2 border-dashed border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 group relative overflow-hidden"
                   onClick={handleGuestLogin}
-                  disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
+                  disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest || (isSigningUp && !agreedToTerms)}
                 >
                   <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   {isSubmittingGuest ? (
@@ -736,10 +739,37 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
                 </div>
               </div>
 
+              {isSigningUp && (
+                <div className="flex items-start space-x-3 px-1">
+                  <Checkbox 
+                    id="terms" 
+                    checked={agreedToTerms} 
+                    onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                    className="mt-1 border-blue-200 dark:border-gray-700 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <Label
+                      htmlFor="terms"
+                      className="text-xs font-medium text-gray-500 dark:text-gray-400 leading-normal"
+                    >
+                      I agree to the{" "}
+                      <Link href="/terms" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline">
+                        Terms of Service
+                      </Link>{" "}
+                      and{" "}
+                      <Link href="/privacy" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline">
+                        Privacy Policy
+                      </Link>
+                      . I confirm that I am at least 18 years old.
+                    </Label>
+                  </div>
+                </div>
+              )}
+
               <Button
                 type="submit"
                 className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 rounded-xl transition-all duration-300 hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
-                disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
+                disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest || (isSigningUp && !agreedToTerms)}
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin mr-2 h-5 w-5" />
@@ -762,7 +792,7 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
               variant="outline"
               className="w-full h-12 text-base font-medium bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 rounded-xl transition-all duration-300"
               onClick={handleGoogleSignIn}
-              disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest}
+              disabled={isSubmitting || isSubmittingGoogle || isSubmittingGuest || (isSigningUp && !agreedToTerms)}
             >
               {isSubmittingGoogle ? (
                 <Loader2 className="animate-spin mr-3 h-5 w-5" />

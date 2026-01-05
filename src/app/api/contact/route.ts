@@ -10,7 +10,20 @@ const getResend = () => {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, subject, category, message } = await request.json();
+    const formData = await request.formData();
+    const name = formData.get('name') as string;
+    const email = formData.get('email') as string;
+    const subject = formData.get('subject') as string;
+    const category = formData.get('category') as string;
+    const message = formData.get('message') as string;
+
+    // Get images from formData
+    const images: File[] = [];
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith('image-') && value instanceof File) {
+        images.push(value);
+      }
+    }
 
     // Validate required fields
     if (!name || !email || !message) {
@@ -107,6 +120,15 @@ export async function POST(request: NextRequest) {
                           <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #374151; white-space: pre-wrap;">${message}</p>
                         </div>
 
+                        ${images.length > 0 ? `
+                        <!-- Attachments Note -->
+                        <div style="margin-bottom: 32px; padding: 12px; background-color: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+                          <p style="margin: 0; font-size: 14px; color: #0369a1; font-weight: 500;">
+                            📎 ${images.length} image${images.length > 1 ? 's' : ''} attached to this email
+                          </p>
+                        </div>
+                        ` : ''}
+
                         <!-- Primary Action -->
                         <table width="100%" cellpadding="0" cellspacing="0">
                           <tr>
@@ -137,8 +159,22 @@ export async function POST(request: NextRequest) {
         </html>
     `;
 
-    // Check if Resend is configured
     const resend = getResend();
+    
+    // Process attachments if images exist
+    const attachments = await Promise.all(
+      images.map(async (image) => {
+        const arrayBuffer = await image.arrayBuffer();
+        const base64Content = Buffer.from(arrayBuffer).toString('base64');
+        return {
+          filename: image.name,
+          content: base64Content,
+          type: image.type,
+          disposition: 'attachment'
+        };
+      })
+    );
+
     if (!resend) {
       console.log('📧 CONTACT FORM EMAIL PREVIEW (RESEND_API_KEY not configured):');
       console.log('To:', recipientEmail);
@@ -146,6 +182,7 @@ export async function POST(request: NextRequest) {
       console.log('Subject:', `Contact Form: ${subjectText}`);
       console.log('Category:', categoryText);
       console.log('Message:', message);
+      console.log('Attachments:', attachments.length, 'files');
       // Return success even if email isn't configured (for development)
       return NextResponse.json({
         success: true,
@@ -160,6 +197,7 @@ export async function POST(request: NextRequest) {
       reply_to: email,
       subject: `Contact Form: ${subjectText}`,
       html: emailHtml,
+      attachments: attachments,
     });
 
     console.log(`✅ Contact form email sent to ${recipientEmail} from ${email}`);

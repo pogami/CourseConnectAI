@@ -17,6 +17,10 @@ const footerLinks = {
     { name: 'About Us', href: '/about' },
     { name: 'Contact', href: '/contact' },
   ],
+  legal: [
+    { name: 'Privacy Policy', href: '/privacy' },
+    { name: 'Terms of Service', href: '/terms' },
+  ],
   resources: [
     // { name: 'Changelog', href: '/changelog' }, // Hidden
     // { name: 'Blog', href: '/blog' },
@@ -162,15 +166,40 @@ export function Footer() {
                 ))}
               </ul>
             </div>
+            <div>
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 text-sm uppercase tracking-wider">Legal</h3>
+              <ul className="space-y-3">
+                {footerLinks.legal.map((link) => (
+                  <li key={link.name}>
+                    <Link href={link.href} className="text-sm text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors">
+                      {link.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 
         {/* Newsletter & Bottom */}
         <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <p className="text-sm text-slate-500 dark:text-slate-500">
-              © {new Date().getFullYear()} CourseConnect <span className="text-blue-600 dark:text-blue-500">AI</span>. All rights reserved.
-            </p>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-slate-500 dark:text-slate-500 text-center md:text-left">
+                © {new Date().getFullYear()} CourseConnect <span className="text-blue-600 dark:text-blue-500">AI</span>. All rights reserved.
+              </p>
+              <div className="flex items-center gap-2 justify-center md:justify-start">
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Systems Operational</span>
+                </div>
+                <span className="text-[10px] font-medium text-slate-400 dark:text-slate-600 uppercase tracking-wider">•</span>
+                <span className="text-[10px] font-medium text-slate-400 dark:text-slate-600 uppercase tracking-wider">Engineered for Every Syllabus</span>
+              </div>
+            </div>
             
             <div className="flex items-center gap-6">
               <Button

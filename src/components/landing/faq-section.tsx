@@ -11,6 +11,10 @@ import { motion } from 'framer-motion';
 
 const faqs = [
   {
+    question: "How do I upload from my Student Portal?",
+    answer: "It's easy. Log into your student portal (Canvas, Blackboard, iCollege, etc.), go to your course, and find your syllabus. Download it as a PDF, and simply drag and drop it into CourseConnect. We've optimized our AI to handle syllabus formats from all major universities."
+  },
+  {
     question: "What file types can I upload?",
     answer: "We support <strong>PDF, DOCX, and TXT</strong> files. You can upload your syllabus, lecture notes, reading summaries, or assignment prompts. The AI reads them all to build context for your course. <br/><br/><span class='text-sm text-gray-500 dark:text-gray-400 italic'>(Lecture notes and handwritten text support is coming soon!)</span>"
   },

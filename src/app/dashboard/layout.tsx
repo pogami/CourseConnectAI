@@ -790,8 +790,16 @@ export default function DashboardLayout({
               )} */}
             </SidebarMenu>
           </SidebarContent>
-          <SidebarFooter>
-            {/* User profile moved to header */}
+          <SidebarFooter className="p-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex flex-col items-center justify-center gap-1.5 py-2">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100/50 dark:border-blue-900/30">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
+                  Built for Students
+                </p>
+              </div>
+              <span className="text-[9px] font-medium text-gray-400 dark:text-gray-500 tracking-wider">Beta v1.0.4</span>
+            </div>
           </SidebarFooter>
         </Sidebar>
         <SidebarInset className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white/90 to-blue-50/70 dark:from-gray-950 dark:via-gray-900 dark:to-blue-950/40">

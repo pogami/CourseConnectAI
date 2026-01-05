@@ -9,35 +9,30 @@ import { Analytics } from '@vercel/analytics/next';
 import { Providers } from "@/components/providers";
 
 import { GlobalNoise } from "@/components/ui/global-noise";
+import { CookieConsent } from "@/components/cookie-consent";
 
 export const metadata: Metadata = {
-  title: "CourseConnect AI - Your AI-Powered Study Companion",
-  description: "Upload your syllabus and let AI help you ace your courses. Get personalized study plans, interactive quizzes, and smart tutoring tailored to your classes.",
+  title: "CourseConnect AI | The AI Study System for College Students",
+  description: "Built for students, by students. Upload your syllabus and let AI help you outperform. Personalized study plans and smart tutoring tailored to your university classes.",
   openGraph: {
     type: "website",
     url: "https://courseconnectai.com",
-    title: "CourseConnect AI - Your AI-Powered Study Companion",
-    description: "Upload your syllabus and let AI help you ace your courses. Get personalized study plans, interactive quizzes, and smart tutoring tailored to your classes.",
+    title: "CourseConnect AI | The AI Study System for College Students",
+    description: "Built for students. Turn your syllabus into an AI study companion. Get personalized tutoring, automated tracking, and your academic edge.",
     siteName: "CourseConnect AI",
     images: [
       {
         url: "https://courseconnectai.com/opengraph2.png",
         width: 1200,
         height: 630,
-        alt: "CourseConnect AI - AI-Powered Study Platform",
-      },
-      {
-        url: "https://courseconnectai.com/opengraph2.png",
-        width: 1200,
-        height: 630,
-        alt: "CourseConnect AI - Mobile Preview",
+        alt: "CourseConnect AI - Built for Students",
       },
     ],
   },
   twitter: {
-    card: "summary",
-    title: "CourseConnect AI - Your AI-Powered Study Companion",
-    description: "Upload your syllabus and let AI help you ace your courses. Get personalized study plans, interactive quizzes, and smart tutoring tailored to your classes.",
+    card: "summary_large_image",
+    title: "CourseConnect AI | The AI Study System for College Students",
+    description: "Built for students. Turn your syllabus into an AI study companion. Stop just studying, start outperforming.",
     images: ["https://courseconnectai.com/opengraph2.png"],
     creator: "@courseconnectai",
     site: "@courseconnectai",
@@ -46,8 +41,8 @@ export const metadata: Metadata = {
     'og:image:width': '1200',
     'og:image:height': '630',
     'og:image:type': 'image/png',
-    'og:image:alt': 'CourseConnect AI - AI-Powered Study Platform',
-    'twitter:image:alt': 'CourseConnect AI - AI-Powered Study Platform',
+    'og:image:alt': 'CourseConnect AI - Built for Students',
+    'twitter:image:alt': 'CourseConnect AI - Built for Students',
     'apple-mobile-web-app-title': 'CourseConnect AI',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'default',
@@ -81,8 +76,8 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
 
         {/* Open Graph Meta Tags - Server Side Rendered */}
-        <meta property="og:title" content="CourseConnect AI - Your AI-Powered Study Companion" />
-        <meta property="og:description" content="Upload your syllabus and let AI help you ace your courses. Get personalized study plans, interactive quizzes, and smart tutoring tailored to your classes." />
+        <meta property="og:title" content="CourseConnect AI - The AI Study System for College Students" />
+        <meta property="og:description" content="Built for students. Upload your syllabus and let AI help you ace your courses. Get personalized study plans and smart tutoring tailored to your university classes." />
         <meta property="og:url" content="https://courseconnectai.com" />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="CourseConnect AI" />
@@ -90,9 +85,9 @@ export default function RootLayout({
 
         {/* Twitter Card Meta Tags */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="CourseConnect AI - Your AI-Powered Study Companion" />
-        <meta name="twitter:description" content="Upload your syllabus and let AI help you ace your courses. Get personalized study plans, interactive quizzes, and smart tutoring tailored to your classes." />
-        <meta name="twitter:image:alt" content="CourseConnect AI - AI-Powered Study Platform" />
+        <meta name="twitter:title" content="CourseConnect AI - The AI Study System for College Students" />
+        <meta name="twitter:description" content="Built for students. Upload your syllabus and let AI help you ace your courses. Get personalized study plans and smart tutoring tailored to your university classes." />
+        <meta name="twitter:image:alt" content="CourseConnect AI - Built for Students" />
         <meta name="twitter:creator" content="@courseconnectai" />
         <meta name="twitter:site" content="@courseconnectai" />
 
@@ -147,6 +142,7 @@ export default function RootLayout({
             {children}
           </StudyBreakProvider>
           <MobileDetectionPopup />
+          <CookieConsent />
           {/* <Sonner /> */}
           {/* <Toaster /> */}
           <Analytics />

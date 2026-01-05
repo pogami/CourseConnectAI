@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Play, Sparkles, CheckCircle2, Upload, Zap } from 'lucide-react';
+import { ArrowRight, Play, Sparkles, CheckCircle2, Upload, Zap, ShieldCheck } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import InteractiveSyllabusDemo from '@/components/interactive-syllabus-demo';
 import BetaBadge from '@/components/beta-badge';
@@ -41,7 +41,7 @@ export function HeroSection() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="mb-8"
+            className="mb-8 flex flex-wrap justify-center gap-3"
           >
             <BetaBadge />
           </motion.div>

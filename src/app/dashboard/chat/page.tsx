@@ -1412,8 +1412,12 @@ export default function ChatPage() {
                                     fullResponse = finalResponse;
                                     
                                     // Final update to ensure everything is displayed
+                                    // Only update if there's a meaningful difference to prevent unnecessary re-renders
                                     if (finalResponse && displayedText.trim() !== finalResponse.trim()) {
-                                        setStreamingResponse(finalResponse);
+                                        // Use a small delay to batch the update and prevent flash
+                                        setTimeout(() => {
+                                            setStreamingResponse(finalResponse);
+                                        }, 0);
                                         displayedText = finalResponse;
                                     }
                                     
@@ -1555,12 +1559,19 @@ export default function ChatPage() {
                         // Add message to chat store - this will queue it for Firestore write
                         await addMessage(currentTab || 'private-general-chat', aiMessage);
                         aiMessageWritten = true;
+                        
+                        // Mark streaming as complete, but keep the response visible briefly
+                        // to allow smooth transition to stored message
+                        setIsStreamingComplete(true);
+                        
+                        // Clear streaming state after a brief delay to ensure smooth transition
+                        // This prevents the flash by letting the stored message render first
+                        setTimeout(() => {
+                            setStreamingResponse("");
+                            setStreamingMessageId(null);
+                            setIsStreamingComplete(false);
+                        }, 100);
                     }
-                    
-                    // Clear streaming state immediately to prevent overlap (synchronous for smooth transition)
-                    setStreamingResponse("");
-                    setStreamingMessageId(null);
-                    setIsStreamingComplete(false);
                     
                     // Update metadata if provided
                     if (metadata && currentTab) {

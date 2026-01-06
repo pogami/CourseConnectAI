@@ -790,7 +790,7 @@ export default function DashboardLayout({
               )} */}
             </SidebarMenu>
           </SidebarContent>
-          <SidebarFooter className="p-4 border-t border-gray-100 dark:border-gray-800">
+          <SidebarFooter className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950">
             <div className="flex flex-col items-center justify-center gap-1.5 py-2">
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100/50 dark:border-blue-900/30">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />

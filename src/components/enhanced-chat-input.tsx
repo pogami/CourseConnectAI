@@ -444,6 +444,22 @@ export function EnhancedChatInput({
           return;
         }
 
+        // Check if we're on HTTPS (required for Web Speech API in production)
+        if (typeof window !== 'undefined' && window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+          console.log('🎤 HTTPS required for speech recognition');
+          alert('Voice input requires a secure connection (HTTPS). Please ensure you are using https:// in the URL.');
+          return;
+        }
+
+        // Request microphone permission first
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (permError: any) {
+          console.error('🎤 Microphone permission denied:', permError);
+          alert('Microphone access is required for voice input. Please allow microphone access in your browser settings and try again.');
+          return;
+        }
+
         console.log('🎤 Speech recognition supported, creating recognition instance');
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
@@ -502,14 +518,26 @@ export function EnhancedChatInput({
           console.error('🎤 Speech recognition error:', event.error);
           setIsVoiceActive(false);
           if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            alert('Microphone access is required for voice input. Please allow microphone access and try again.');
+            alert('Microphone access is required for voice input. Please allow microphone access in your browser settings and try again.');
           } else if (event.error === 'no-speech') {
             // Just turn off silently or with a toast for no-speech
             console.log('🎤 No speech detected');
+            setIsVoiceActive(false);
           } else if (event.error === 'network') {
-            alert('Voice input requires a stable internet connection. Please check your connection and try again.');
+            // Network errors can be due to HTTPS, CSP, or actual network issues
+            const isHttps = window.location.protocol === 'https:';
+            if (!isHttps) {
+              alert('Voice input requires a secure connection (HTTPS). Please use https:// in the URL.');
+            } else {
+              alert('Voice input requires a stable internet connection. If the issue persists, please try refreshing the page or use text input instead.');
+            }
+          } else if (event.error === 'aborted') {
+            // User stopped it, just turn off silently
+            console.log('🎤 Speech recognition aborted');
+            setIsVoiceActive(false);
           } else {
-            console.warn(`Speech recognition status: ${event.error}`);
+            console.warn(`Speech recognition error: ${event.error}`);
+            alert(`Voice input error: ${event.error}. Please try again or use text input.`);
           }
         };
         

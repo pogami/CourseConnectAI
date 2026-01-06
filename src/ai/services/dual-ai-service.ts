@@ -3,8 +3,8 @@
 /**
  * @fileOverview Dual AI Provider Service with Automatic Fallback
  * 
- * This service tries Claude Sonnet 4.5 first for high-quality responses,
- * and if it fails, automatically falls back to Google AI (Gemini 3 Flash Preview).
+ * This service tries Claude Haiku 4.5 first for cost-effective responses,
+ * and if it fails, automatically falls back to OpenAI (GPT-5-mini).
  */
 
 import OpenAI from 'openai';
@@ -107,11 +107,11 @@ export interface StudyAssistanceInput {
 }
 
 /**
- * Try Claude Sonnet 4.5 first
+ * Try Claude Haiku 4.5 first
  */
 async function tryClaude(input: StudyAssistanceInput): Promise<AIResponse> {
   try {
-    console.log('Trying Claude Sonnet 4.5...');
+    console.log('Trying Claude Haiku 4.5...');
     
     // Read API key at runtime - check both common names
     const apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_KEY;
@@ -394,7 +394,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 4096,
         stream: true, // Enable native streaming
         system: systemInstruction,
@@ -1756,8 +1756,8 @@ export async function provideStudyAssistanceWithFallback(input: StudyAssistanceI
   console.log('AI Service: Starting with input:', input.question);
   
   try {
-    // Try Claude Sonnet 4.5 first (Primary)
-    console.log('AI Service: Trying Claude Sonnet 4.5...');
+    // Try Claude Haiku 4.5 first (Primary)
+    console.log('AI Service: Trying Claude Haiku 4.5...');
     try {
       const result = await tryClaude(input);
       console.log('AI Service: Claude succeeded:', result.provider);
@@ -1779,16 +1779,16 @@ export async function provideStudyAssistanceWithFallback(input: StudyAssistanceI
         throw new Error(`Claude API quota exceeded: ${claudeErrorMessage}. Please check your Anthropic billing and quota limits.`);
       }
       
-      // Only fallback to Gemini for non-quota errors (API key issues, network errors, etc.)
-      console.log('AI Service: Claude non-quota error, falling back to Gemini 3 Flash Preview...');
+      // Only fallback to OpenAI for non-quota errors (API key issues, network errors, etc.)
+      console.log('AI Service: Claude non-quota error, falling back to OpenAI GPT-5-mini...');
       try {
-        const result = await tryGoogleAI(input);
-        console.log('AI Service: Gemini succeeded:', result.provider);
+        const result = await tryOpenAI(input, 'gpt-5-mini');
+        console.log('AI Service: OpenAI succeeded:', result.provider);
         return result;
-      } catch (geminiError) {
-        console.error('AI Service: Gemini also failed:', geminiError);
-        const geminiErrorMessage = geminiError instanceof Error ? geminiError.message : 'Unknown error';
-        throw new Error(`Both AI providers failed. Claude error: ${claudeErrorMessage}. Gemini error: ${geminiErrorMessage}. Please check your API keys and configuration.`);
+      } catch (openaiError) {
+        console.error('AI Service: OpenAI also failed:', openaiError);
+        const openaiErrorMessage = openaiError instanceof Error ? openaiError.message : 'Unknown error';
+        throw new Error(`Both AI providers failed. Claude error: ${claudeErrorMessage}. OpenAI error: ${openaiErrorMessage}. Please check your API keys and configuration.`);
       }
     }
   } catch (error) {
@@ -1810,8 +1810,8 @@ export async function provideStudyAssistanceWithStreaming(
   console.log('AI Service: Starting native streaming with input:', input.question);
   
   try {
-    // Try Claude Sonnet 4.5 first (Primary) with native streaming
-    console.log('AI Service: Trying Claude Sonnet 4.5 with native streaming...');
+    // Try Claude Haiku 4.5 first (Primary) with native streaming
+    console.log('AI Service: Trying Claude Haiku 4.5 with native streaming...');
     try {
       const result = await tryClaudeNativeStreaming(input, onChunk);
       console.log('AI Service: Claude native streaming succeeded:', result.provider);
@@ -1829,20 +1829,33 @@ export async function provideStudyAssistanceWithStreaming(
       
       if (isClaudeQuotaError) {
         // If Claude has quota issues, throw directly - user should check Anthropic billing
-        console.error('AI Service: Claude quota error detected - not falling back to Gemini');
+        console.error('AI Service: Claude quota error detected - not falling back to OpenAI');
         throw new Error(`Claude API quota exceeded: ${claudeErrorMessage}. Please check your Anthropic billing and quota limits.`);
       }
       
-      // Only fallback to Gemini for non-quota errors (API key issues, network errors, etc.)
-      console.log('AI Service: Claude non-quota error, falling back to Gemini 3 Flash Preview with native streaming...');
+      // Only fallback to OpenAI for non-quota errors (API key issues, network errors, etc.)
+      console.log('AI Service: Claude non-quota error, falling back to OpenAI GPT-5-mini with streaming...');
       try {
-        const result = await tryGoogleAINativeStreaming(input, onChunk);
-        console.log('AI Service: Gemini native streaming succeeded:', result.provider);
+        // OpenAI doesn't have a separate streaming function, so we'll use the regular tryOpenAI
+        // Note: OpenAI streaming would need to be implemented separately if needed
+        const result = await tryOpenAI(input, 'gpt-5-mini');
+        // For streaming compatibility, we'll call onChunk with the full response
+        // This isn't true streaming but maintains compatibility
+        if (result.answer && onChunk) {
+          // Split into chunks to simulate streaming
+          const words = result.answer.split(' ');
+          for (let i = 0; i < words.length; i++) {
+            await onChunk(words[i] + (i < words.length - 1 ? ' ' : ''));
+            // Small delay to simulate streaming
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+        console.log('AI Service: OpenAI succeeded:', result.provider);
         return result;
-      } catch (geminiError) {
-        console.error('AI Service: Gemini native streaming also failed:', geminiError);
-        const geminiErrorMessage = geminiError instanceof Error ? geminiError.message : 'Unknown error';
-        throw new Error(`Both AI providers failed. Claude error: ${claudeErrorMessage}. Gemini error: ${geminiErrorMessage}. Please check your API keys and configuration.`);
+      } catch (openaiError) {
+        console.error('AI Service: OpenAI also failed:', openaiError);
+        const openaiErrorMessage = openaiError instanceof Error ? openaiError.message : 'Unknown error';
+        throw new Error(`Both AI providers failed. Claude error: ${claudeErrorMessage}. OpenAI error: ${openaiErrorMessage}. Please check your API keys and configuration.`);
       }
     }
   } catch (error) {
@@ -2141,7 +2154,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
       stream: true, // Enable native streaming
       system: systemInstruction,

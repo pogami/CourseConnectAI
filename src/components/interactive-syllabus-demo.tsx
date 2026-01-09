@@ -4,8 +4,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Upload, FileText, Sparkles, CheckCircle, ArrowRight, Calendar, User, GraduationCap, BookOpen, Clock, Shield, File, AlertCircle, Info, Zap, Users, TrendingUp, RotateCcw } from 'lucide-react';
+import { Upload, FileText, Sparkles, CheckCircle, ArrowRight, Calendar, User, GraduationCap, BookOpen, Clock, Shield, File, AlertCircle, Info, Zap, Users, TrendingUp, RotateCcw, MessageSquare, MapPin } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useChatStore } from '@/hooks/use-chat-store';
 import { toast } from 'sonner';
@@ -21,6 +23,7 @@ interface ExtractedData {
   semester?: string;
   year?: string;
   classTime?: string;
+  location?: string;
   department?: string;
   topics?: string[];
   assignments?: Array<{ name: string; dueDate?: string }>;
@@ -55,6 +58,11 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
   const [recentActivity, setRecentActivity] = useState<string[]>([]);
   const [uploadedSyllabi, setUploadedSyllabi] = useState<UploadedSyllabus[]>([]);
   const [isClient, setIsClient] = useState(false);
+  // COURSE FEED STATE - COMMENTED OUT
+  // const [enableCourseFeed, setEnableCourseFeed] = useState(false);
+  const enableCourseFeed = false; // Placeholder to prevent errors
+  const [createdChatId, setCreatedChatId] = useState<string | null>(null);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { addChat, setCurrentTab, chats } = useChatStore();
@@ -632,6 +640,7 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
         const extractedData = {
           ...rawData,
           classTime: rawData.classTime ?? null,
+          location: rawData.location ?? null,
         };
         setExtractedData(extractedData);
         setProgress(100);
@@ -675,6 +684,13 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
   };
 
   const handleSignUp = async () => {
+    // Prevent multiple simultaneous calls
+    if (isCreatingChat) {
+      console.log('⏸️ Chat creation already in progress, skipping...');
+      return;
+    }
+    
+    setIsCreatingChat(true);
     console.log('🚀 handleSignUp called!');
     console.log('🔍 redirectToSignup:', redirectToSignup);
     console.log('📋 extractedData:', extractedData);
@@ -695,7 +711,9 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
       console.log('📤 Redirecting to signup...');
       // Mark this as a new signup from homepage
       localStorage.setItem('cc-new-signup', 'true');
+      setIsCreatingChat(false);
       router.push('/signup');
+      return;
     } else {
       console.log('✅ Authenticated user - creating chat...');
       // For authenticated users on upload page, create a course-specific chat
@@ -721,6 +739,7 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           semester: extractedData.semester || 'Unknown Semester',
           year: extractedData.year || 'Unknown Year',
           classTime: extractedData.classTime || 'Unknown Time',
+          location: extractedData.location || 'Not specified',
           department: extractedData.department || 'Unknown Department',
           topics: extractedData.topics || [],
           assignments: validAssignments,
@@ -769,6 +788,55 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
 
           console.log('Chat creation result:', chatCreated);
 
+          // Store chatId for showing feed link
+          setCreatedChatId(uniqueChatId);
+          
+          // CRITICAL: Verify chat is in store immediately after creation
+          const { chats: verifyChats } = useChatStore.getState();
+          if (!verifyChats[uniqueChatId]) {
+            console.warn('⚠️ Chat not in store immediately after creation, re-adding...');
+            await addChat(chatTitle, welcomeMessage, uniqueChatId, 'class', courseData);
+            // Wait a moment for state to update
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+          
+          // Set current tab immediately to ensure it's selected
+          setCurrentTab(uniqueChatId);
+
+          // Create course feed if checkbox was checked
+          if (enableCourseFeed) {
+            try {
+              // Get user ID from auth or use guest ID
+              let userId = 'guest';
+              try {
+                const { auth } = await import('@/lib/firebase/client-simple');
+                if (auth?.currentUser) {
+                  userId = auth.currentUser.uid;
+                }
+              } catch (e) {
+                console.warn('Could not get user ID:', e);
+              }
+
+              const feedResponse = await fetch('/api/course-feed/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  courseId: uniqueChatId,
+                  courseCode: courseCode,
+                  courseName: courseName,
+                  syllabusData: courseData,
+                  userId: userId,
+                }),
+              });
+              
+              if (feedResponse.ok) {
+                console.log('✅ Course feed created');
+              }
+            } catch (error) {
+              console.warn('Could not create course feed:', error);
+            }
+          }
+
           // Save to uploaded syllabi list
           console.log('💾 Saving syllabus to localStorage...');
           console.log('📁 File name:', file?.name);
@@ -799,9 +867,16 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           console.log('✅ Successfully saved syllabus!');
 
           // Show success toast
+          // COURSE FEED TOAST - COMMENTED OUT
+          const toastDescription = `${courseName} is now ready for AI tutoring`;
+          
           toast.success('Your syllabus has been uploaded successfully!', {
-            description: `${courseName} is now ready for AI tutoring`,
+            description: toastDescription,
             duration: 5000,
+            // action: enableCourseFeed && createdChatId ? {
+            //   label: 'View Feed',
+            //   onClick: () => router.push(`/dashboard/course/${encodeURIComponent(createdChatId)}/feed`)
+            // } : undefined,
           });
 
           // Check for upcoming exams and assignments
@@ -851,18 +926,62 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
             });
           }
 
-          // Wait a moment to ensure the chat is properly added to the store
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          // Navigate to the chat page with the new chat
-          console.log('Navigating to chat:', uniqueChatId);
-          router.push(`/dashboard/chat?chatId=${encodeURIComponent(uniqueChatId)}`);
+          // Final verification that chat is in store before navigating
+          const finalCheck = useChatStore.getState();
+          if (!finalCheck.chats[uniqueChatId]) {
+            console.error('❌ Chat still not in store! Re-adding one more time...');
+            await addChat(chatTitle, welcomeMessage, uniqueChatId, 'class', courseData);
+            setCurrentTab(uniqueChatId);
+            // Wait a moment for state to propagate
+            await new Promise(resolve => setTimeout(resolve, 300));
+          } else {
+            // Ensure current tab is set
+            setCurrentTab(uniqueChatId);
+          }
+          
+          // CRITICAL: Mark chat as protected before navigation to prevent sync from removing it
+          if (typeof window !== 'undefined') {
+            try {
+              // Store in multiple places for redundancy
+              localStorage.setItem('cc-active-tab', uniqueChatId);
+              localStorage.setItem('cc-protected-chat-id', uniqueChatId);
+              localStorage.setItem(`cc-chat-${uniqueChatId}-protected`, Date.now().toString());
+              
+              // Also in sessionStorage
+              const protectedChats = JSON.parse(sessionStorage.getItem('cc-protected-chats') || '{}');
+              protectedChats[uniqueChatId] = {
+                timestamp: Date.now(),
+                chatData: finalCheck.chats[uniqueChatId] || {
+                  id: uniqueChatId,
+                  title: chatTitle,
+                  messages: [welcomeMessage],
+                  createdAt: Date.now(),
+                  chatType: 'class',
+                  courseData
+                }
+              };
+              sessionStorage.setItem('cc-protected-chats', JSON.stringify(protectedChats));
+            } catch (e) {
+              console.warn('Failed to mark chat as protected:', e);
+            }
+          }
+          
+          // Navigate immediately - don't wait for Firestore verification
+          // The chat is already in local state and will be preserved during sync
+          console.log('✅ Navigating to chat immediately:', uniqueChatId);
+          setIsCreatingChat(false);
+          
+          // Use router.push - Next.js client-side navigation
+          // The chat is protected in localStorage/sessionStorage and will be restored if lost
+          router.push(`/dashboard/chat?tab=${encodeURIComponent(uniqueChatId)}`);
         } catch (error) {
           console.error('Failed to create course chat:', error);
+          setIsCreatingChat(false);
           // Fallback to dashboard if chat creation fails
           router.push('/dashboard');
         }
       } else {
+        setIsCreatingChat(false);
         // Fallback to dashboard if no extracted data
         router.push('/dashboard');
       }
@@ -1095,6 +1214,30 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
                 </div>
               )}
 
+              {/* COURSE FEED CHECKBOX - COMMENTED OUT */}
+              {/* {file && !extractedData && (
+                <div className="flex items-center space-x-2 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <Checkbox
+                    id="enable-course-feed"
+                    checked={enableCourseFeed}
+                    onCheckedChange={(checked) => setEnableCourseFeed(checked === true)}
+                  />
+                  <Label
+                    htmlFor="enable-course-feed"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="text-gray-900 dark:text-white">
+                        Enable Course Feed
+                      </span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400 font-normal">
+                        Ask questions, get AI answers, and interact with classmates
+                      </span>
+                    </div>
+                  </Label>
+                </div>
+              )} */}
+
               {/* Action Button */}
               <Button
                 onClick={processSyllabus}
@@ -1209,6 +1352,18 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
                             </p>
                           </div>
                         </div>
+
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <MapPin className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Location</p>
+                            <p className={`text-sm text-gray-500 dark:text-gray-400 ${redirectToSignup ? 'blur-[2px] select-none' : ''}`}>
+                              {extractedData.location || 'Not specified'}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -1288,35 +1443,80 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
                 </div>
               )}
               {!redirectToSignup && (
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg mx-auto mt-8">
-                  <Button
-                    onClick={async () => {
-                      await handleSignUp();
-                      const chats = useChatStore.getState().chats;
-                      const latestChat =
-                        Object.keys(chats)
-                          .filter((key) => chats[key].chatType === 'class')
-                          .sort((a, b) => (chats[b].createdAt || 0) - (chats[a].createdAt || 0))[0] || null;
-                      if (latestChat) {
-                        router.push(`/dashboard/chat?chatId=${encodeURIComponent(latestChat)}`);
-                      }
-                    }}
-                    size="lg"
-                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-6 px-8 text-lg rounded-full shadow-lg hover:shadow-blue-500/25 transition-all transform hover:scale-105"
-                  >
-                    Create Course Chat
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
+                <div className="flex flex-col items-center justify-center gap-4 w-full max-w-lg mx-auto mt-8">
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full">
+                    <Button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!isCreatingChat) {
+                          handleSignUp();
+                        }
+                      }}
+                      type="button"
+                      disabled={isCreatingChat}
+                      size="lg"
+                      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-6 px-8 text-lg rounded-full shadow-lg hover:shadow-blue-500/25 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isCreatingChat ? 'Creating...' : 'Create Course Chat'}
+                      <ArrowRight className="ml-2 w-5 h-5" />
+                    </Button>
 
-                  <Button
-                    variant="outline"
-                    onClick={removeFile}
-                    size="lg"
-                    className="w-full sm:w-auto py-6 px-8 text-lg rounded-full border-2 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    Upload Another
-                    <RotateCcw className="ml-2 w-4 h-4" />
-                  </Button>
+                    <Button
+                      variant="outline"
+                      onClick={removeFile}
+                      size="lg"
+                      className="w-full sm:w-auto py-6 px-8 text-lg rounded-full border-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      Upload Another
+                      <RotateCcw className="ml-2 w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* COURSE FEED LINK - COMMENTED OUT */}
+                  {/* {enableCourseFeed && extractedData && (
+                    <Button
+                      onClick={async () => {
+                        const courseCode = extractedData.courseCode || 'UNKNOWN';
+                        const courseName = extractedData.courseName || 'Unknown Course';
+                        
+                        // First, try createdChatId if available
+                        let chatId = createdChatId;
+                        
+                        // If not, find matching chat in store
+                        if (!chatId) {
+                          const matchingChat = Object.entries(chats).find(([id, chat]) => {
+                            if (chat.chatType !== 'class' || !chat.courseData) return false;
+                            const chatCourseCode = (chat.courseData.courseCode || '').toLowerCase().trim();
+                            const chatCourseName = (chat.courseData.courseName || '').toLowerCase().trim();
+                            const targetCode = courseCode.toLowerCase().trim();
+                            const targetName = courseName.toLowerCase().trim();
+                            
+                            return (chatCourseCode && targetCode && chatCourseCode === targetCode) ||
+                                   (chatCourseName && targetName && chatCourseName === targetName);
+                          });
+                          
+                          chatId = matchingChat?.[0] || null;
+                        }
+                        
+                        if (!chatId) {
+                          toast.error('Course chat not found', {
+                            description: 'Please click "Create Course Chat" first, then you can access the feed.',
+                          });
+                          return;
+                        }
+                        
+                        // Navigate to feed
+                        router.push(`/dashboard/course/${encodeURIComponent(chatId)}/feed`);
+                      }}
+                      variant="outline"
+                      size="lg"
+                      className="w-full sm:w-auto border-2 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/20 py-6 px-8 text-lg rounded-full"
+                    >
+                      <MessageSquare className="mr-2 w-5 h-5" />
+                      Go to Course Feed
+                    </Button>
+                  )} */}
                 </div>
               )}
             </div>

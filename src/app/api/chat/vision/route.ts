@@ -20,13 +20,15 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { message, image, mimeType, courseData } = await request.json();
+    const { message, image, mimeType, courseData, conversationHistory } = await request.json();
     console.log('Request data:', { 
       hasMessage: !!message, 
       hasImage: !!image, 
       imageLength: image?.length || 0,
       mimeType,
-      hasCourseData: !!courseData
+      hasCourseData: !!courseData,
+      hasConversationHistory: !!conversationHistory,
+      conversationHistoryLength: conversationHistory?.length || 0
     });
     
     if (!image) {
@@ -66,8 +68,9 @@ If the image is NOT related (including code, unrelated subjects, etc.), respond 
 Be VERY strict - only mark as RELATED if it's clearly and directly relevant to ${courseName}.`;
 
       try {
+        const validationModel = "gpt-4o";
         const validationResponse = await openai.chat.completions.create({
-          model: "gpt-4o",
+          model: validationModel,
           messages: [
             {
               role: "user",
@@ -83,7 +86,11 @@ Be VERY strict - only mark as RELATED if it's clearly and directly relevant to $
               ],
             },
           ],
-          max_tokens: 200,
+          // Use max_completion_tokens for newer models (o1, o3), max_tokens for older models
+          ...(validationModel.startsWith('o1') || validationModel.startsWith('o3') 
+            ? { max_completion_tokens: 200 }
+            : { max_tokens: 200 }
+          ),
         });
         
         const validationText = validationResponse.choices[0]?.message?.content || '';
@@ -107,8 +114,28 @@ Be VERY strict - only mark as RELATED if it's clearly and directly relevant to $
       }
     }
     
-    // Enhanced system prompt for better formatting
-           const systemPrompt = `You are a helpful academic assistant analyzing images for students.
+    // Enhanced system prompt that uses conversation context
+    const conversationContext = conversationHistory && conversationHistory.length > 0 
+      ? `\n\nCONVERSATION CONTEXT - You are in the middle of an ongoing conversation:
+${conversationHistory.map((msg: any) => `${msg.role === 'user' ? 'Student' : 'You'}: ${msg.content}`).join('\n')}
+
+CRITICAL INSTRUCTIONS FOR CONTEXTUAL RESPONSES:
+- Continue the conversation naturally based on what you see in the image
+- If the student was asking about something specific, relate the image to that topic
+- If you see specific text, numbers, colors, or details in the image, mention them naturally (e.g., "I see it says 'black' on it...", "I notice you've written 'Area = 12' in red marker...")
+- Don't just describe the image - continue the conversation flow
+- Be conversational and contextual, not robotic or generic
+- If the conversation was about a specific topic, connect the image to that topic
+- Reference specific details from the image to show you're paying attention
+- Don't ask "What do you need help with?" if the context makes it clear
+- Build on previous messages naturally
+
+`
+      : '';
+
+    const systemPrompt = `You are a helpful academic assistant analyzing images for students.
+
+${conversationContext}
 
 FORMATTING RULES:
 1. For ALL mathematical expressions, equations, or formulas:
@@ -123,25 +150,40 @@ FORMATTING RULES:
    - For fractions: $\\frac{a}{b}$ or $$\\frac{a}{b}$$
 
 2. Response style:
-   - Be CONCISE and direct
-   - Skip unnecessary introductions like "This image shows..."
-   - Get straight to the solution/explanation
+   - Continue the conversation naturally
+   - If you see specific text/numbers/colors in the image, mention them (e.g., "I see it says 'black'...", "I notice 'Area = 12' written in red...")
+   - Be conversational and contextual
    - Use **bold** for key terms (sparingly)
    - DO NOT use asterisks for formatting
    - Use numbered lists ONLY when showing multiple steps
+   - Skip generic introductions if context exists
+   - ACTUALLY SOLVE problems - don't just describe them
+   - Be helpful and proactive - offer solutions, not just descriptions
 
 3. When solving math problems:
+   - ACTUALLY SOLVE the problems shown in the image
    - Show the problem first in LaTeX
-   - Show solution steps (if needed)
+   - Show solution steps clearly but concisely
    - Give final answer clearly
-   - Keep explanations brief and focused
+   - If multiple problems, solve each one
+   - Don't just list what problems are there - solve them!
+   - For multiple-choice questions: solve it, then clearly state which option is correct
+   - Be thorough but concise - don't over-explain
 
-4. For diagrams/concepts:
+4. For multiple-choice questions specifically:
+   - Identify the question and options
+   - Solve/analyze the problem
+   - Clearly state which answer is correct (e.g., "The correct answer is A")
+   - Briefly explain why (1-2 sentences)
+   - Don't go through every wrong option unless asked
+
+5. For diagrams/concepts:
    - Explain what's shown concisely
    - Highlight key points
+   - Reference specific details you see (colors, labels, annotations)
    - Skip obvious details
 
-5. Overall tone: Clear, concise, academic, helpful`;
+6. Overall tone: Conversational, contextual, helpful, natural, concise`;
 
     // Check if user has a specific question or just uploaded without asking
     const hasSpecificQuestion = prompt && 
@@ -153,29 +195,38 @@ FORMATTING RULES:
     let enhancedPrompt = prompt;
     let finalSystemPrompt = systemPrompt;
     
-    if (!hasSpecificQuestion || prompt.trim() === 'Describe this image and extract relevant info.') {
-      // If no specific question, briefly acknowledge what the image is about (1 sentence) and ask what they need
-      finalSystemPrompt = `You are a helpful academic assistant. When a user uploads an image without a specific question, you should:
-1. Briefly identify what the image shows (ONE sentence)
+    // If there's conversation history, always use contextual mode
+    // If no history and no specific question, use acknowledgment mode
+    if (!hasSpecificQuestion && (!conversationHistory || conversationHistory.length === 0)) {
+      // If no specific question and no conversation history, briefly acknowledge and ask
+      finalSystemPrompt = `You are a helpful academic assistant. When a user uploads an image without a specific question or prior context, you should:
+1. Briefly identify what the image shows (ONE sentence), mentioning specific details you see
 2. Ask what they need help with
 
 BAD response:
 "This image shows a calculus problem involving derivatives. The problem asks you to find the derivative of f(x) = x^2 + 3x. Here's how to solve it: [long solution]..."
 
 GOOD response:
-"I see you uploaded an image showing a calculus problem about derivatives. What do you need help with - solving the problem, understanding the concept, or something else?"
+"I see you uploaded an image showing a calculus problem about derivatives. I can see the equation $f(x) = x^2 + 3x$ written in black ink. What do you need help with - solving the problem, understanding the concept, or something else?"
 
 Format ALL math using $...$ for inline and $$...$$ for display. NEVER use \\( or \\).`;
-      enhancedPrompt = 'Briefly identify what this image shows in ONE sentence, then ask what the user needs help with. Do not analyze or solve anything yet.';
+      enhancedPrompt = 'Briefly identify what this image shows in ONE sentence, mentioning specific details you see (colors, text, numbers, etc.), then ask what the user needs help with. Do not analyze or solve anything yet.';
+    } else if (!hasSpecificQuestion && conversationHistory && conversationHistory.length > 0) {
+      // If there's conversation history but no specific question, continue the conversation naturally
+      enhancedPrompt = 'Continue the conversation naturally based on what you see in this image. Reference specific details from the image (text, numbers, colors, annotations) and connect it to our previous discussion. If the image contains problems or questions, ACTUALLY SOLVE THEM - don\'t just describe them. Be helpful, proactive, and conversational.';
+    } else if (hasSpecificQuestion) {
+      // If there's a specific question, make sure to actually solve problems if they're shown
+      enhancedPrompt = `${enhancedPrompt}\n\nIMPORTANT: If the image contains problems, questions, or exercises, ACTUALLY SOLVE THEM. Don't just describe what problems are there - solve each one step by step. Be thorough and helpful.`;
     }
 
     const userPrompt = `${enhancedPrompt}
 
 CRITICAL: Format ALL math using $...$ for inline and $$...$$ for display. NEVER use \\( or \\). Examples: $k = 3$, $x^2 + 4x + 1$, $$\\frac{a}{b}$$`;
     
-    // Use GPT-4o with vision
+    // Use GPT-4o with vision - enable streaming
+    const visionModel = "gpt-4o";
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: visionModel,
       messages: [
         {
           role: "system",
@@ -195,18 +246,83 @@ CRITICAL: Format ALL math using $...$ for inline and $$...$$ for display. NEVER 
           ],
         },
       ],
-      max_tokens: 1500,
+      stream: true, // Enable streaming
+      // Use max_completion_tokens for newer models (o1, o3), max_tokens for older models
+      ...(visionModel.startsWith('o1') || visionModel.startsWith('o3') 
+        ? { max_completion_tokens: 2000 }
+        : { max_tokens: 2000 }
+      ),
     });
     
-    const text = response.choices[0]?.message?.content || 'No response';
+    // Create a readable stream for SSE
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let fullAnswer = '';
+        
+        try {
+          // Send initial chunk to establish connection
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'status',
+            message: 'Analyzing image...'
+          }) + '\n'));
+          
+          // Process streaming response
+          for await (const chunk of response) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              fullAnswer += content;
+              
+              // Split into words for word-by-word streaming
+              const words = content.split(/(\s+)/).filter((w: string) => w.length > 0);
+              
+              // Send each word individually
+              for (const word of words) {
+                if (word) {
+                  try {
+                    const chunkData = encoder.encode(JSON.stringify({
+                      type: 'content',
+                      content: word
+                    }) + '\n');
+                    
+                    controller.enqueue(chunkData);
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                  } catch (enqueueError) {
+                    console.warn('Stream controller closed:', enqueueError);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          // Send done signal
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'done',
+            fullResponse: fullAnswer.trim()
+          }) + '\n'));
+          
+          controller.close();
+        } catch (error: any) {
+          console.error('Streaming error:', error);
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'error',
+            message: error.message || 'Failed to stream response'
+          }) + '\n'));
+          controller.close();
+        }
+      }
+    });
     
-    console.log(`✅ SUCCESS with GPT-4o!`);
-    console.log(`📄 Response length: ${text.length} characters`);
+    console.log(`✅ Streaming response with GPT-4o!`);
     
-    return NextResponse.json({ 
-      response: text, 
-      model: "gpt-4o",
-      provider: "OpenAI"
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform, no-store',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
     });
     
   } catch (error: any) {

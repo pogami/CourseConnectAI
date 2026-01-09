@@ -426,25 +426,43 @@ export default function ClassOverviewPage() {
                                                 </div>
                                             </div>
                                             
-                                            <div className="flex gap-3 mt-2">
-                                                <Button 
-                                                    className="flex-1 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 shadow-sm hover:shadow transition-all"
+                                            <div className="flex flex-col gap-2 mt-2">
+                                                <div className="flex gap-2">
+                                                    <Button 
+                                                        className="flex-1 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 shadow-sm hover:shadow transition-all"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCardClick(id, getChatDisplayName(chat, id));
+                                                        }}
+                                                    >
+                                                        Join Chat
+                                                        <ArrowRight className="size-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                                    </Button>
+                                                    <Button 
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                                        onClick={(e) => handleLeaveClass(id, getChatDisplayName(chat, id), e)}
+                                                    >
+                                                        <LogOut className="size-4" />
+                                                    </Button>
+                                                </div>
+                                                <Link 
+                                                    href={`/dashboard/course/${encodeURIComponent(id)}/feed`}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        handleCardClick(id, getChatDisplayName(chat, id));
+                                                        console.log('Course Feed link clicked:', { id, chatTitle: getChatDisplayName(chat, id) });
                                                     }}
+                                                    className="w-full"
                                                 >
-                                                    Join Chat
-                                                    <ArrowRight className="size-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                                                </Button>
-                                                <Button 
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                                                    onClick={(e) => handleLeaveClass(id, getChatDisplayName(chat, id), e)}
-                                                >
-                                                    <LogOut className="size-4" />
-                                                </Button>
+                                                    <Button 
+                                                        variant="outline"
+                                                        className="w-full border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                                                    >
+                                                        <MessageSquare className="size-4 mr-2" />
+                                                        Course Feed
+                                                    </Button>
+                                                </Link>
                                             </div>
                                         </CardContent>
                                     </Card>

@@ -10,7 +10,6 @@ import { useState, useEffect, useRef } from "react";
 import {
   Settings as SettingsIcon,
   Database,
-  Download,
   Trash2,
   User,
   Mail,
@@ -30,8 +29,8 @@ import {
 import { toast } from "sonner";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase/client-simple";
-import { updatePassword, deleteUser } from "firebase/auth";
-import { doc, getDoc, deleteDoc, collection, getDocs, query, where, updateDoc, setDoc, onSnapshot } from "firebase/firestore";
+import { updatePassword } from "firebase/auth";
+import { doc, getDoc, updateDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/client-simple";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
@@ -194,90 +193,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleExportData = async () => {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to export your data.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      toast({
-        title: "Exporting Data",
-        description: "Preparing your complete data export...",
-      });
-
-      // Get user data
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-
-      // Get ALL user's chats (including public chats they've participated in)
-      const chatsQuery = query(collection(db, 'chats'), where('userId', '==', user.uid));
-      const chatsSnapshot = await getDocs(chatsQuery);
-      const chats = [];
-
-      for (const chatDoc of chatsSnapshot.docs) {
-        const chatData = { id: chatDoc.id, ...chatDoc.data() };
-
-        // Get all messages for this chat
-        const messagesQuery = query(collection(db, 'messages'), where('chatId', '==', chatDoc.id));
-        const messagesSnapshot = await getDocs(messagesQuery);
-        const messages = messagesSnapshot.docs.map(msgDoc => ({ id: msgDoc.id, ...msgDoc.data() }));
-
-        chatData.messages = messages;
-        chats.push(chatData);
-      }
-
-      // Get user's notifications
-      const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', user.uid));
-      const notificationsSnapshot = await getDocs(notificationsQuery);
-      const notifications = notificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      // Get user's uploaded files/syllabi
-      const filesQuery = query(collection(db, 'files'), where('userId', '==', user.uid));
-      const filesSnapshot = await getDocs(filesQuery);
-      const files = filesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      const exportData = {
-        user: userData,
-        chats,
-        notifications,
-        files,
-        exportDate: new Date().toISOString(),
-        version: '1.0',
-        totalChats: chats.length,
-        totalMessages: chats.reduce((sum, chat) => sum + (chat.messages?.length || 0), 0),
-        totalNotifications: notifications.length,
-        totalFiles: files.length
-      };
-
-      // Create and download file
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `courseconnect-complete-data-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast({
-        title: "Complete Data Exported",
-        description: `Downloaded ${exportData.totalChats} chats, ${exportData.totalMessages} messages, ${exportData.totalNotifications} notifications, and ${exportData.totalFiles} files.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to export data.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleDeleteAccount = async () => {
     if (!user) {
       toast.error("Error", {
@@ -294,169 +209,50 @@ export default function SettingsPage() {
     }
 
     setIsDeletingAccount(true);
-    setShowDeleteAccountDialog(true); // Ensure dialog stays open
-    setShowDeleteAccountDialog(true); // Ensure dialog stays open
+    setShowDeleteAccountDialog(true);
+    
     try {
       toast.info("Deleting Account", {
         description: "This may take a moment. Please do not close this page."
       });
 
-      // Check if db is available
-      if (!db) {
-        throw new Error('Database not available. Please refresh the page and try again.');
+      // Get the user's ID token for authentication
+      const idToken = await user.getIdToken();
+      
+      // Call the server-side API route which handles ALL deletions
+      // This is simpler, faster, and more reliable than client-side deletions
+      // It also bypasses the recent login requirement for auth deletion
+      const response = await fetch('/api/auth/delete-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          idToken: idToken,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete account');
       }
 
-      // Delete user's chats and all messages
-      try {
-        const chatsQuery = query(collection(db, 'chats'), where('userId', '==', user.uid));
-        const chatsSnapshot = await getDocs(chatsQuery);
-
-        for (const chatDoc of chatsSnapshot.docs) {
-          // Delete all messages in this chat
-          try {
-            const messagesQuery = query(collection(db, 'messages'), where('chatId', '==', chatDoc.id));
-            const messagesSnapshot = await getDocs(messagesQuery);
-            for (const messageDoc of messagesSnapshot.docs) {
-              await deleteDoc(messageDoc.ref);
-            }
-          } catch (msgError) {
-            console.warn('Failed to delete some messages (non-critical):', msgError);
-          }
-
-          // Delete the chat itself
-          try {
-            await deleteDoc(chatDoc.ref);
-          } catch (chatError) {
-            console.warn('Failed to delete chat (non-critical):', chatError);
-          }
-        }
-      } catch (chatsError) {
-        console.warn('Failed to delete some chats (non-critical):', chatsError);
-      }
-
-      // Delete user's notifications
-      try {
-        const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', user.uid));
-        const notificationsSnapshot = await getDocs(notificationsQuery);
-        for (const notificationDoc of notificationsSnapshot.docs) {
-          await deleteDoc(notificationDoc.ref);
-        }
-      } catch (notifError) {
-        console.warn('Failed to delete some notifications (non-critical):', notifError);
-      }
-
-      // Delete user's uploaded files
-      try {
-        const filesQuery = query(collection(db, 'files'), where('userId', '==', user.uid));
-        const filesSnapshot = await getDocs(filesQuery);
-        for (const fileDoc of filesSnapshot.docs) {
-          await deleteDoc(fileDoc.ref);
-        }
-      } catch (filesError) {
-        console.warn('Failed to delete some files (non-critical):', filesError);
-      }
-
-      // Delete user's flashcard sets
-      try {
-        const flashcardSetsQuery = query(collection(db, 'flashcardSets'), where('userId', '==', user.uid));
-        const flashcardSetsSnapshot = await getDocs(flashcardSetsQuery);
-        for (const flashcardSetDoc of flashcardSetsSnapshot.docs) {
-          await deleteDoc(flashcardSetDoc.ref);
-        }
-      } catch (flashcardError) {
-        console.warn('Failed to delete some flashcard sets (non-critical):', flashcardError);
-      }
-
-      // Delete user's study sessions
-      try {
-        const studySessionsQuery = query(collection(db, 'studySessions'), where('userId', '==', user.uid));
-        const studySessionsSnapshot = await getDocs(studySessionsQuery);
-        for (const studySessionDoc of studySessionsSnapshot.docs) {
-          await deleteDoc(studySessionDoc.ref);
-        }
-      } catch (studySessionError) {
-        console.warn('Failed to delete some study sessions (non-critical):', studySessionError);
-      }
-
-      // Delete user's whiteboard sessions
-      try {
-        const whiteboardSessionsQuery = query(collection(db, 'whiteboardSessions'), where('userId', '==', user.uid));
-        const whiteboardSessionsSnapshot = await getDocs(whiteboardSessionsQuery);
-        for (const whiteboardSessionDoc of whiteboardSessionsSnapshot.docs) {
-          await deleteDoc(whiteboardSessionDoc.ref);
-        }
-      } catch (whiteboardError) {
-        console.warn('Failed to delete some whiteboard sessions (non-critical):', whiteboardError);
-      }
-
-      // Delete user's scanned documents
-      try {
-        const scannedDocsQuery = query(collection(db, 'scannedDocuments'), where('userId', '==', user.uid));
-        const scannedDocsSnapshot = await getDocs(scannedDocsQuery);
-        for (const scannedDoc of scannedDocsSnapshot.docs) {
-          await deleteDoc(scannedDoc.ref);
-        }
-      } catch (scannedDocsError) {
-        console.warn('Failed to delete some scanned documents (non-critical):', scannedDocsError);
-      }
-
-      // Delete user's courses
-      try {
-        const coursesQuery = query(collection(db, 'courses'), where('userId', '==', user.uid));
-        const coursesSnapshot = await getDocs(coursesQuery);
-        for (const courseDoc of coursesSnapshot.docs) {
-          await deleteDoc(courseDoc.ref);
-        }
-      } catch (coursesError) {
-        console.warn('Failed to delete some courses (non-critical):', coursesError);
-      }
-
-      // Delete user's study schedules
-      try {
-        const studySchedulesQuery = query(collection(db, 'studySchedules'), where('userId', '==', user.uid));
-        const studySchedulesSnapshot = await getDocs(studySchedulesQuery);
-        for (const scheduleDoc of studySchedulesSnapshot.docs) {
-          await deleteDoc(scheduleDoc.ref);
-        }
-      } catch (schedulesError) {
-        console.warn('Failed to delete some study schedules (non-critical):', schedulesError);
-      }
-
-      // Delete user's analytics data (optional - you may want to keep aggregated data)
-      try {
-        const analyticsQuery = query(collection(db, 'analytics'), where('userId', '==', user.uid));
-        const analyticsSnapshot = await getDocs(analyticsQuery);
-        for (const analyticsDoc of analyticsSnapshot.docs) {
-          await deleteDoc(analyticsDoc.ref);
-        }
-      } catch (analyticsError) {
-        console.warn('Failed to delete some analytics data (non-critical):', analyticsError);
-      }
-
-      // Delete user document
-      try {
-        await deleteDoc(doc(db, 'users', user.uid));
-      } catch (userDocError) {
-        console.warn('Failed to delete user document (non-critical):', userDocError);
-      }
-
-      // Delete Firebase Auth user (this will also sign them out)
-      try {
-        await deleteUser(user);
-      } catch (authError: any) {
-        // If auth deletion fails, still try to redirect
-        console.error('Failed to delete auth user:', authError);
-        if (authError.code === 'auth/requires-recent-login') {
-          throw new Error('For security, please sign out and sign back in before deleting your account.');
-        }
-        throw authError;
-      }
+      const result = await response.json();
+      console.log('Account deletion successful:', result);
 
       // Clear localStorage
       try {
         localStorage.clear();
       } catch (e) {
         console.warn('Failed to clear localStorage:', e);
+      }
+
+      // Sign out the user (they're already deleted from Auth, but this clears local state)
+      try {
+        await auth.signOut();
+      } catch (signOutError) {
+        console.warn('Sign out error (non-critical):', signOutError);
       }
 
       toast.success("Account Deleted", {
@@ -473,7 +269,6 @@ export default function SettingsPage() {
         description: error.message || "Failed to delete account. Please try again or contact support."
       });
       setIsDeletingAccount(false);
-      // Allow closing dialog on error
       setShowDeleteAccountDialog(false);
     }
   };
@@ -1175,10 +970,6 @@ export default function SettingsPage() {
                 }
               `}</style>
               <div className="flex flex-col sm:flex-row gap-3">
-                  <Button onClick={handleExportData} variant="outline" className="flex-1 gap-2 h-11 font-semibold shadow-sm hover:shadow-md transition-all border-2">
-                    <Download className="size-4" />
-                    Export My Data
-                  </Button>
                   <Dialog open={showDeleteAccountDialog} onOpenChange={(open) => {
                     // Prevent closing if deletion is in progress
                     if (!isDeletingAccount) {

@@ -4,7 +4,7 @@
  * @fileOverview Dual AI Provider Service with Automatic Fallback
  * 
  * This service tries Claude Haiku 4.5 first for cost-effective responses,
- * and if it fails, automatically falls back to OpenAI (GPT-5-mini).
+ * and if it fails, automatically falls back to OpenAI (GPT-4o-mini).
  */
 
 import OpenAI from 'openai';
@@ -1031,7 +1031,7 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
 /**
  * Try OpenAI (ChatGPT) as fallback
  */
-async function tryOpenAI(input: StudyAssistanceInput, model: string = 'gpt-5-mini'): Promise<AIResponse> {
+async function tryOpenAI(input: StudyAssistanceInput, model: string = 'gpt-4o-mini'): Promise<AIResponse> {
   try {
     console.log(`Trying OpenAI with model: ${model}...`);
     
@@ -1410,7 +1410,11 @@ For mathematical expressions, use LaTeX formatting:
 Remember: This is part of an ongoing conversation. Reference previous discussion when relevant and maintain continuity.`
         }
       ],
-      max_tokens: 1000,
+      // Use max_completion_tokens for newer models (o1, o3), max_tokens for older models
+      ...(model.startsWith('o1') || model.startsWith('o3') 
+        ? { max_completion_tokens: 1000 }
+        : { max_tokens: 1000 }
+      ),
       temperature: 0.3,
     });
     } catch (apiError: any) {
@@ -1660,8 +1664,9 @@ async function tryOpenAIInDepth(input: StudyAssistanceInput): Promise<AIResponse
       throw new Error('OpenAI API key not configured');
     }
     
+    const inDepthModel = 'gpt-4o-mini'; // Use GPT-4o Mini for in-depth analysis
     const response = await openai.chat.completions.create({
-      model: 'gpt-5-mini', // Use GPT-5 Mini for in-depth analysis
+      model: inDepthModel,
       messages: [
         {
           role: 'system',
@@ -1732,7 +1737,11 @@ For mathematical expressions, use LaTeX formatting:
           content: `Context: ${input.context}\n\nQuestion: ${input.question}\n\nPlease provide a detailed, comprehensive analysis.`
         }
       ],
-      max_tokens: 2000,
+      // Use max_completion_tokens for newer models (o1, o3), max_tokens for older models
+      ...(inDepthModel.startsWith('o1') || inDepthModel.startsWith('o3') 
+        ? { max_completion_tokens: 2000 }
+        : { max_tokens: 2000 }
+      ),
       temperature: 0.7,
     });
 
@@ -1780,9 +1789,9 @@ export async function provideStudyAssistanceWithFallback(input: StudyAssistanceI
       }
       
       // Only fallback to OpenAI for non-quota errors (API key issues, network errors, etc.)
-      console.log('AI Service: Claude non-quota error, falling back to OpenAI GPT-5-mini...');
+      console.log('AI Service: Claude non-quota error, falling back to OpenAI GPT-4o-mini...');
       try {
-        const result = await tryOpenAI(input, 'gpt-5-mini');
+        const result = await tryOpenAI(input, 'gpt-4o-mini');
         console.log('AI Service: OpenAI succeeded:', result.provider);
         return result;
       } catch (openaiError) {
@@ -1834,11 +1843,11 @@ export async function provideStudyAssistanceWithStreaming(
       }
       
       // Only fallback to OpenAI for non-quota errors (API key issues, network errors, etc.)
-      console.log('AI Service: Claude non-quota error, falling back to OpenAI GPT-5-mini with streaming...');
+      console.log('AI Service: Claude non-quota error, falling back to OpenAI GPT-4o-mini with streaming...');
       try {
         // OpenAI doesn't have a separate streaming function, so we'll use the regular tryOpenAI
         // Note: OpenAI streaming would need to be implemented separately if needed
-        const result = await tryOpenAI(input, 'gpt-5-mini');
+        const result = await tryOpenAI(input, 'gpt-4o-mini');
         // For streaming compatibility, we'll call onChunk with the full response
         // This isn't true streaming but maintains compatibility
         if (result.answer && onChunk) {
@@ -2220,10 +2229,21 @@ Remember: This is part of an ongoing conversation. Reference previous discussion
             if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta' && data.delta?.text) {
               const chunk = data.delta.text;
               fullAnswer += chunk;
-              const result = onChunk(chunk); // Forward chunk in real-time
-              // If callback is async, wait for it
-              if (result instanceof Promise) {
-                await result;
+              
+              // CRITICAL: Always split chunks into words for consistent word-by-word streaming
+              // This ensures both general chat and class chats stream the same way
+              // Split on whitespace but preserve spaces for proper word boundaries
+              const words = chunk.split(/(\s+)/).filter((w: string) => w.length > 0);
+              
+              // Forward each word individually for smooth word-by-word display
+              for (const word of words) {
+                if (word) { // Skip empty strings
+                  const result = onChunk(word); // Forward each word immediately
+                  // If callback is async, wait for it
+                  if (result instanceof Promise) {
+                    await result;
+                  }
+                }
               }
             } else if (data.type === 'message_stop') {
               // Stream complete

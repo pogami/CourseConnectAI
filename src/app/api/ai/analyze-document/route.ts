@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
     let fileType: string;
     let userPrompt: string | undefined;
     let courseData: any = null;
+    let conversationHistory: any[] = [];
 
     if (contentType.includes('multipart/form-data')) {
       // Handle FormData from chat upload
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
       const file = formData.get('file') as File;
       const prompt = formData.get('prompt') as string | null;
       const courseDataStr = formData.get('courseData') as string | null;
+      const conversationHistoryStr = formData.get('conversationHistory') as string | null;
 
       if (!file) {
         return NextResponse.json(
@@ -39,6 +41,14 @@ export async function POST(request: NextRequest) {
           courseData = JSON.parse(courseDataStr);
         } catch (e) {
           console.warn('Failed to parse courseData:', e);
+        }
+      }
+      
+      if (conversationHistoryStr) {
+        try {
+          conversationHistory = JSON.parse(conversationHistoryStr);
+        } catch (e) {
+          console.warn('Failed to parse conversationHistory:', e);
         }
       }
 
@@ -119,6 +129,23 @@ export async function POST(request: NextRequest) {
       ? `Course: ${courseData.courseName || courseData.courseCode || 'Unknown'}\n`
       : '';
 
+    // Build conversation context for prompts
+    const conversationContext = conversationHistory && conversationHistory.length > 0
+      ? `\n\nCONVERSATION CONTEXT - You are in the middle of an ongoing conversation:
+${conversationHistory.map((msg: any) => `${msg.role === 'user' ? 'Student' : 'You'}: ${msg.content}`).join('\n')}
+
+CRITICAL INSTRUCTIONS FOR CONTEXTUAL RESPONSES:
+- Continue the conversation naturally based on the document content
+- If the student was asking about something specific, relate the document to that topic
+- Reference specific details from the document naturally
+- Don't just describe the document - continue the conversation flow
+- Be conversational and contextual, not robotic or generic
+- If the conversation was about a specific topic, connect the document to that topic
+- Don't ask "What do you need help with?" if the context makes it clear
+
+`
+      : '';
+
     // Check if user has a specific question or just uploaded without asking
     const hasSpecificQuestion = userPrompt && 
       userPrompt.trim().length > 0 && 
@@ -131,18 +158,22 @@ export async function POST(request: NextRequest) {
       // Quick scan to identify document type/topic (1 sentence acknowledgment)
       const quickScanPrompt = `You are analyzing a document that a user uploaded. Read the document and provide a ONE SENTENCE acknowledgment of what it's about. Then ask what they need help with.
 
+${conversationContext}
+
 CRITICAL INSTRUCTIONS:
 - Read the document to understand its topic/subject
-- Give ONE sentence acknowledging what the document is about (e.g., "I see you uploaded an essay about Copland's three planes of listening" or "I see you uploaded a resume highlighting your software engineering experience")
+- ${conversationHistory && conversationHistory.length > 0 ? 'Continue the conversation naturally. If the student was discussing something specific, relate the document to that topic. ' : ''}Give ONE sentence acknowledging what the document is about (e.g., "I see you uploaded an essay about Copland's three planes of listening" or "I see you uploaded a resume highlighting your software engineering experience")
 - DO NOT analyze, summarize, or provide feedback
 - DO NOT list strengths, weaknesses, or suggestions
-- Simply acknowledge what it is, then ask: "What do you need help with - understanding the concepts, revising your essay, or something else?"
+- ${conversationHistory && conversationHistory.length > 0 ? 'Continue the conversation flow naturally based on previous messages. ' : ''}Simply acknowledge what it is, then ask: "What do you need help with - understanding the concepts, revising your essay, or something else?"
 
 BAD response:
 "The document you've shared is an analysis of Copland's three planes of listening. The essay discusses the sensuous plane, expressive plane, and sheerly musical plane in detail. Your writing demonstrates strong understanding of the concepts, though you could strengthen the conclusion. The structure is clear and well-organized..."
 
 GOOD response:
-"I see you uploaded an essay about Copland's three planes of listening. What do you need help with - understanding the concepts, revising your essay, or something else?"
+${conversationHistory && conversationHistory.length > 0 
+  ? '"Perfect! I can see you\'ve uploaded the essay we were discussing. It covers Copland\'s three planes of listening. What would you like help with - understanding the concepts, revising your essay, or something else?"'
+  : '"I see you uploaded an essay about Copland\'s three planes of listening. What do you need help with - understanding the concepts, revising your essay, or something else?"'}
 
 Now read the document and respond:`;
 
@@ -154,7 +185,7 @@ Now read the document and respond:`;
           fileType,
           fileContent: extractedText.substring(0, 50000) // Just enough to identify topic
         },
-        conversationHistory: [],
+        conversationHistory: conversationHistory,
         isSearchRequest: false
       });
 
@@ -171,7 +202,13 @@ Now read the document and respond:`;
     }
 
     // Create a comprehensive prompt for document analysis (when user has a specific question)
-    const analysisPrompt = userPrompt || `You are an expert document analyst providing detailed, actionable feedback. Analyze this document thoroughly and provide:
+    const contextualUserPrompt = userPrompt 
+      ? `${userPrompt}${conversationContext ? `\n\n${conversationContext}` : ''}`
+      : '';
+    
+    const analysisPrompt = contextualUserPrompt || `You are an expert document analyst providing detailed, actionable feedback. Analyze this document thoroughly and provide:
+
+${conversationContext}
 
 **CRITICAL - PERSPECTIVE DETECTION (READ THIS FIRST):**
 The user has uploaded this document themselves. This means it is almost certainly THEIR OWN WORK. 
@@ -236,7 +273,7 @@ Now analyze the following document:`;
         fileType,
         fileContent: extractedText.substring(0, 100000) // Limit to 100k chars to avoid token limits
       },
-      conversationHistory: [],
+      conversationHistory: conversationHistory,
       isSearchRequest: false
     });
 

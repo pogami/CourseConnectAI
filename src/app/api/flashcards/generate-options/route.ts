@@ -38,8 +38,9 @@ Example format:
 
 Return ONLY the JSON array, nothing else.`;
 
+    const model = 'gpt-4o-mini';
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: model,
       messages: [
         {
           role: 'system',
@@ -51,7 +52,11 @@ Return ONLY the JSON array, nothing else.`;
         },
       ],
       temperature: 0.7,
-      max_tokens: 500,
+      // Use max_completion_tokens for newer models (o1, o3), max_tokens for older models
+      ...(model.startsWith('o1') || model.startsWith('o3') 
+        ? { max_completion_tokens: 500 }
+        : { max_tokens: 500 }
+      ),
     });
 
     const content = response.choices[0]?.message?.content || '';

@@ -9,12 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/client-simple';
+import { db, auth } from '@/lib/firebase/client-simple';
 import { toast } from 'sonner';
 import { generateCelebrationMessage } from '@/lib/emotional-intelligence';
 import { calculatePriorityRankings, getPriorityLabel } from '@/lib/assignment-priority';
 
-export function DashboardAgenda() {
+interface DashboardAgendaProps {
+  onCompletionChange?: (completedCount: number) => void;
+}
+
+export function DashboardAgenda({ onCompletionChange }: DashboardAgendaProps) {
   const { chats } = useChatStore();
   const [showAllDialog, setShowAllDialog] = useState(false);
   const [markingComplete, setMarkingComplete] = useState<string | null>(null);
@@ -43,7 +47,13 @@ export function DashboardAgenda() {
     });
     
     setLocalCompletions(completions);
-  }, [chats]);
+    
+    // Calculate and notify completed count (count all completed items)
+    const completedCount = Object.values(completions).filter(Boolean).length;
+    if (onCompletionChange) {
+      onCompletionChange(completedCount);
+    }
+  }, [chats, onCompletionChange]);
 
   // Collect all items with priority rankings
   const allItems = React.useMemo(() => {
@@ -115,11 +125,52 @@ export function DashboardAgenda() {
     if (markingComplete === item.id) return; // Prevent double-clicks
     setMarkingComplete(item.id);
     try {
+      // Check if user is authenticated
+      const user = auth.currentUser;
+      const isGuest = !user || (user as any).isGuest || (user as any).isAnonymous;
+      
+      // For guest users, only update local state (don't try to update Firestore)
+      if (isGuest) {
+        const isCurrentlyCompleted = localCompletions[item.id] || false;
+        setLocalCompletions(prev => {
+          const newCompletions = { ...prev, [item.id]: !isCurrentlyCompleted };
+          const completedCount = Object.values(newCompletions).filter(Boolean).length;
+          if (onCompletionChange) {
+            onCompletionChange(completedCount);
+          }
+          return newCompletions;
+        });
+        
+        if (!isCurrentlyCompleted) {
+          toast.success("Item Completed! 🎉", {
+            description: `${item.name} has been marked as complete.`,
+            duration: 3000,
+          });
+        } else {
+          toast.info("Item Marked as Incomplete", {
+            description: `${item.name} has been marked as incomplete.`,
+            duration: 3000,
+          });
+        }
+        setMarkingComplete(null);
+        return;
+      }
+      
       const chatRef = doc(db, 'chats', item.chatId);
       const chatSnap = await getDoc(chatRef);
       
       if (chatSnap.exists()) {
         const chatData = chatSnap.data();
+        // Check if user owns this chat
+        if (chatData.userId && chatData.userId !== user?.uid) {
+          toast.error("Permission Denied", {
+            description: "You don't have permission to update this chat.",
+            duration: 4000,
+          });
+          setMarkingComplete(null);
+          return;
+        }
+        
         // Check current status from database and local state
         let currentStatus = item.status || 'Not Started';
         if (item.type === 'assignment') {
@@ -141,10 +192,85 @@ export function DashboardAgenda() {
               return assignment;
             });
             
-            await updateDoc(chatRef, {
-              'courseData.assignments': updatedAssignments
-            });
-            setLocalCompletions(prev => ({ ...prev, [item.id]: !isCurrentlyCompleted }));
+            try {
+              // Build update object - ensure userId is preserved for security rules
+              const updateData: any = {
+                'courseData.assignments': updatedAssignments,
+                updatedAt: Date.now()
+              };
+              
+              // CRITICAL: Always set userId if user is authenticated (for migration and security)
+              // This ensures Firestore security rules can verify ownership
+              if (user?.uid) {
+                // Always include userId in update to ensure security rules pass
+                updateData.userId = user.uid;
+              }
+              
+              console.log('🔄 Updating chat:', { 
+                chatId: item.chatId, 
+                hasUserId: !!chatData.userId, 
+                currentUserId: user?.uid,
+                updateDataKeys: Object.keys(updateData)
+              });
+              
+              await updateDoc(chatRef, updateData);
+              
+              // Success - update local state
+              setLocalCompletions(prev => {
+                const newCompletions = { ...prev, [item.id]: !isCurrentlyCompleted };
+                const completedCount = Object.values(newCompletions).filter(Boolean).length;
+                if (onCompletionChange) {
+                  onCompletionChange(completedCount);
+                }
+                return newCompletions;
+              });
+              
+              if (!isCurrentlyCompleted) {
+                toast.success("Item Completed! 🎉", {
+                  description: `${item.name} has been marked as complete.`,
+                  duration: 3000,
+                });
+              } else {
+                toast.info("Item Marked as Incomplete", {
+                  description: `${item.name} has been marked as incomplete.`,
+                  duration: 3000,
+                });
+              }
+            } catch (error: any) {
+              // If Firestore update fails, still update local state
+              console.error('❌ Firestore update failed:', {
+                error: error.message,
+                code: error.code,
+                chatId: item.chatId,
+                hasUserId: !!chatData.userId,
+                currentUserId: user?.uid,
+                chatDataKeys: Object.keys(chatData),
+                updateDataKeys: Object.keys(updateData)
+              });
+              
+              setLocalCompletions(prev => {
+                const newCompletions = { ...prev, [item.id]: !isCurrentlyCompleted };
+                const completedCount = Object.values(newCompletions).filter(Boolean).length;
+                if (onCompletionChange) {
+                  onCompletionChange(completedCount);
+                }
+                return newCompletions;
+              });
+              
+              if (!isCurrentlyCompleted) {
+                toast.success("Item Completed! 🎉", {
+                  description: `${item.name} has been marked as complete (saved locally).`,
+                  duration: 3000,
+                });
+              } else {
+                toast.info("Item Marked as Incomplete", {
+                  description: `${item.name} has been marked as incomplete (saved locally).`,
+                  duration: 3000,
+                });
+              }
+            } finally {
+              setMarkingComplete(null);
+            }
             
             if (!isCurrentlyCompleted) {
               // Check if this is a priority task (weight >= 15 or urgent)
@@ -179,10 +305,85 @@ export function DashboardAgenda() {
               return exam;
             });
             
-            await updateDoc(chatRef, {
-              'courseData.exams': updatedExams
-            });
-            setLocalCompletions(prev => ({ ...prev, [item.id]: !isCurrentlyCompleted }));
+            try {
+              // Build update object - ensure userId is preserved for security rules
+              const updateData: any = {
+                'courseData.exams': updatedExams,
+                updatedAt: Date.now()
+              };
+              
+              // CRITICAL: Always set userId if user is authenticated (for migration and security)
+              // This ensures Firestore security rules can verify ownership
+              if (user?.uid) {
+                // Always include userId in update to ensure security rules pass
+                updateData.userId = user.uid;
+              }
+              
+              console.log('🔄 Updating chat:', { 
+                chatId: item.chatId, 
+                hasUserId: !!chatData.userId, 
+                currentUserId: user?.uid,
+                updateDataKeys: Object.keys(updateData)
+              });
+              
+              await updateDoc(chatRef, updateData);
+              
+              // Success - update local state
+              setLocalCompletions(prev => {
+                const newCompletions = { ...prev, [item.id]: !isCurrentlyCompleted };
+                const completedCount = Object.values(newCompletions).filter(Boolean).length;
+                if (onCompletionChange) {
+                  onCompletionChange(completedCount);
+                }
+                return newCompletions;
+              });
+              
+              if (!isCurrentlyCompleted) {
+                toast.success("Item Completed! 🎉", {
+                  description: `${item.name} has been marked as complete.`,
+                  duration: 3000,
+                });
+              } else {
+                toast.info("Item Marked as Incomplete", {
+                  description: `${item.name} has been marked as incomplete.`,
+                  duration: 3000,
+                });
+              }
+            } catch (error: any) {
+              // If Firestore update fails, still update local state
+              console.error('❌ Firestore update failed:', {
+                error: error.message,
+                code: error.code,
+                chatId: item.chatId,
+                hasUserId: !!chatData.userId,
+                currentUserId: user?.uid,
+                chatDataKeys: Object.keys(chatData),
+                updateDataKeys: Object.keys(updateData)
+              });
+              
+              setLocalCompletions(prev => {
+                const newCompletions = { ...prev, [item.id]: !isCurrentlyCompleted };
+                const completedCount = Object.values(newCompletions).filter(Boolean).length;
+                if (onCompletionChange) {
+                  onCompletionChange(completedCount);
+                }
+                return newCompletions;
+              });
+              
+              if (!isCurrentlyCompleted) {
+                toast.success("Item Completed! 🎉", {
+                  description: `${item.name} has been marked as complete (saved locally).`,
+                  duration: 3000,
+                });
+              } else {
+                toast.info("Item Marked as Incomplete", {
+                  description: `${item.name} has been marked as incomplete (saved locally).`,
+                  duration: 3000,
+                });
+              }
+            } finally {
+              setMarkingComplete(null);
+            }
             
             if (!isCurrentlyCompleted) {
               // Exams are typically high priority
@@ -210,7 +411,15 @@ export function DashboardAgenda() {
           }
         } else {
           // For other types, mark locally (could be extended to save to a custom field)
-          setLocalCompletions(prev => ({ ...prev, [item.id]: !isCurrentlyCompleted }));
+          setLocalCompletions(prev => {
+            const newCompletions = { ...prev, [item.id]: !isCurrentlyCompleted };
+            // Calculate completed count and notify parent
+            const completedCount = Object.values(newCompletions).filter(Boolean).length;
+            if (onCompletionChange) {
+              onCompletionChange(completedCount);
+            }
+            return newCompletions;
+          });
           if (!isCurrentlyCompleted) {
             toast.success("Item Completed! 🎉", {
               description: `${item.name} has been marked as complete.`,
@@ -275,6 +484,7 @@ export function DashboardAgenda() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.05 }}
                 className={`flex items-start gap-4 p-4 hover:bg-blue-50/30 dark:hover:bg-gray-800/50 transition-all relative group ${!isLast ? 'border-b border-gray-100 dark:border-gray-800' : ''}`}
+                style={{ pointerEvents: 'auto' }}
               >
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity rounded-r-full" />
                 {/* Date Box or Completed Badge */}
@@ -329,20 +539,22 @@ export function DashboardAgenda() {
                 </div>
 
                 {/* Action/Status */}
-                <div className="self-center relative z-10">
+                <div className="self-center relative z-50">
                     <button
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         handleMarkComplete(item);
                       }}
                       disabled={markingComplete === item.id}
-                      className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed relative z-20 ${
+                      className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed relative z-50 pointer-events-auto ${
                         isCompleted
                           ? 'border-green-500 bg-green-50 text-green-600 shadow-inner dark:bg-green-900/20 dark:border-green-400 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95'
                           : 'border-gray-200 dark:border-gray-700 text-gray-300 hover:border-green-500 hover:text-green-500 active:scale-95'
                       }`}
                       title={isCompleted ? "Mark Incomplete" : "Mark Complete"}
                       type="button"
+                      style={{ pointerEvents: 'auto', zIndex: 50 }}
                     >
                       {markingComplete === item.id ? (
                         <div className="h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
@@ -450,14 +662,15 @@ export function DashboardAgenda() {
                       </h4>
                     </div>
 
-                    <div className="self-center relative z-10">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMarkComplete(item);
-                        }}
-                        disabled={markingComplete === item.id}
-                        className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed relative z-20 ${
+                    <div className="self-center relative z-50">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleMarkComplete(item);
+                          }}
+                          disabled={markingComplete === item.id}
+                          className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed relative z-50 pointer-events-auto ${
                           isCompleted
                             ? 'border-green-500 bg-green-50 text-green-600 shadow-inner dark:bg-green-900/20 dark:border-green-400 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95'
                             : 'border-gray-200 dark:border-gray-700 text-gray-300 hover:border-green-500 hover:text-green-500 active:scale-95'

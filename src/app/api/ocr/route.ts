@@ -19,8 +19,9 @@ export async function POST(request: NextRequest) {
     const base64Data = image.includes(",") ? image.split(",")[1] : image;
     console.log("🔍 OCR API: Image data length:", base64Data.length, "Mime:", mimeType);
 
+    const model = "gpt-4o";
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: model,
       messages: [
         {
           role: "system",
@@ -40,7 +41,11 @@ export async function POST(request: NextRequest) {
           ]
         }
       ],
-      max_tokens: 2000,
+      // Use max_completion_tokens for newer models (o1, o3), max_tokens for older models
+      ...(model.startsWith('o1') || model.startsWith('o3') 
+        ? { max_completion_tokens: 2000 }
+        : { max_tokens: 2000 }
+      ),
     });
 
     const text = response.choices[0]?.message?.content || "";

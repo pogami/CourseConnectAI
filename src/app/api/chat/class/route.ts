@@ -90,6 +90,14 @@ export async function POST(request: NextRequest) {
     const needsAssignmentHelp = isAssignmentHelpRequest(cleanedQuestion);
     const wantsPracticeExam = isPracticeExamRequest(cleanedQuestion);
     const wantsResources = isResourceRequest(cleanedQuestion);
+    
+    // Detect "missed class" questions
+    const missedClassPattern = /missed.*class|wasn't.*there|absent|skipped.*class|didn't.*attend|what.*did.*i.*miss/i;
+    const wantsMissedClassInfo = missedClassPattern.test(lowerQuestion);
+    
+    // Extract day/date from question
+    const dayMatch = lowerQuestion.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)/i);
+    const dateMatch = lowerQuestion.match(/(\d{1,2}\/\d{1,2}|\d{1,2}-\d{1,2}|(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2})/i);
 
     console.log('Class Chat API called with:', { 
       question: cleanedQuestion, 
@@ -103,7 +111,8 @@ export async function POST(request: NextRequest) {
         wantsStudyPlan,
         needsAssignmentHelp,
         wantsPracticeExam,
-        wantsResources
+        wantsResources,
+        wantsMissedClassInfo
       },
       courseData: courseData ? {
         courseName: courseData.courseName,
@@ -133,7 +142,7 @@ export async function POST(request: NextRequest) {
     let specialInstructions = '';
     
     if (courseData) {
-      const { courseName, courseCode, professor, university, semester, year, classTime, topics, assignments, exams, syllabusText, pdfUrl } = courseData;
+      const { courseName, courseCode, professor, university, semester, year, classTime, location, topics, assignments, exams, syllabusText, pdfUrl } = courseData;
       
       // Log syllabus text availability for debugging
       console.log('Syllabus text available:', {
@@ -141,6 +150,72 @@ export async function POST(request: NextRequest) {
         syllabusTextLength: syllabusText?.length || 0,
         syllabusTextPreview: syllabusText ? syllabusText.substring(0, 200) : 'N/A'
       });
+      
+      // Add "What did I miss?" special instructions
+      if (wantsMissedClassInfo) {
+        // Find matching schedule item if day is mentioned
+        const schedule = (courseData as any)?.schedule || [];
+        let matchingSchedule = null;
+        let inferredTopic = null;
+        
+        if (dayMatch) {
+          const missedDay = dayMatch[1]?.toLowerCase();
+          matchingSchedule = schedule.find((item: any) => {
+            const itemDay = item.day?.toLowerCase() || '';
+            return itemDay.includes(missedDay) || 
+                   itemDay.includes(missedDay?.substring(0, 3)) ||
+                   (missedDay === 'tue' && itemDay.includes('tuesday')) ||
+                   (missedDay === 'thu' && itemDay.includes('thursday')) ||
+                   (missedDay === 'wed' && itemDay.includes('wednesday'));
+          });
+          
+          if (matchingSchedule) {
+            inferredTopic = matchingSchedule.description || matchingSchedule.type;
+          }
+        }
+        
+        // Get next class info
+        const nextClassSchedule = schedule.find((item: any, index: number) => {
+          if (matchingSchedule) {
+            const currentIndex = schedule.indexOf(matchingSchedule);
+            return index > currentIndex && item.type === 'lecture';
+          }
+          return item.type === 'lecture';
+        });
+        
+        specialInstructions = `
+CRITICAL: The student missed class. Provide a comprehensive catch-up guide with the following structure:
+
+1. **📚 What You Missed: [Topic Name]**
+   - Use the schedule description or inferred topic: ${inferredTopic || 'based on syllabus schedule'}
+   - If a specific day was mentioned (${dayMatch?.[1] || 'not specified'}), reference that class session
+
+2. **📋 Summary:**
+   - What was covered in that class session (based on schedule description and syllabus)
+   - Key concepts, definitions, or topics discussed
+   - Important announcements or assignments given
+
+3. **📖 What to Review:**
+   - Specific topics, readings, or concepts they need to catch up on
+   - Chapter/section numbers if available from syllabus
+   - Practice problems or exercises mentioned
+   - Any required readings or materials
+
+4. **💪 Practice Suggestions:**
+   - Exercises, problems, or activities to reinforce the missed material
+   - Specific practice problems from textbook if mentioned in syllabus
+   - Online resources or supplementary materials
+   - Step-by-step examples to work through
+
+5. **🔮 What's Coming Next:**
+   ${nextClassSchedule ? `- Next class: ${nextClassSchedule.day} - ${nextClassSchedule.description || nextClassSchedule.type}` : '- Check the syllabus schedule for upcoming topics'}
+   - What will be covered in the next class(es) so they're prepared
+   - Any prerequisites they need to understand before the next class
+   - Upcoming assignments or exams related to the missed material
+
+Be specific, actionable, and encouraging. Reference the syllabus schedule, topics array, and assignments when available. If the student mentioned a specific day, make sure to address that day's content specifically.
+`;
+      }
 
       const respondWith = (answer: string) => NextResponse.json({
         success: true,
@@ -159,6 +234,12 @@ export async function POST(request: NextRequest) {
         lowerQuestion.includes('class time') ||
         lowerQuestion.includes('schedule');
 
+      const wantsLocation = lowerQuestion.includes('where is class') ||
+        lowerQuestion.includes('class location') ||
+        lowerQuestion.includes('where does class meet') ||
+        lowerQuestion.includes('what room') ||
+        lowerQuestion.includes('which building');
+
       const wantsUniversity = lowerQuestion.includes('what school') ||
         lowerQuestion.includes('what university') ||
         lowerQuestion.includes('which campus');
@@ -173,7 +254,12 @@ export async function POST(request: NextRequest) {
       }
 
       if (wantsClassTime && classTime) {
-        return respondWith(`${courseName || courseCode || 'This class'} meets ${classTime}.`);
+        const locationInfo = location ? ` at ${location}` : '';
+        return respondWith(`${courseName || courseCode || 'This class'} meets ${classTime}${locationInfo}.`);
+      }
+
+      if (wantsLocation && location) {
+        return respondWith(`${courseName || courseCode || 'This class'} meets ${location}.`);
       }
 
       if (wantsUniversity && university) {
@@ -185,7 +271,8 @@ export async function POST(request: NextRequest) {
           courseName ? `Course: ${courseName}` : null,
           courseCode ? `Course Code: ${courseCode}` : null,
           professor ? `Professor: ${professor}` : null,
-          classTime ? `Class Time: ${classTime}` : null
+          classTime ? `Class Time: ${classTime}` : null,
+          location ? `Location: ${location}` : null
         ].filter(Boolean).join(' — ');
         return respondWith(details);
       }
@@ -311,6 +398,9 @@ The student is struggling with this concept.
 
 ${professor ? `👨‍🏫 PROFESSOR: ${professor} (IMPORTANT: Use this name when answering questions about the course or professor)` : '⚠️ No professor name found in syllabus'}
 ${classTime ? `🕐 CLASS TIME: ${classTime} (IMPORTANT: Use this when answering questions about when class meets)` : '⚠️ No class time found in syllabus'}
+${location ? `📍 LOCATION: ${location} (IMPORTANT: Use this when answering questions about where class meets)` : '⚠️ No location found in syllabus'}
+${(courseData as any)?.schedule && (courseData as any).schedule.length > 0 ? `\n📅 CLASS SCHEDULE:
+${(courseData as any).schedule.map((item: any) => `- ${item.day || 'N/A'}: ${item.time || 'N/A'} (${item.type || 'N/A'})${item.description ? ` - ${item.description}` : ''}${item.location ? ` - Location: ${item.location}` : ''}`).join('\n')}` : ''}
 ${university ? `🏫 University: ${university}` : ''}
 ${semester && year ? `📅 Semester: ${semester} ${year}` : ''}
 
@@ -363,10 +453,11 @@ ${specialInstructions}
 CRITICAL - USE COURSE DETAILS:
 - You MUST use the professor name when it's provided above (e.g., "According to ${professor || 'your professor'}" or "As ${professor || 'your professor'} mentioned...")
 - You MUST use the class time when it's provided above (e.g., "Your class meets ${classTime || 'at the scheduled time'}")
-- NEVER say you don't have access to professor name, class time, or other course details if they're listed in the course context above
-- Reference specific course details: professor name, class time, course code, topics, assignments, exam dates
+- NEVER say you don't have access to professor name, class time, location, or other course details if they're listed in the course context above
+- Reference specific course details: professor name, class time, location, course code, topics, assignments, exam dates
 - If the student asks "who is my professor" and the professor name is in the context above, tell them directly (e.g., "Your professor is ${professor}")
 - If the student asks "what time is class" or "when does class meet" and classTime is in the context above, tell them directly (e.g., "Class meets ${classTime}")
+- If the student asks "where is class" or "what room" and location is in the context above, tell them directly (e.g., "Class meets at ${location}")
 - Use the actual course information provided - don't say you don't have access to it
 
 IMPORTANT: 

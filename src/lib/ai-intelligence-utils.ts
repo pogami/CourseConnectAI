@@ -1,16 +1,171 @@
 /**
  * AI Intelligence Utilities
- * Helper functions for smart features like deadline tracking, topic analysis, etc.
+ * Helper functions for analyzing questions and generating context
  */
 
-import { Chat } from '@/hooks/use-chat-store';
+export function detectQuestionComplexity(question: string): 'basic' | 'intermediate' | 'advanced' {
+  const lowerQuestion = question.toLowerCase();
+  
+  // Advanced indicators
+  const advancedKeywords = ['prove', 'derive', 'theorem', 'lemma', 'corollary', 'optimize', 'algorithm', 'complexity', 'asymptotic'];
+  if (advancedKeywords.some(keyword => lowerQuestion.includes(keyword))) {
+    return 'advanced';
+  }
+  
+  // Intermediate indicators
+  const intermediateKeywords = ['explain', 'analyze', 'compare', 'contrast', 'evaluate', 'calculate', 'solve', 'find'];
+  if (intermediateKeywords.some(keyword => lowerQuestion.includes(keyword))) {
+    return 'intermediate';
+  }
+  
+  // Basic by default
+  return 'basic';
+}
 
-// Calculate days until a date
-export function calculateDaysUntil(dateString: string): number {
-  if (!dateString) return Infinity;
+export function getAdaptiveInstructions(complexity: 'basic' | 'intermediate' | 'advanced'): string {
+  switch (complexity) {
+    case 'advanced':
+      return '\n\nFor this advanced question, provide a rigorous, detailed explanation with formal reasoning and mathematical precision.';
+    case 'intermediate':
+      return '\n\nFor this intermediate question, provide a clear, step-by-step explanation with examples.';
+    case 'basic':
+      return '\n\nFor this basic question, provide a simple, easy-to-understand explanation.';
+    default:
+      return '';
+  }
+}
+
+export function isQuizRequest(question: string): boolean {
+  const lowerQuestion = question.toLowerCase();
+  return lowerQuestion.includes('quiz') || 
+         lowerQuestion.includes('practice test') || 
+         lowerQuestion.includes('practice exam') ||
+         lowerQuestion.includes('test me');
+}
+
+export function extractQuizTopic(question: string): string | null {
+  const lowerQuestion = question.toLowerCase();
+  const topicMatch = lowerQuestion.match(/(?:quiz|test|exam|practice).*?(?:on|about|for|covering)\s+([^.?!]+)/i);
+  return topicMatch ? topicMatch[1].trim() : null;
+}
+
+export function detectConfusion(question: string): boolean {
+  const lowerQuestion = question.toLowerCase();
+  const confusionIndicators = [
+    'confused', 'don\'t understand', 'don\'t get', 'unclear', 'unclear about',
+    'not sure', 'help me understand', 'explain', 'what does', 'how does'
+  ];
+  return confusionIndicators.some(indicator => lowerQuestion.includes(indicator));
+}
+
+export function isStudyPlanRequest(question: string): boolean {
+  const lowerQuestion = question.toLowerCase();
+  return lowerQuestion.includes('study plan') || 
+         lowerQuestion.includes('study schedule') ||
+         lowerQuestion.includes('how should i study') ||
+         lowerQuestion.includes('what should i study');
+}
+
+export function generateStudyPlan(courseData: any, topics: string[]): string {
+  if (!topics || topics.length === 0) {
+    return 'I can help you create a study plan! Please provide the topics you need to study.';
+  }
+  
+  const assignments = courseData?.assignments || [];
+  const exams = courseData?.exams || [];
+  
+  let plan = `Here's a suggested study plan for: ${topics.join(', ')}\n\n`;
+  
+  if (exams.length > 0) {
+    const nextExam = exams[0];
+    plan += `📅 Next Exam: ${nextExam.name || 'Upcoming Exam'}\n`;
+    if (nextExam.date) {
+      plan += `Date: ${nextExam.date}\n`;
+    }
+  }
+  
+  plan += `\nRecommended Study Schedule:\n`;
+  plan += `1. Review lecture notes and textbook chapters\n`;
+  plan += `2. Practice problems related to each topic\n`;
+  plan += `3. Create flashcards for key concepts\n`;
+  plan += `4. Take practice quizzes\n`;
+  plan += `5. Review and reinforce weak areas\n`;
+  
+  return plan;
+}
+
+export function isAssignmentHelpRequest(question: string): boolean {
+  const lowerQuestion = question.toLowerCase();
+  return lowerQuestion.includes('assignment') || 
+         lowerQuestion.includes('homework') ||
+         lowerQuestion.includes('hw') ||
+         lowerQuestion.includes('problem set');
+}
+
+export function findRelevantAssignment(question: string, assignments: any[]): any | null {
+  if (!assignments || assignments.length === 0) return null;
+  
+  const lowerQuestion = question.toLowerCase();
+  
+  // Try to find assignment by name
+  for (const assignment of assignments) {
+    const assignmentName = (assignment.name || '').toLowerCase();
+    if (assignmentName && lowerQuestion.includes(assignmentName)) {
+      return assignment;
+    }
+  }
+  
+  // Return first upcoming assignment
+  const upcoming = assignments
+    .filter(a => a.dueDate && new Date(a.dueDate) > new Date())
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  
+  return upcoming[0] || null;
+}
+
+export function extractTopics(text: string, availableTopics?: string[]): string[] {
+  // Simple topic extraction - look for capitalized words or quoted phrases
+  const topics: string[] = [];
+  
+  // If availableTopics provided, match against them
+  if (availableTopics && availableTopics.length > 0) {
+    const lowerText = text.toLowerCase();
+    const matched = availableTopics.filter(topic => 
+      lowerText.includes(topic.toLowerCase())
+    );
+    if (matched.length > 0) {
+      topics.push(...matched);
+    }
+  }
+  
+  // Extract quoted topics
+  const quotedMatches = text.match(/"([^"]+)"/g);
+  if (quotedMatches) {
+    topics.push(...quotedMatches.map(m => m.replace(/"/g, '')));
+  }
+  
+  // Extract topics after keywords
+  const topicKeywords = ['topic', 'topics', 'about', 'covering', 'on'];
+  for (const keyword of topicKeywords) {
+    const regex = new RegExp(`${keyword}\\s+([^.!?]+)`, 'gi');
+    const matches = text.match(regex);
+    if (matches) {
+      matches.forEach(match => {
+        const topic = match.replace(new RegExp(keyword, 'gi'), '').trim();
+        if (topic) topics.push(topic);
+      });
+    }
+  }
+  
+  // Remove duplicates
+  return Array.from(new Set(topics.filter(t => t.length > 2)));
+}
+
+export function calculateDaysUntil(date: string): number {
+  if (!date || date === 'null') return -1;
   
   try {
-    const targetDate = new Date(dateString);
+    const targetDate = new Date(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     targetDate.setHours(0, 0, 0, 0);
@@ -20,371 +175,108 @@ export function calculateDaysUntil(dateString: string): number {
     
     return diffDays;
   } catch (error) {
-    return Infinity;
+    return -1;
   }
 }
 
-// Check for upcoming deadlines (within 7 days)
-export function getUpcomingDeadlines(courseData: Chat['courseData']) {
-  if (!courseData) return { assignments: [], exams: [] };
-  
-  const upcomingAssignments = (courseData.assignments || [])
-    .map(assignment => ({
-      ...assignment,
-      daysUntil: assignment.dueDate ? calculateDaysUntil(assignment.dueDate) : Infinity
-    }))
-    .filter(assignment => assignment.daysUntil >= 0 && assignment.daysUntil <= 7)
-    .sort((a, b) => a.daysUntil - b.daysUntil);
-    
-  const upcomingExams = (courseData.exams || [])
-    .map(exam => ({
-      ...exam,
-      daysUntil: exam.date ? calculateDaysUntil(exam.date) : Infinity
-    }))
-    .filter(exam => exam.daysUntil >= 0 && exam.daysUntil <= 7)
-    .sort((a, b) => a.daysUntil - b.daysUntil);
-    
-  return { assignments: upcomingAssignments, exams: upcomingExams };
+export function isPracticeExamRequest(question: string): boolean {
+  const lowerQuestion = question.toLowerCase();
+  return lowerQuestion.includes('practice exam') || 
+         lowerQuestion.includes('practice test') ||
+         lowerQuestion.includes('mock exam') ||
+         lowerQuestion.includes('sample exam');
 }
 
-// Format date in friendly way
-export function formatDeadlineMessage(name: string, dateString: string, type: 'assignment' | 'exam'): string {
-  const daysUntil = calculateDaysUntil(dateString);
-  
-  if (daysUntil === 0) {
-    return `${name} is due TODAY!`;
-  } else if (daysUntil === 1) {
-    return `${name} is due TOMORROW!`;
-  } else if (daysUntil <= 3) {
-    return `${name} is due in ${daysUntil} days (that's really soon!)`;
-  } else if (daysUntil <= 7) {
-    return `${name} is coming up in ${daysUntil} days`;
-  }
-  
-  return `${name} is due on ${dateString}`;
+export function isResourceRequest(question: string): boolean {
+  const lowerQuestion = question.toLowerCase();
+  return lowerQuestion.includes('resource') || 
+         lowerQuestion.includes('material') ||
+         lowerQuestion.includes('textbook') ||
+         lowerQuestion.includes('reading') ||
+         lowerQuestion.includes('reference');
 }
 
-// Generate deadline reminder context for AI
-export function generateDeadlineContext(courseData: Chat['courseData']): string {
-  const { assignments, exams } = getUpcomingDeadlines(courseData);
+export function generateMemoryContext(metadata: any): string {
+  if (!metadata) return '';
   
-  if (assignments.length === 0 && exams.length === 0) {
-    return '';
+  let context = '';
+  
+  if (metadata.topicsCovered && metadata.topicsCovered.length > 0) {
+    context += `\n\nPreviously discussed topics: ${metadata.topicsCovered.join(', ')}`;
   }
   
-  let context = '\n\n🚨 IMPORTANT UPCOMING DEADLINES:\n';
-  
-  if (exams.length > 0) {
-    context += '\nExams:\n';
-    exams.forEach(exam => {
-      context += `- ${formatDeadlineMessage(exam.name, exam.date!, 'exam')}\n`;
-    });
+  if (metadata.strugglingWith && metadata.strugglingWith.length > 0) {
+    context += `\n\nStudent has been struggling with: ${metadata.strugglingWith.join(', ')}`;
   }
-  
-  if (assignments.length > 0) {
-    context += '\nAssignments:\n';
-    assignments.forEach(assignment => {
-      context += `- ${formatDeadlineMessage(assignment.name, assignment.dueDate!, 'assignment')}\n`;
-    });
-  }
-  
-  context += '\nMention these proactively if relevant to the conversation!\n';
   
   return context;
 }
 
-// Detect question complexity
-export function detectQuestionComplexity(question: string): 'basic' | 'intermediate' | 'advanced' {
-  const lowerQuestion = question.toLowerCase();
-  
-  // Basic indicators
-  const basicIndicators = [
-    'what is', 'define', 'explain simply', 'basics', 'introduction',
-    'eli5', 'simple terms', 'for beginners', 'confused', "don't understand"
-  ];
-  
-  // Advanced indicators
-  const advancedIndicators = [
-    'analyze', 'compare', 'contrast', 'evaluate', 'synthesize',
-    'critique', 'in depth', 'detailed', 'advanced', 'complex',
-    'relationship between', 'why does', 'how does this relate'
-  ];
-  
-  if (basicIndicators.some(indicator => lowerQuestion.includes(indicator))) {
-    return 'basic';
-  }
-  
-  if (advancedIndicators.some(indicator => lowerQuestion.includes(indicator))) {
-    return 'advanced';
-  }
-  
-  return 'intermediate';
-}
+export function generatePracticeExamInstructions(topic: string, courseName: string): string {
+  return `\n\n📝 PRACTICE EXAM MODE - INTERACTIVE:
+Generate a comprehensive practice exam for ${topic || courseName}.
 
-// Generate adaptive response instructions based on complexity
-export function getAdaptiveInstructions(complexity: 'basic' | 'intermediate' | 'advanced'): string {
-  switch (complexity) {
-    case 'basic':
-      return `
-ADAPTIVE RESPONSE MODE: BASIC
-- Use simple, clear language
-- Define terms before using them
-- Provide concrete examples
-- Break concepts into small steps
-- Be extra patient and encouraging
-- Avoid jargon and complex terminology`;
-      
-    case 'advanced':
-      return `
-ADAPTIVE RESPONSE MODE: ADVANCED
-- Use more sophisticated language and analysis
-- Assume familiarity with basic concepts
-- Provide deeper insights and connections
-- Discuss nuances and complexities
-- Reference academic concepts naturally
-- Challenge them with thought-provoking questions`;
-      
-    default:
-      return `
-ADAPTIVE RESPONSE MODE: INTERMEDIATE
-- Balance clarity with depth
-- Introduce new terminology with brief explanations
-- Provide good examples alongside theory
-- Assume some foundational knowledge`;
-  }
-}
+CRITICAL: You MUST output the exam in this EXACT format:
 
-// Detect if question is asking for a quiz
-export function isQuizRequest(question: string): boolean {
-  const lowerQuestion = question.toLowerCase();
-  const quizIndicators = [
-    'quiz me', 'test me', 'practice questions', 'questions about',
-    'practice problems', 'can you quiz', 'give me questions',
-    'test my knowledge', 'ask me questions'
-  ];
-  
-  return quizIndicators.some(indicator => lowerQuestion.includes(indicator));
-}
+First, write a brief introduction (1-2 sentences).
 
-// Detect if asking for full practice exam
-export function isPracticeExamRequest(question: string): boolean {
-  const lowerQuestion = question.toLowerCase();
-  const examIndicators = [
-    'practice exam', 'practice test', 'full exam', 'mock exam',
-    'give me an exam', 'simulate exam', 'exam simulation',
-    'comprehensive test', 'full practice test'
-  ];
-  
-  return examIndicators.some(indicator => lowerQuestion.includes(indicator));
-}
-
-// Extract topic from quiz request
-export function extractQuizTopic(question: string, availableTopics: string[]): string | null {
-  const lowerQuestion = question.toLowerCase();
-  
-  // Try to find topic in available topics list
-  for (const topic of availableTopics) {
-    if (lowerQuestion.includes(topic.toLowerCase())) {
-      return topic;
-    }
-  }
-  
-  // Try common patterns
-  const patterns = [
-    /quiz me on (.*)/i,
-    /test me on (.*)/i,
-    /questions about (.*)/i,
-    /practice (.*) questions/i
-  ];
-  
-  for (const pattern of patterns) {
-    const match = question.match(pattern);
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-  }
-  
-  return null;
-}
-
-// Detect if student is expressing confusion
-export function detectConfusion(question: string): boolean {
-  const lowerQuestion = question.toLowerCase();
-  const confusionIndicators = [
-    "don't understand", "confused", "not sure", "struggling",
-    "hard to grasp", "difficult", "lost", "unclear",
-    "what does this mean", "makes no sense", "not getting"
-  ];
-  
-  return confusionIndicators.some(indicator => lowerQuestion.includes(indicator));
-}
-
-// Detect if student is asking for study plan
-export function isStudyPlanRequest(question: string): boolean {
-  const lowerQuestion = question.toLowerCase();
-  const studyPlanIndicators = [
-    'study plan', 'study schedule', 'how should i study',
-    'prepare for exam', 'help me study', 'study tips',
-    'study strategy', 'plan for studying'
-  ];
-  
-  return studyPlanIndicators.some(indicator => lowerQuestion.includes(indicator));
-}
-
-// Generate study plan based on exam date
-export function generateStudyPlan(
-  examName: string,
-  examDate: string,
-  topics: string[]
-): string {
-  const daysUntil = calculateDaysUntil(examDate);
-  
-  if (daysUntil < 0) {
-    return `The exam (${examName}) has already passed on ${examDate}.`;
-  }
-  
-  if (daysUntil === 0) {
-    return `${examName} is TODAY! Focus on quick review of key concepts and get good rest.`;
-  }
-  
-  if (daysUntil <= 2) {
-    return `You have ${daysUntil} day${daysUntil > 1 ? 's' : ''} until ${examName}. Focus on:
-- Quick review of all major topics
-- Practice problems for weak areas
-- Review your notes and key concepts
-- Get good sleep before the exam`;
-  }
-  
-  const topicsCount = topics.length || 1;
-  const daysPerTopic = Math.floor(daysUntil * 0.7 / topicsCount); // 70% study, 30% review
-  const reviewDays = Math.ceil(daysUntil * 0.3);
-  
-  let plan = `Here's a study plan for ${examName} (${daysUntil} days away):\n\n`;
-  
-  let currentDay = 1;
-  topics.forEach((topic, index) => {
-    const days = daysPerTopic || 1;
-    const dayRange = days === 1 
-      ? `Day ${currentDay}` 
-      : `Days ${currentDay}-${currentDay + days - 1}`;
-    
-    plan += `${dayRange}: ${topic}\n`;
-    plan += `  - Study time: ${days === 1 ? '2-3 hours' : `1-2 hours/day`}\n`;
-    plan += `  - Focus on key concepts and examples\n\n`;
-    
-    currentDay += days;
-  });
-  
-  if (reviewDays > 0) {
-    plan += `Days ${currentDay}-${daysUntil}: Review and Practice\n`;
-    plan += `  - Review all topics\n`;
-    plan += `  - Take practice quizzes\n`;
-    plan += `  - Focus on weak areas\n`;
-    plan += `  - Get good rest before exam day\n`;
-  }
-  
-  return plan;
-}
-
-// Extract topics mentioned in conversation
-export function extractTopics(text: string, availableTopics: string[]): string[] {
-  const mentionedTopics: string[] = [];
-  const lowerText = text.toLowerCase();
-  
-  availableTopics.forEach(topic => {
-    if (lowerText.includes(topic.toLowerCase())) {
-      mentionedTopics.push(topic);
-    }
-  });
-  
-  return mentionedTopics;
-}
-
-// Detect if asking for assignment help
-export function isAssignmentHelpRequest(question: string): boolean {
-  const lowerQuestion = question.toLowerCase();
-  const assignmentIndicators = [
-    'help with', 'how do i', 'assignment', 'project',
-    'homework', 'report', 'essay', 'paper'
-  ];
-  
-  return assignmentIndicators.some(indicator => lowerQuestion.includes(indicator));
-}
-
-// Find specific assignment being asked about
-export function findRelevantAssignment(
-  question: string,
-  assignments: Array<{ name: string; dueDate?: string; description?: string }>
-): typeof assignments[0] | null {
-  const lowerQuestion = question.toLowerCase();
-  
-  return assignments.find(assignment =>
-    lowerQuestion.includes(assignment.name.toLowerCase())
-  ) || null;
-}
-
-// Detect if asking for resource recommendations
-export function isResourceRequest(question: string): boolean {
-  const lowerQuestion = question.toLowerCase();
-  const resourceIndicators = [
-    'resources', 'videos', 'youtube', 'links', 'articles',
-    'where can i learn', 'recommend', 'suggestions', 'materials',
-    'study materials', 'helpful videos', 'good videos'
-  ];
-  
-  return resourceIndicators.some(indicator => lowerQuestion.includes(indicator));
-}
-
-// Generate time-based memory context
-export function generateMemoryContext(metadata?: {
-  topicsCovered?: string[];
-  strugglingWith?: string[];
-  questionComplexityLevel?: 'basic' | 'intermediate' | 'advanced';
-}): string {
-  if (!metadata) return '';
-  
-  let memoryContext = '';
-  
-  if (metadata.topicsCovered && metadata.topicsCovered.length > 0) {
-    memoryContext += `\n\n📝 CONVERSATION MEMORY:
-Topics you've already covered: ${metadata.topicsCovered.join(', ')}
-`;
-  }
-  
-  if (metadata.strugglingWith && metadata.strugglingWith.length > 0) {
-    memoryContext += `Topics you've struggled with before: ${metadata.strugglingWith.join(', ')}
-- Reference these when relevant
-- Offer to revisit if related to current topic
-- Be extra patient with these areas
-`;
-  }
-  
-  if (metadata.questionComplexityLevel) {
-    memoryContext += `Previous question complexity: ${metadata.questionComplexityLevel}
-`;
-  }
-  
-  return memoryContext;
-}
-
-// Generate practice exam prompt
-export function generatePracticeExamInstructions(topics: string[], examName?: string): string {
-  const topicsList = topics.join(', ');
-  
-  return `\n\n📝 PRACTICE EXAM MODE:
-Generate a comprehensive practice exam${examName ? ` for ${examName}` : ''}.
+Then on a new line, output:
+EXAM_DATA: {"topic":"${topic || courseName}","timeLimit":30,"questions":[{"question":"Your question here","options":["A) Option 1","B) Option 2","C) Option 3","D) Option 4"],"answer":"A","explanation":"Why this is correct"}]}
 
 Requirements:
-- 20 questions total covering all major topics: ${topicsList}
-- Mix of question types: multiple choice, short answer, and conceptual
-- Number each question 1-20
-- Cover topics evenly
-- Include difficulty progression (easier → harder)
-- Format naturally without fancy markdown
+- 20 questions total
+- All must be multiple choice with 4 options (A, B, C, D)
+- Answer must be just the letter (A, B, C, or D)
+- Include brief explanation for each
+- Difficulty progression (easier → harder)
 
-After presenting all questions, say:
-"Take your time with these questions. When you're done, share your answers and I'll provide detailed feedback on each one!"
+The JSON must be valid and on ONE line after EXAM_DATA:`;
+}
 
-DO NOT provide answers yet - just the questions.`;
+export function generateDeadlineContext(courseData: any): string {
+  if (!courseData) return '';
+  
+  let context = '';
+  const now = new Date();
+  
+  // Add assignment deadlines
+  const assignments = courseData.assignments || [];
+  const upcomingAssignments = assignments
+    .filter((a: any) => {
+      if (!a.dueDate || a.dueDate === 'null') return false;
+      const dueDate = new Date(a.dueDate);
+      return !isNaN(dueDate.getTime()) && dueDate >= now;
+    })
+    .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .slice(0, 3);
+  
+  if (upcomingAssignments.length > 0) {
+    context += '\n\n📅 Upcoming Assignments:';
+    upcomingAssignments.forEach((assignment: any) => {
+      const daysUntil = calculateDaysUntil(assignment.dueDate);
+      context += `\n- ${assignment.name || 'Assignment'}: Due in ${daysUntil} day${daysUntil !== 1 ? 's' : ''} (${assignment.dueDate})`;
+    });
+  }
+  
+  // Add exam deadlines
+  const exams = courseData.exams || [];
+  const upcomingExams = exams
+    .filter((e: any) => {
+      if (!e.date || e.date === 'null') return false;
+      const examDate = new Date(e.date);
+      return !isNaN(examDate.getTime()) && examDate >= now;
+    })
+    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 2);
+  
+  if (upcomingExams.length > 0) {
+    context += '\n\n📅 Upcoming Exams:';
+    upcomingExams.forEach((exam: any) => {
+      const daysUntil = calculateDaysUntil(exam.date);
+      context += `\n- ${exam.name || 'Exam'}: In ${daysUntil} day${daysUntil !== 1 ? 's' : ''} (${exam.date})`;
+    });
+  }
+  
+  return context;
 }
 

@@ -288,7 +288,9 @@ export default function SyllabusUpload() {
                                 university: ollamaResult.extractedData.university || null,
                                 semester: ollamaResult.extractedData.semester || null,
                                 year: ollamaResult.extractedData.year || null,
-                                department: ollamaResult.extractedData.department || null
+                                department: ollamaResult.extractedData.department || null,
+                                classTime: ollamaResult.extractedData.classTime || null,
+                                location: ollamaResult.extractedData.location || null
                             }
                         },
                         errors: [],
@@ -364,6 +366,49 @@ export default function SyllabusUpload() {
         const className = courseInfo.title || file?.name.replace(/\.[^/.]+$/, "") || "Unknown Course";
             const classCode = courseInfo.courseCode || "UNKNOWN";
             
+            // Extract classTime and location from courseInfo or schedule
+            let classTime = courseInfo.classTime || null;
+            let location = courseInfo.location || null;
+            
+            // If not in courseInfo, try to extract from schedule
+            if (!classTime || !location) {
+                const schedule = parsedData.schedule || [];
+                if (schedule.length > 0) {
+                    // Check if async/online
+                    const isAsync = schedule.some((s: any) => 
+                        s.type?.toLowerCase().includes('async') ||
+                        s.type?.toLowerCase().includes('online') ||
+                        s.location?.toLowerCase().includes('online') ||
+                        s.location?.toLowerCase().includes('async') ||
+                        s.description?.toLowerCase().includes('async') ||
+                        s.description?.toLowerCase().includes('online')
+                    );
+                    
+                    if (isAsync) {
+                        classTime = classTime || 'Asynchronous';
+                        location = location || 'Online';
+                    } else {
+                        // Extract from first schedule item
+                        const firstSchedule = schedule[0];
+                        if (!classTime && firstSchedule.day && firstSchedule.time) {
+                            classTime = `${firstSchedule.day} ${firstSchedule.time}`;
+                        }
+                        if (!location && firstSchedule.location) {
+                            location = firstSchedule.location;
+                        }
+                    }
+                }
+            }
+            
+            // Set defaults if still null
+            if (!location) {
+                if (classTime?.toLowerCase().includes('async') || classTime?.toLowerCase().includes('online')) {
+                    location = 'Online';
+                } else {
+                    location = 'Not specified';
+                }
+            }
+            
             // Create courseData with full syllabus text for AI context
             const courseData = {
                 courseName: className,
@@ -372,6 +417,8 @@ export default function SyllabusUpload() {
                 university: courseInfo.university || null,
                 semester: courseInfo.semester || null,
                 year: courseInfo.year || null,
+                classTime: classTime,
+                location: location,
                 topics: parsedData.topics || [],
                 assignments: parsedData.assignments || [],
                 exams: parsedData.exams || [],
@@ -487,6 +534,24 @@ export default function SyllabusUpload() {
 
             // Create class group
             await createClassGroup(syllabusData, chatId, chatPreference);
+
+            // Create course feed automatically
+            try {
+                await fetch('/api/course-feed/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        courseId: chatId,
+                        courseCode: classCode,
+                        courseName: className,
+                        syllabusData: courseData,
+                        userId: user?.uid || 'guest',
+                    }),
+                });
+                console.log('✅ Course feed created for', chatId);
+            } catch (error) {
+                console.warn('Could not create course feed (will be created on first question):', error);
+            }
 
             // Save uploaded syllabus to localStorage for duplicate checking
             if (file) {

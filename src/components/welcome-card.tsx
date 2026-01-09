@@ -30,11 +30,22 @@ interface WelcomeCardProps {
     assignments?: Array<{ name: string; dueDate?: string; description?: string }>;
     exams?: Array<{ name: string; date?: string; daysUntil?: number }>;
   };
+  classChats?: Array<{
+    id: string;
+    title: string;
+    courseData?: {
+      courseName?: string;
+      courseCode?: string;
+      topics?: string[];
+      assignments?: Array<{ name: string; dueDate?: string }>;
+      exams?: Array<{ name: string; date?: string }>;
+    };
+  }>;
   onDismiss?: () => void;
   onQuickAction?: (action: string) => void;
 }
 
-export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: WelcomeCardProps) {
+export function WelcomeCard({ chatType, courseData, classChats, onDismiss, onQuickAction }: WelcomeCardProps) {
   const [isVisible, setIsVisible] = useState(true);
 
   const handleDismiss = () => {
@@ -136,6 +147,13 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
         });
       }
       
+      // Add "What did I miss?" button
+      actions.push({
+        icon: Calendar01Icon,
+        label: "What did I miss?",
+        action: "I missed class Tuesday"
+      });
+      
       // Add chart action only for courses that actually need it
       const courseCodeLower = (courseData.courseCode || '').toLowerCase();
       const courseNameLower = courseName.toLowerCase();
@@ -225,12 +243,109 @@ export function WelcomeCard({ chatType, courseData, onDismiss, onQuickAction }: 
         { icon: Brain01Icon, label: "Get AI Help", action: "@ai help me with" }
       ];
     } else {
-      return [
-        { icon: SparklesIcon, label: "Ask AI", action: "help me understand calculus" },
-        { icon: GraduationScrollIcon, label: "Study Help", action: "explain photosynthesis" },
-        { icon: AnalyticsUpIcon, label: "Create Chart", action: "graph y = x²" },
-        { icon: ChartBarLineIcon, label: "Visualize Data", action: "create a bar chart showing: Math 85, Science 90, English 78" }
-      ];
+      // General chat: Show curated questions if student has classes, otherwise show general starters
+      if (classChats && classChats.length > 0) {
+        // Student has classes - create curated questions based on their courses
+        const actions = [];
+        
+        // Get all course names and codes
+        const courseNames = classChats
+          .map(chat => chat.courseData?.courseName || chat.courseData?.courseCode || chat.title)
+          .filter(Boolean)
+          .slice(0, 3); // Limit to 3 courses for brevity
+        
+        // Get upcoming assignments across all courses
+        const allAssignments = classChats
+          .flatMap(chat => 
+            (chat.courseData?.assignments || []).map(assignment => ({
+              ...assignment,
+              courseName: chat.courseData?.courseName || chat.courseData?.courseCode || chat.title
+            }))
+          )
+          .filter(a => a.name)
+          .slice(0, 2);
+        
+        // Get upcoming exams across all courses
+        const allExams = classChats
+          .flatMap(chat => 
+            (chat.courseData?.exams || []).map(exam => ({
+              ...exam,
+              courseName: chat.courseData?.courseName || chat.courseData?.courseCode || chat.title
+            }))
+          )
+          .filter(e => e.name)
+          .slice(0, 2);
+        
+        // Get topics from all courses
+        const allTopics = classChats
+          .flatMap(chat => chat.courseData?.topics || [])
+          .filter(Boolean)
+          .slice(0, 5);
+        
+        // Curated question 1: Help with specific course
+        if (courseNames.length > 0) {
+          actions.push({
+            icon: SparklesIcon,
+            label: `Help with ${courseNames[0]}`,
+            action: `help me with ${courseNames[0]}`
+          });
+        }
+        
+        // Curated question 2: Upcoming assignment or exam
+        if (allAssignments.length > 0) {
+          const nextAssignment = allAssignments[0];
+          actions.push({
+            icon: Calendar01Icon,
+            label: "Assignment Help",
+            action: `help me with ${nextAssignment.name}${nextAssignment.courseName ? ` in ${nextAssignment.courseName}` : ''}`
+          });
+        } else if (allExams.length > 0) {
+          const nextExam = allExams[0];
+          actions.push({
+            icon: Award01Icon,
+            label: "Exam Prep",
+            action: `help me prepare for ${nextExam.name}${nextExam.courseName ? ` in ${nextExam.courseName}` : ''}`
+          });
+        } else if (allTopics.length > 0) {
+          actions.push({
+            icon: GraduationScrollIcon,
+            label: "Study Help",
+            action: `help me understand ${allTopics[0]}`
+          });
+        }
+        
+        // Curated question 3: Cross-course question or study strategy
+        if (courseNames.length > 1) {
+          actions.push({
+            icon: Brain01Icon,
+            label: "Study Strategy",
+            action: `help me balance studying for ${courseNames.slice(0, 2).join(' and ')}`
+          });
+        } else if (allTopics.length > 0) {
+          actions.push({
+            icon: GraduationScrollIcon,
+            label: "Study Help",
+            action: `explain ${allTopics[0]}`
+          });
+        }
+        
+        // Curated question 4: General AI capability (chart/visualization)
+        actions.push({
+          icon: AnalyticsUpIcon,
+          label: "Create Chart",
+          action: "help me create a chart or graph"
+        });
+        
+        return actions;
+      } else {
+        // No classes - show general starter buttons for what AI can do
+        return [
+          { icon: SparklesIcon, label: "Ask AI", action: "help me understand calculus" },
+          { icon: GraduationScrollIcon, label: "Study Help", action: "explain photosynthesis" },
+          { icon: AnalyticsUpIcon, label: "Create Chart", action: "graph y = x²" },
+          { icon: ChartBarLineIcon, label: "Visualize Data", action: "create a bar chart showing: Math 85, Science 90, English 78" }
+        ];
+      }
     }
   };
 

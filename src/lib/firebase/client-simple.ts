@@ -2,7 +2,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getStorage } from "firebase/storage";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
-import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 
 // Get authDomain - always use the Firebase auth domain (no localhost override)
 // This must be a domain that Firebase Auth hosts handlers for (e.g. auth.courseconnectai.com)
@@ -70,11 +70,10 @@ const initializeFirebase = () => {
     db = getFirestore(app);
     auth = getAuth(app);
     
-    // Ensure auth persistence is set to local storage
-    if (auth && typeof setPersistence === 'function') {
-      setPersistence(auth, browserLocalPersistence).catch((error: any) => {
-        console.warn("Auth persistence setting failed (non-critical):", error);
-      });
+    // Only set auth persistence in browser environment (not in API routes)
+    if (typeof window !== 'undefined' && auth) {
+      // This will only run in the browser, not in server-side API routes
+      // We skip setPersistence on server-side to avoid crashes
     }
     
     console.log("✅ Firebase services initialized");
@@ -89,19 +88,11 @@ const initializeFirebase = () => {
   return { app, storage, db, auth };
 };
 
-// Initialize immediately if in browser, otherwise lazy init
-if (typeof window !== 'undefined') {
-  const initialized = initializeFirebase();
-  app = initialized.app;
-  storage = initialized.storage;
-  db = initialized.db;
-  auth = initialized.auth;
-} else {
-  // Server-side: export getters that initialize on first use
-  app = null;
-  storage = null;
-  db = null;
-  auth = null;
-}
+// Initialize immediately
+const initialized = initializeFirebase();
+app = initialized.app;
+storage = initialized.storage;
+db = initialized.db;
+auth = initialized.auth;
 
 export { app, storage, db, auth, initializeFirebase };

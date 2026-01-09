@@ -212,22 +212,30 @@ Start your response with empathy and understanding. Acknowledge their frustratio
             // Stream chunks immediately as they come from AI - no buffering, no delays
             fullAnswer += chunk;
             
-            // Send chunk directly to client - let it stream naturally
-            // CRITICAL: Flush immediately for Vercel/production
-            try {
-              const chunkData = encoder.encode(JSON.stringify({
-                type: 'content',
-                content: chunk
-              }) + '\n');
-              
-              controller.enqueue(chunkData);
-              
-              // Force flush on Vercel by yielding control (allows nginx to send chunk)
-              // This ensures chunks are sent immediately instead of being buffered
-              await new Promise(resolve => setTimeout(resolve, 0));
-            } catch (enqueueError) {
-              // If controller is closed, stop streaming
-              console.warn('Stream controller closed:', enqueueError);
+            // CRITICAL: Always split chunks into words for consistent word-by-word streaming
+            // This ensures both general chat and class chats stream the same way
+            // Split on whitespace but preserve spaces for proper word boundaries
+            const words = chunk.split(/(\s+)/).filter((w: string) => w.length > 0);
+            
+            // Send each word individually for smooth word-by-word display
+            for (const word of words) {
+              if (word) { // Skip empty strings
+                try {
+                  const chunkData = encoder.encode(JSON.stringify({
+                    type: 'content',
+                    content: word
+                  }) + '\n');
+                  
+                  controller.enqueue(chunkData);
+                  
+                  // Small delay between words for visible word-by-word streaming
+                  await new Promise(resolve => setTimeout(resolve, 0));
+                } catch (enqueueError) {
+                  // If controller is closed, stop streaming
+                  console.warn('Stream controller closed:', enqueueError);
+                  break;
+                }
+              }
             }
           });
 

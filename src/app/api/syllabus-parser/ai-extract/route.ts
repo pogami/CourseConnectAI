@@ -41,6 +41,17 @@ CRITICAL DATE EXTRACTION RULES:
   * Assignment schedules, exam schedules, calendar sections, timeline sections
 - Be thorough - scan the entire document for dates, not just obvious sections
 
+CRITICAL CLASS TIME & LOCATION EXTRACTION RULES:
+- For schedule items: Extract meeting days, times, and locations from the schedule section
+- If the course is asynchronous/online/async, the schedule should indicate this and classTime should be "Asynchronous" or "Async" or "Online"
+- Look for keywords: "asynchronous", "async", "online", "remote", "virtual", "no meeting times", "self-paced"
+- If class has specific meeting times, extract them exactly (e.g., "MWF 9:00 AM - 9:50 AM", "T/Th 2:00 PM - 3:30 PM")
+- For location: Extract the building and room number if available (e.g., "Science Building Room 201", "Langdale Hall 300")
+- If the course is async/online, location should be "Online"
+- If no location is found and course is not async, use "Not specified" or "Not found"
+- Look for location patterns: "Room", "Building", "Hall", "Campus", "Location:", "Meets in:", "Classroom:"
+- Combine multiple schedule items if the class meets multiple times per week
+
 Extract the following information and return as JSON:
 
 {
@@ -51,7 +62,9 @@ Extract the following information and return as JSON:
     "semester": "Semester name or null",
     "year": "Academic year or null",
     "courseCode": "Course code or null",
-    "department": "Department name or null"
+    "department": "Department name or null",
+    "classTime": "string describing meeting days/times, 'Asynchronous'/'Async'/'Online' for async courses, or null (extract from schedule)",
+    "location": "string with building and room if IRL, 'Online' if async, 'Not specified' or 'Not found' if none (extract from schedule)"
   },
   "schedule": [
     {

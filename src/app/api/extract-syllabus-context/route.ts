@@ -48,6 +48,16 @@ CRITICAL DATE EXTRACTION RULES:
   * "Exam on [date]", "Test on [date]", "Midterm: [date]"
   * Assignment schedules, exam schedules, calendar sections
 
+CRITICAL CLASS TIME & LOCATION EXTRACTION RULES:
+- For classTime: Extract the actual meeting days and times (e.g., "Monday/Wednesday 2:00 PM - 3:30 PM", "Tuesday/Thursday 10:00 AM - 11:30 AM")
+- If the course is asynchronous/online/async, classTime should be "Asynchronous" or "Async" or "Online"
+- Look for keywords: "asynchronous", "async", "online", "remote", "virtual", "no meeting times", "self-paced"
+- If class has specific meeting times, extract them exactly (e.g., "MWF 9:00 AM - 9:50 AM", "T/Th 2:00 PM - 3:30 PM")
+- For location: Extract the building and room number if available (e.g., "Science Building Room 201", "Langdale Hall 300")
+- If the course is async/online, location should be "Online"
+- If no location is found and course is not async, use "Not specified" or "Not found"
+- Look for location patterns: "Room", "Building", "Hall", "Campus", "Location:", "Meets in:", "Classroom:"
+
 JSON format:
 {
   "courseName": "string or null",
@@ -56,7 +66,8 @@ JSON format:
   "university": "string or null",
   "semester": "string or null",
   "year": "string or null",
-  "classTime": "string describing meeting days/times or null",
+  "classTime": "string describing meeting days/times, 'Asynchronous'/'Async'/'Online' for async courses, or null",
+  "location": "string with building and room if IRL, 'Online' if async, 'Not specified' or 'Not found' if none",
   "department": "string or null",
   "topics": ["array of strings"],
   "assignments": [{"name": "string", "dueDate": "YYYY-MM-DD or null"}],
@@ -146,6 +157,7 @@ JSON:`;
         semester: null,
         year: null,
         classTime: null,
+        location: null,
         department: null,
         topics: [],
         assignments: [],
@@ -176,6 +188,7 @@ JSON:`;
         semester: null,
         year: null,
         classTime: null,
+        location: null,
         department: null,
         topics: [],
         assignments: [],

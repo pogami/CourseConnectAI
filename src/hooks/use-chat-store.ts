@@ -265,7 +265,32 @@ export function flushAllPendingWrites() {
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      // Migration: Fix chats loaded from storage that have courseData but no chatType
+      const migrateChatTypes = (state: ChatState) => {
+        const migratedChats = { ...state.chats };
+        let needsUpdate = false;
+        
+        Object.keys(migratedChats).forEach(chatId => {
+          const chat = migratedChats[chatId];
+          // If chat has courseData but no chatType, set it to 'class'
+          if (chat.courseData && !chat.chatType) {
+            console.log(`🔧 Migrating chat ${chatId}: Adding chatType 'class' (has courseData)`);
+            migratedChats[chatId] = {
+              ...chat,
+              chatType: 'class'
+            };
+            needsUpdate = true;
+          }
+        });
+        
+        if (needsUpdate) {
+          return { ...state, chats: migratedChats };
+        }
+        return state;
+      };
+      
+      return {
       chats: {},
       currentTab: undefined,
       showUpgrade: false,
@@ -288,6 +313,19 @@ export const useChatStore = create<ChatState>()(
           const currentChats = get().chats;
           let needsUpdate = false;
           const updatedChats = { ...currentChats };
+          
+          // CRITICAL: Fix chats with courseData but no chatType
+          Object.keys(updatedChats).forEach(chatId => {
+            const chat = updatedChats[chatId];
+            if (chat.courseData && !chat.chatType) {
+              console.log(`🔧 Migrating chat ${chatId}: Adding chatType 'class' (has courseData)`);
+              updatedChats[chatId] = {
+                ...chat,
+                chatType: 'class'
+              };
+              needsUpdate = true;
+            }
+          });
           
           Object.keys(updatedChats).forEach(chatId => {
             const chat = updatedChats[chatId];
@@ -462,17 +500,49 @@ export const useChatStore = create<ChatState>()(
               // User is signed in.
               console.log("User signed in, loading chats...");
               
+              // CRITICAL: Check for protected chats BEFORE clearing anything
+              let protectedChats: Record<string, any> = {};
+              if (typeof window !== 'undefined') {
+                try {
+                  const protectedChatsData = sessionStorage.getItem('cc-protected-chats');
+                  if (protectedChatsData) {
+                    protectedChats = JSON.parse(protectedChatsData);
+                    console.log('🛡️ Found protected chats:', Object.keys(protectedChats));
+                  }
+                } catch (e) {
+                  console.warn('Failed to load protected chats:', e);
+                }
+              }
+              
               // CRITICAL: Only clear guest data if this is a REAL authenticated user (not anonymous)
               // Anonymous users are still guests and should keep their guest data
               const isRealUser = !user.isAnonymous && user.email;
+              const wasGuest = get().isGuest;
               
-              if (isRealUser && typeof window !== 'undefined') {
-                // Only clear guest data for real authenticated users
+              if (isRealUser && wasGuest && typeof window !== 'undefined') {
+                // Only clear guest data ONCE when transitioning from guest to real user
+                // BUT preserve protected chats
+                console.log('🧹 Clearing guest data for first-time real user sign-in');
                 localStorage.removeItem('uploaded-syllabi');
-                // Clear guest chat storage
+                // Clear guest chat storage BUT preserve protected chats
+                const currentChats = get().chats;
+                const chatsToPreserve: Record<string, Chat> = {};
+                
+                // Preserve protected chats
+                Object.entries(protectedChats).forEach(([id, data]: [string, any]) => {
+                  if (currentChats[id]) {
+                    chatsToPreserve[id] = currentChats[id];
+                    console.log(`🛡️ Preserving protected chat during guest cleanup: ${id}`);
+                  }
+                });
+                
                 localStorage.removeItem('chat-storage');
                 localStorage.removeItem('cc-chat-store');
-                localStorage.removeItem('cc-active-tab');
+                // Don't clear cc-active-tab if it's a protected chat
+                const activeTab = localStorage.getItem('cc-active-tab');
+                if (activeTab && !protectedChats[activeTab]) {
+                  localStorage.removeItem('cc-active-tab');
+                }
                 // Clear guest notifications
                 localStorage.removeItem('guest-notifications');
                 localStorage.removeItem('guestUser');
@@ -482,7 +552,7 @@ export const useChatStore = create<ChatState>()(
                     localStorage.removeItem(key);
                   }
                 });
-                console.log('✅ Cleared all guest data from localStorage (real user signed in)');
+                console.log('✅ Cleared all guest data from localStorage');
               } else if (user.isAnonymous) {
                 // Anonymous user - preserve guest data in localStorage
                 console.log('Anonymous user detected, preserving guest data');
@@ -490,12 +560,25 @@ export const useChatStore = create<ChatState>()(
               
               // Only clear guest chats and switch to user-specific chat for REAL authenticated users
               // (reuse isRealUser from above)
-              if (isRealUser) {
-                // Clear guest chats from store state for real users
+              if (isRealUser && wasGuest) {
+                // ONLY clear guest chats if we are actually switching from guest to real user
+                // BUT preserve protected chats
+                console.log('🔄 Transitioning from guest to real user, clearing guest chats');
+                
+                // Preserve protected chats
+                const currentChats = get().chats;
+                const chatsToPreserve: Record<string, Chat> = {};
+                Object.entries(protectedChats).forEach(([id, data]: [string, any]) => {
+                  if (currentChats[id]) {
+                    chatsToPreserve[id] = currentChats[id];
+                    console.log(`🛡️ Preserving protected chat during transition: ${id}`);
+                  }
+                });
+                
                 set({ 
                   isGuest: false, 
                   isStoreLoading: false,
-                  chats: {} // Clear all chats - will be reloaded from Firestore
+                  chats: chatsToPreserve // Only preserve protected chats, not all chats
                 });
                 
                 // Create user-specific private general chat
@@ -515,6 +598,10 @@ export const useChatStore = create<ChatState>()(
                 // Subscribe to user-specific chat
                 get().subscribeToChat(privateGeneralChatId);
                 console.log(`✅ Switched to user-specific chat: ${privateGeneralChatId}`);
+              } else if (isRealUser) {
+                // Already a real user, just ensure isGuest is false
+                set({ isGuest: false, isStoreLoading: false });
+                console.log('✅ User already authenticated, keeping current chats');
               } else if (user.isAnonymous) {
                 // Anonymous user - keep guest mode and preserve guest data
                 set({ 
@@ -570,20 +657,90 @@ export const useChatStore = create<ChatState>()(
                              chatsToLoad[chatId] = { ...chatData, id: chatId, chatType };
                          }
                     }
-                    // CRITICAL: Clear guest chats before loading user chats to prevent data leakage
-                    // Only keep public-general-chat if it exists, clear all other guest chats
+                    // CRITICAL: MERGE strategy - preserve ALL local chats and add server chats
+                    // This prevents newly created chats from being deleted during sync
                     const currentState = get();
-                    const cleanedChats: Record<string, Chat> = {};
                     
-                    // Only preserve public-general-chat (if it exists)
-                    if (currentState.chats['public-general-chat']) {
-                      cleanedChats['public-general-chat'] = currentState.chats['public-general-chat'];
+                    // Filter out only guest-specific chats (keep all user chats including newly created ones)
+                    const localUserChats: Record<string, Chat> = {};
+                    Object.entries(currentState.chats).forEach(([id, chat]) => {
+                      // Keep public-general-chat (always)
+                      if (id === 'public-general-chat') {
+                        localUserChats[id] = chat;
+                      }
+                      // Keep all class chats (these are user's courses) - CRITICAL for newly created course chats
+                      else if (chat.chatType === 'class') {
+                        localUserChats[id] = chat;
+                        console.log(`🛡️ Preserving class chat during sync: ${id}`, { 
+                          hasCourseData: !!chat.courseData,
+                          messageCount: chat.messages?.length || 0 
+                        });
+                      }
+                      // Keep user's private general chat
+                      else if (id === `private-general-chat-${user.uid}`) {
+                        localUserChats[id] = chat;
+                      }
+                      // Keep any chat that has courseData or userId matching the current user
+                      else if (chat.courseData || (chat as any).userId === user.uid) {
+                        localUserChats[id] = chat;
+                        console.log(`🛡️ Preserving chat with courseData/userId during sync: ${id}`);
+                      }
+                    });
+                    
+                    // MERGE: Combine local chats with server chats
+                    // CRITICAL: For recently created chats (within 30 seconds), local wins over server
+                    const now = Date.now();
+                    const mergedChats: Record<string, Chat> = { ...localUserChats };
+                    
+                    // Check sessionStorage for protected chats that might have been lost
+                    if (typeof window !== 'undefined') {
+                        try {
+                            const protectedChats = JSON.parse(sessionStorage.getItem('cc-protected-chats') || '{}');
+                            Object.entries(protectedChats).forEach(([id, protectedData]: [string, any]) => {
+                                const protectionAge = now - (protectedData.timestamp || 0);
+                                if (protectionAge < 60000 && !mergedChats[id]) { // Within 60 seconds
+                                    console.log(`🛡️ Restoring protected chat ${id} from sessionStorage`);
+                                    const chatData = protectedData.chatData;
+                                    // Remove the _newlyCreated flag
+                                    const { _newlyCreated, ...cleanChatData } = chatData;
+                                    mergedChats[id] = cleanChatData as Chat;
+                                }
+                            });
+                        } catch (e) {
+                            console.warn('Failed to restore protected chats:', e);
+                        }
                     }
                     
-                    // Load only user's chats (these are already filtered by userId in Firestore)
-                    const userChats = { ...cleanedChats, ...chatsToLoad };
-                    set({ chats: userChats, isStoreLoading: false });
-                    console.log('✅ Cleared guest chats, loaded user chats only:', Object.keys(userChats));
+                    // Add server chats, but don't overwrite recently created local chats
+                    Object.entries(chatsToLoad).forEach(([id, serverChat]) => {
+                      const localChat = localUserChats[id];
+                      
+                      // If local chat exists and was created recently (within 30 seconds), keep local version
+                      if (localChat) {
+                        const chatAge = now - (localChat.createdAt || 0);
+                        const isRecentlyCreated = chatAge < 30000; // 30 seconds
+                        const isProtected = (localChat as any)._newlyCreated && (now - (localChat as any)._newlyCreated) < 60000;
+                        
+                        if (isRecentlyCreated || isProtected) {
+                          console.log(`🛡️ Keeping local chat ${id} over server (created ${Math.round(chatAge / 1000)}s ago, protected: ${isProtected})`);
+                          // Keep local version
+                          return;
+                        }
+                      }
+                      
+                      // Otherwise, use server version (or add if new)
+                      mergedChats[id] = serverChat;
+                    });
+                    
+                    const currentChatCount = Object.keys(currentState.chats).length;
+                    const localCount = Object.keys(localUserChats).length;
+                    const serverCount = Object.keys(chatsToLoad).length;
+                    const finalCount = Object.keys(mergedChats).length;
+                    
+                    console.log(`📊 Chat sync: Local: ${currentChatCount} → Filtered: ${localCount}, Server: ${serverCount}, Final: ${finalCount}`);
+                    
+                    set({ chats: mergedChats, isStoreLoading: false });
+                    console.log('✅ Sidebar synced (preserved local chats + merged server chats)');
                 } else {
                      // Don't overwrite existing chats if user has no Firestore chats yet
                      const currentState = get();
@@ -710,18 +867,21 @@ export const useChatStore = create<ChatState>()(
         console.log('User authenticated, persisting chat to Firestore:', user.uid);
 
         // Optimistically update local state first
+        const now = Date.now();
         const newChatData = {
             id: chatId,
             title: chatName,
             messages: [safeInitialMessage],
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+            createdAt: now,
+            updatedAt: now,
             chatType: chatType || (courseData ? 'class' : 'private'), // FAILSAFE: Ensure chatType is set
-            courseData
+            courseData,
+            // Mark as newly created for protection during sync (will be removed after 30 seconds)
+            _newlyCreated: now
         };
         
         set((state) => {
-            console.log('Adding chat to local state:', { chatId, chatName, chatType: newChatData.chatType });
+            console.log('Adding chat to local state:', { chatId, chatName, chatType: newChatData.chatType, timestamp: now });
             return {
                 chats: {
                     ...state.chats,
@@ -730,6 +890,31 @@ export const useChatStore = create<ChatState>()(
                 currentTab: chatId
             };
         });
+        
+        // Store in sessionStorage as backup to restore if lost during sync
+        if (typeof window !== 'undefined') {
+            try {
+                const protectedChats = JSON.parse(sessionStorage.getItem('cc-protected-chats') || '{}');
+                protectedChats[chatId] = {
+                    timestamp: now,
+                    chatData: newChatData
+                };
+                sessionStorage.setItem('cc-protected-chats', JSON.stringify(protectedChats));
+                
+                // Clean up after 60 seconds
+                setTimeout(() => {
+                    try {
+                        const current = JSON.parse(sessionStorage.getItem('cc-protected-chats') || '{}');
+                        delete current[chatId];
+                        sessionStorage.setItem('cc-protected-chats', JSON.stringify(current));
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                }, 60000);
+            } catch (e) {
+                console.warn('Failed to store protected chat:', e);
+            }
+        }
         
         // Verify the chat was added correctly
         const addedChat = get().chats[chatId];
@@ -774,11 +959,33 @@ export const useChatStore = create<ChatState>()(
             }
             
             const userDocRef = doc(db as Firestore, 'users', user.uid);
-            await updateDoc(userDocRef, {
+            // Use setDoc with merge: true instead of updateDoc to handle cases where user doc might not exist yet
+            await setDoc(userDocRef, {
                 chats: arrayUnion(chatId)
-            });
+            }, { merge: true });
+            
+            // CRITICAL: Verify the chat ID was added to user's chats array
+            // This ensures the sync process will find it
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+              const userData = userDocSnap.data();
+              const userChatIds = userData.chats || [];
+              if (!userChatIds.includes(chatId)) {
+                console.warn('⚠️ Chat ID not in user array, retrying...');
+                // Retry once
+                await setDoc(userDocRef, {
+                  chats: arrayUnion(chatId)
+                }, { merge: true });
+              } else {
+                console.log('✅ Chat ID confirmed in user profile:', chatId);
+              }
+            }
 
-            // Start realtime subscription
+            // CRITICAL: Wait a moment before subscribing to ensure Firestore write is complete
+            // This prevents the snapshot from overwriting the newly created chat with incomplete data
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Start realtime subscription (with protection against overwriting newly created chats)
             await get().subscribeToChat(chatId);
         } catch (error) {
             // Only log non-offline errors to reduce noise
@@ -1051,6 +1258,48 @@ export const useChatStore = create<ChatState>()(
               
               console.log(`Received ${allMessages.length} total messages, showing ${filteredMessages.length} for ${chatId}`);
               
+              // Deduplicate messages by ID first, then by content+timestamp for bot messages
+              const seenIds = new Set<string>();
+              const deduplicatedMessages = filteredMessages.filter((msg: any, index: number) => {
+                const messageId = msg.id || `fallback-${index}-${msg.timestamp}`;
+                
+                // Skip if we've seen this ID before
+                if (seenIds.has(messageId)) {
+                  console.log(`Deduplicating message by ID: ${messageId}`);
+                  return false;
+                }
+                
+                // For bot messages, also check for duplicate content within a short time window
+                if (msg.sender === 'bot' || msg.role === 'assistant') {
+                  const msgText = typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text);
+                  const msgTimestamp = msg.timestamp || 0;
+                  
+                  // Check if there's another message with same content within 5 seconds
+                  const duplicate = filteredMessages.find((other: any, otherIndex: number) => {
+                    if (otherIndex === index) return false;
+                    const otherId = other.id || `fallback-${otherIndex}-${other.timestamp}`;
+                    if (seenIds.has(otherId)) return false; // Already processed
+                    
+                    const otherText = typeof other.text === 'string' ? other.text : JSON.stringify(other.text);
+                    const otherTimestamp = other.timestamp || 0;
+                    const timeDiff = Math.abs(msgTimestamp - otherTimestamp);
+                    
+                    // Same content and within 5 seconds = duplicate
+                    return otherText === msgText && timeDiff < 5000 && (other.sender === 'bot' || other.role === 'assistant');
+                  });
+                  
+                  if (duplicate) {
+                    console.log(`Deduplicating bot message by content: ${messageId} (duplicate found)`);
+                    return false;
+                  }
+                }
+                
+                seenIds.add(messageId);
+                return true;
+              });
+              
+              console.log(`After deduplication: ${deduplicatedMessages.length} messages for ${chatId}`);
+              
               // SAFETY CHECK: Ensure chatType is set (for backward compatibility with old chats)
               let chatType = data.chatType;
               if (!chatType) {
@@ -1066,17 +1315,75 @@ export const useChatStore = create<ChatState>()(
                 console.log(`⚠️ Chat ${chatId} missing chatType, inferred as: ${chatType}`);
               }
               
-              set((state) => ({
-                chats: {
-                  ...state.chats,
-                  [chatId]: {
-                    id: chatId,
-                    ...data,
-                    chatType,
-                    messages: filteredMessages
+              set((state) => {
+                // CRITICAL: Preserve local chat if it exists and Firestore data is incomplete
+                // This prevents newly created chats from being overwritten with empty/incomplete data
+                const existingLocalChat = state.chats[chatId];
+                
+                // If local chat exists, check if we should preserve it
+                if (existingLocalChat) {
+                  const localMessageCount = existingLocalChat.messages?.length || 0;
+                  const firestoreMessageCount = deduplicatedMessages.length;
+                  
+                  // Calculate chat age - if created within last 10 seconds, it's very new
+                  const chatAge = Date.now() - (existingLocalChat.createdAt || 0);
+                  const isVeryRecentlyCreated = chatAge < 10000; // 10 seconds
+                  
+                  // Also check if local chat has courseData (class chats)
+                  const hasLocalCourseData = !!existingLocalChat.courseData;
+                  const hasFirestoreCourseData = !!data.courseData;
+                  
+                  // Preserve local chat if:
+                  // 1. It was created very recently (within 10 seconds)
+                  // 2. It has messages and Firestore doesn't
+                  // 3. It has courseData and Firestore doesn't (newly created class chat)
+                  if (isVeryRecentlyCreated || 
+                      (localMessageCount > 0 && firestoreMessageCount === 0) ||
+                      (hasLocalCourseData && !hasFirestoreCourseData)) {
+                    console.log(`🛡️ Preserving local chat ${chatId}`, {
+                      isVeryRecentlyCreated,
+                      localMessageCount,
+                      firestoreMessageCount,
+                      hasLocalCourseData,
+                      hasFirestoreCourseData,
+                      chatAge: `${Math.round(chatAge / 1000)}s`
+                    });
+                    // Merge Firestore data with local data, but prioritize local data for new chats
+                    return {
+                      chats: {
+                        ...state.chats,
+                        [chatId]: {
+                          ...existingLocalChat,
+                          // Keep local messages if chat is very new or has more messages
+                          messages: (isVeryRecentlyCreated || localMessageCount > firestoreMessageCount)
+                            ? existingLocalChat.messages
+                            : deduplicatedMessages,
+                          chatType: existingLocalChat.chatType || chatType,
+                          // Always preserve courseData from local if it exists (critical for class chats)
+                          courseData: existingLocalChat.courseData || data.courseData,
+                          // Preserve other local properties
+                          title: existingLocalChat.title || data.title,
+                          createdAt: existingLocalChat.createdAt || data.createdAt,
+                          updatedAt: Math.max(existingLocalChat.updatedAt || 0, data.updatedAt || 0)
+                        }
+                      }
+                    };
                   }
                 }
-              }));
+                
+                // Otherwise, use Firestore data (normal sync)
+                return {
+                  chats: {
+                    ...state.chats,
+                    [chatId]: {
+                      id: chatId,
+                      ...data,
+                      chatType,
+                      messages: deduplicatedMessages
+                    }
+                  }
+                };
+              });
             }
           }, (error) => {
             console.warn('onSnapshot error for chat', chatId, error);
@@ -1725,8 +2032,9 @@ export const useChatStore = create<ChatState>()(
             },
           };
         });
-      },
-    }),
+      }
+      }
+    },
     {
       name: 'chat-storage', // This will now store guest chats
       storage: createJSONStorage(() => {

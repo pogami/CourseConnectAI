@@ -49,8 +49,11 @@ service cloud.firestore {
         chatId == 'private-general-chat-' + request.auth.uid
       );
       // Allow update only if user owns it or it's public/guest/user's private general
+      // Also allow if chat doesn't have userId yet (for migration) and user is authenticated
       allow update: if isSignedIn() && (
         (resource.data.userId != null && resource.data.userId == request.auth.uid) ||
+        (!('userId' in resource.data) && request.resource.data.userId == request.auth.uid) || // Migration: allow setting userId if field doesn't exist
+        (resource.data.userId == null && request.resource.data.userId == request.auth.uid) || // Migration: allow setting userId if null
         chatId == 'public-general-chat' ||
         chatId == 'private-general-chat-guest' ||
         chatId == 'private-general-chat-' + request.auth.uid
@@ -139,6 +142,11 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isSignedIn();
       allow delete: if isSignedIn();
+    }
+
+    // Course feeds
+    match /courseFeeds/{feedId} {
+      allow read, write: if true; // Allow API access
     }
     
     // Study schedules

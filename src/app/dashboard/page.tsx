@@ -306,7 +306,26 @@ export default function DashboardPage() {
   
   // Get real-time dashboard stats
   const { stats, isLoading: statsLoading, refreshStats } = useDashboardStats(user);
+  const [localCompletedCount, setLocalCompletedCount] = useState<number | null>(null);
   const showTopicsReview = process.env.NEXT_PUBLIC_SHOW_TOPICS_REVIEW === 'true';
+  
+  // Calculate completed count from chats (for immediate UI update)
+  useEffect(() => {
+    if (localCompletedCount === null) {
+      // Initialize from chats
+      let count = 0;
+      Object.values(chats).forEach((chat: any) => {
+        if (chat.chatType !== 'class' || !chat.courseData) return;
+        (chat.courseData.assignments || []).forEach((a: any) => {
+          if (a?.status === 'Completed') count++;
+        });
+        (chat.courseData.exams || []).forEach((e: any) => {
+          if (e?.status === 'Completed') count++;
+        });
+      });
+      setLocalCompletedCount(count);
+    }
+  }, [chats, localCompletedCount]);
   
   // Create welcome notifications for new users
   useEffect(() => {
@@ -654,7 +673,7 @@ export default function DashboardPage() {
                   <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Done</p>
                 </div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">
-                  {statsLoading ? '...' : stats.assignmentsCompleted}
+                  {statsLoading ? '...' : (localCompletedCount !== null ? localCompletedCount : stats.assignmentsCompleted)}
                 </p>
               </div>
             </CardContent>
@@ -701,7 +720,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Agenda - Timeline View */}
-        <DashboardAgenda />
+        <DashboardAgenda onCompletionChange={(count) => setLocalCompletedCount(count)} />
 
 
         {/* Topics to Review (lightweight, signal-driven) */}

@@ -154,6 +154,14 @@ export default function CourseDetailPage() {
                             <p className="text-gray-900 dark:text-gray-100">{course.courseData?.professor || 'TBA'}</p>
                           </div>
                           <div>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Class Time:</p>
+                            <p className="text-gray-900 dark:text-gray-100">{course.courseData?.classTime || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Location:</p>
+                            <p className="text-gray-900 dark:text-gray-100">{course.courseData?.location || 'Not specified'}</p>
+                          </div>
+                          <div>
                             <p className="font-semibold text-gray-600 dark:text-gray-400">Credits:</p>
                             <p className="text-gray-900 dark:text-gray-100">3</p>
                           </div>

@@ -1,77 +1,37 @@
-"use strict";
-// Polyfill Buffer for Node environment (needed for worker processes)
-if (typeof global.Buffer === 'undefined') {
-  global.Buffer = require('buffer').Buffer;
-}
-const buffer = require('buffer');
-if (!buffer.SlowBuffer) {
-  buffer.SlowBuffer = buffer.Buffer;
-}
+// localStorage polyfill for Node.js/SSR
+// Provides a simple in-memory storage implementation
 
-// Minimal localStorage polyfill for Node/SSR usage.
-// Provides getItem/setItem/removeItem/clear/key/length.
-if (typeof globalThis.localStorage === "undefined" || typeof globalThis.localStorage.getItem !== "function") {
-  const store = new Map();
-
-  const polyfill = {
-    getItem(key) {
-      return store.has(key) ? store.get(key) : null;
+if (typeof global !== 'undefined' && typeof global.localStorage === 'undefined') {
+  const storage = new Map();
+  
+  global.localStorage = {
+    getItem: (key) => {
+      return storage.get(String(key)) || null;
     },
-    setItem(key, value) {
-      store.set(key, String(value));
+    setItem: (key, value) => {
+      storage.set(String(key), String(value));
     },
-    removeItem(key) {
-      store.delete(key);
+    removeItem: (key) => {
+      storage.delete(String(key));
     },
-    clear() {
-      store.clear();
-    },
-    key(index) {
-      return Array.from(store.keys())[index] ?? null;
+    clear: () => {
+      storage.clear();
     },
     get length() {
-      return store.size;
+      return storage.size;
     },
+    key: (index) => {
+      const keys = Array.from(storage.keys());
+      return keys[index] || null;
+    }
   };
-
-  globalThis.localStorage = polyfill;
 }
 
-module.exports = globalThis.localStorage;
-"use strict";
-
-// Minimal localStorage polyfill for Node/SSR
-const store = new Map();
-
-const localStorage = {
-  getItem: (key) => {
-    const v = store.get(String(key));
-    return v === undefined ? null : v;
-  },
-  setItem: (key, value) => {
-    store.set(String(key), String(value));
-  },
-  removeItem: (key) => {
-    store.delete(String(key));
-  },
-  clear: () => {
-    store.clear();
-  },
-  key: (index) => {
-    const keys = Array.from(store.keys());
-    return keys[index] ?? null;
-  },
-  get length() {
-    return store.size;
-  },
-};
-
-if (typeof globalThis.localStorage === "undefined" || typeof globalThis.localStorage.getItem !== "function") {
-  Object.defineProperty(globalThis, "localStorage", {
-    value: localStorage,
-    writable: false,
-    configurable: false,
-    enumerable: true,
-  });
+// Also set for window if in browser-like environment
+if (typeof window !== 'undefined' && typeof window.localStorage === 'undefined') {
+  window.localStorage = global.localStorage;
 }
+
+module.exports = global.localStorage;
+
 

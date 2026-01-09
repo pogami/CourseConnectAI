@@ -16,6 +16,7 @@ import {
   Book01Icon,
   Camera01Icon
 } from "hugeicons-react";
+import { MessageSquare } from "lucide-react";
 import { GlobalCommandMenu } from "@/components/global-command-menu";
 import {
   SidebarProvider,
@@ -506,9 +507,9 @@ export default function DashboardLayout({
 
 
   return (
-    <SidebarProvider className="bg-white dark:bg-gray-950 min-h-screen">
-        <Sidebar className="sm:translate-x-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50 shadow-xl">
-          <SidebarHeader className="group-data-[collapsible=icon]:justify-center p-6 border-b border-gray-100 dark:border-gray-800">
+    <SidebarProvider className="bg-white dark:bg-background min-h-screen">
+        <Sidebar className="sm:translate-x-0 bg-white dark:bg-sidebar border-r border-gray-200/50 dark:border-sidebar-border shadow-xl">
+          <SidebarHeader className="group-data-[collapsible=icon]:justify-center p-6 border-b border-gray-100 dark:border-sidebar-border bg-white dark:bg-transparent">
              <Link href="/home" className="flex items-center gap-3 hover:opacity-80 transition-all duration-200">
                 <Image 
                   src="/pageicon.png?v=4"
@@ -522,7 +523,7 @@ export default function DashboardLayout({
                 </span>
              </Link>
           </SidebarHeader>
-          <SidebarContent>
+          <SidebarContent className="bg-white dark:bg-transparent">
             <SidebarMenu className="space-y-2 p-4">
               {/* Home */}
               <SidebarMenuItem>
@@ -540,7 +541,7 @@ export default function DashboardLayout({
               </SidebarMenuItem>
 
               {/* Divider */}
-              <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+              <div className="border-t border-gray-200 dark:border-sidebar-border my-4" />
 
               {/* My Courses Section */}
               <div className="px-4 py-2">
@@ -584,7 +585,10 @@ export default function DashboardLayout({
               })()}
 
               {/* List courses from chats (class chats) */}
-              {Object.values(chats).filter((chat: any) => chat.chatType === 'class').map((chat: any) => (
+              {Object.values(chats).filter((chat: any) => {
+                // Show if it has chatType 'class' OR has courseData (legacy support)
+                return chat.chatType === 'class' || !!chat.courseData;
+              }).map((chat: any) => (
                 <SidebarMenuItem key={chat.id}>
                   <Link 
                     href={`/dashboard/chat?tab=${encodeURIComponent(chat.id)}`}
@@ -657,7 +661,7 @@ export default function DashboardLayout({
               ))}
               
               {/* View All Courses Link - Only show if more than 5 courses */}
-              {Object.values(chats).filter((chat: any) => chat.chatType === 'class').length > 5 && (
+              {Object.values(chats).filter((chat: any) => chat.chatType === 'class' || !!chat.courseData).length > 5 && (
                 <SidebarMenuItem>
                   <Link 
                     href="/dashboard/overview"
@@ -704,6 +708,27 @@ export default function DashboardLayout({
                   <span className="font-medium text-sm">Classes Overview</span>
                 </Link>
               </SidebarMenuItem>
+              
+              {/* COURSE FEED - COMMENTED OUT */}
+              {/* <SidebarMenuItem>
+                <Link 
+                  href="/dashboard/course-feeds"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
+                    isActive("/dashboard/course-feeds") 
+                      ? "bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" 
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                  }`}
+                >
+                  <div className={`p-2 rounded-md transition-all duration-200 ${
+                    isActive("/dashboard/course-feeds") 
+                      ? "bg-purple-100 dark:bg-purple-900/50" 
+                      : "bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
+                  }`}>
+                    <MessageSquare className="size-4" />
+                  </div>
+                  <span className="font-medium text-sm">Course Feeds</span>
+                </Link>
+              </SidebarMenuItem> */}
               
               <SidebarMenuItem>
                 <Link 
@@ -790,7 +815,7 @@ export default function DashboardLayout({
               )} */}
             </SidebarMenu>
           </SidebarContent>
-          <SidebarFooter className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950">
+          <SidebarFooter className="p-4 border-t border-gray-100 dark:border-sidebar-border bg-white dark:bg-transparent">
             <div className="flex flex-col items-center justify-center gap-1.5 py-2">
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100/50 dark:border-blue-900/30">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />

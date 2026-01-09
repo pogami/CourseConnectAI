@@ -161,7 +161,15 @@ export default function ChatPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [streamingResponse, setStreamingResponse] = useState("");
     const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+    const [streamingStartTime, setStreamingStartTime] = useState<number | null>(null);
     const [isStreamingComplete, setIsStreamingComplete] = useState(false);
+    // Track when streaming is actively updating to prevent premature clearing
+    const isStreamingActiveRef = useRef(false);
+    // Word-by-word streaming queue and state
+    const streamingQueueRef = useRef<string[]>([]);
+    const streamingDisplayRef = useRef<string>("");
+    const streamingAnimationFrameRef = useRef<number | null>(null);
+    const isProcessingQueueRef = useRef(false);
     // Animated analyzing steps for AI response while processing images/files
     const analyzingSteps = ["Analyzing...", "Extracting...", "Preparing response..."];
     const [analyzingStepIndex, setAnalyzingStepIndex] = useState(0);
@@ -348,6 +356,13 @@ export default function ChatPage() {
         if (!viewport) return;
 
         const handleScroll = () => {
+            // If streaming is active, always keep auto-scroll enabled
+            if (streamingResponse || streamingMessageId) {
+                autoScrollRef.current = true;
+                return;
+            }
+            
+            // Otherwise, check if user is at bottom
             const distanceFromBottom = viewport.scrollHeight - (viewport.scrollTop + viewport.clientHeight);
             // User is at bottom if within 150px
             autoScrollRef.current = distanceFromBottom <= 150;
@@ -359,70 +374,85 @@ export default function ChatPage() {
         return () => {
             viewport.removeEventListener('scroll', handleScroll);
         };
-    }, [currentTab]);
+    }, [currentTab, streamingResponse, streamingMessageId]);
 
-    // Enable auto-scroll when streaming starts
+    // Enable auto-scroll when streaming starts - FORCE it to stay at bottom
     useEffect(() => {
-        if (streamingMessageId && !streamingResponse) {
-            // Just started streaming, enable auto-scroll
+        if (streamingMessageId) {
+            // When streaming starts, FORCE auto-scroll to true and scroll immediately
             autoScrollRef.current = true;
-        }
-    }, [streamingMessageId, streamingResponse]);
-
-    // Auto-scroll during streaming - only if user is at bottom
-    useEffect(() => {
-        if (!streamingResponse) return;
-        
-        // Only scroll if user is at bottom
-        if (!autoScrollRef.current) return;
-        
-        const now = Date.now();
-        const timeSinceLastScroll = now - lastScrollTimeRef.current;
-        
-        // Throttle: only scroll if at least 100ms have passed since last scroll (reduced for smoother scrolling)
-        if (timeSinceLastScroll < 100) return;
-        
-        lastScrollTimeRef.current = now;
-        
-        // Double-check user hasn't scrolled up before doing any DOM work
-        if (!autoScrollRef.current) return;
-        
-        // Use requestAnimationFrame to batch DOM updates
-        requestAnimationFrame(() => {
-            if (!autoScrollRef.current) return;
             
-            const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
-            if (viewport) {
-                // Check if we're already at bottom (within 10px) to avoid unnecessary scrolls
-                const distanceFromBottom = viewport.scrollHeight - (viewport.scrollTop + viewport.clientHeight);
-                if (distanceFromBottom > 10) {
+            // Immediately scroll to bottom when streaming starts
+            requestAnimationFrame(() => {
+                const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+                if (viewport) {
                     viewport.scrollTo({
                         top: viewport.scrollHeight,
                         behavior: 'auto'
                     });
+                } else if (messagesEndRef.current) {
+                    messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
                 }
+            });
+        }
+    }, [streamingMessageId]);
+
+    // Auto-scroll during streaming - AGGRESSIVE: Keep user at bottom during streaming
+    useEffect(() => {
+        if (!streamingResponse) return;
+        
+        // During streaming, FORCE auto-scroll to stay enabled
+        // This ensures user stays with the AI response even if they accidentally scroll up
+        autoScrollRef.current = true;
+        
+        const now = Date.now();
+        const timeSinceLastScroll = now - lastScrollTimeRef.current;
+        
+        // During streaming, use faster throttle (50ms instead of 100ms) for smoother following
+        if (timeSinceLastScroll < 50) return;
+        
+        lastScrollTimeRef.current = now;
+        
+        // Use requestAnimationFrame to batch DOM updates
+        requestAnimationFrame(() => {
+            const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+            if (viewport) {
+                // During streaming, always scroll to bottom (no distance check)
+                // This ensures user stays with the response
+                viewport.scrollTo({
+                    top: viewport.scrollHeight,
+                    behavior: 'auto'
+                });
             } else if (messagesEndRef.current) {
                 messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
             }
         });
     }, [streamingResponse]);
 
-    // Clear streaming display when message appears in store to prevent overlap
+    // Backup: Clear streaming when message appears in store (safety net)
+    // BUT only after streaming is complete AND message is confirmed saved
     useEffect(() => {
         if (!streamingMessageId || !streamingResponse) return;
+        if (!isStreamingComplete) return; // CRITICAL: Don't clear while streaming
+        if (isStreamingActiveRef.current) return; // CRITICAL: Don't clear while queue is processing
         
         const currentChat = chats[currentTab || 'private-general-chat'];
-        const messageExists = currentChat?.messages?.some(
+        
+        // Check by ID only (most reliable)
+        const storedMessageById = currentChat?.messages?.find(
             msg => msg.id === streamingMessageId && msg.sender === 'bot'
         );
         
-        if (messageExists) {
-            // Message is now in store, clear streaming state immediately
-            setStreamingResponse("");
-            setStreamingMessageId(null);
-            setIsStreamingComplete(false);
+        // Only clear if message is confirmed in store by ID match
+        if (storedMessageById) {
+            console.log('✅ Message confirmed in store, clearing streaming state');
+                    setStreamingResponse("");
+                    setStreamingMessageId(null);
+            setStreamingStartTime(null);
+                    setIsStreamingComplete(false);
+            isStreamingActiveRef.current = false;
         }
-    }, [chats, currentTab, streamingMessageId, streamingResponse]);
+    }, [chats, currentTab, streamingMessageId, streamingResponse, isStreamingComplete]);
 
     // Pusher integration disabled - real-time features coming soon
     const pusherConnected = false;
@@ -500,39 +530,34 @@ export default function ChatPage() {
         }
     };
 
-    // Auto-scroll to bottom function
-    const scrollToBottom = () => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    };
+    // Removed scrollToBottom function - using direct scroll logic in effects
 
-    // Auto-scroll when page loads or messages change (but not when switching tabs)
+    // Consolidated auto-scroll: only scroll when messages actually change, not on every render
     useEffect(() => {
-        // Only auto-scroll when chats change, not when currentTab changes
-        const timer = setTimeout(() => {
-            scrollToBottom();
-        }, 100);
-        return () => clearTimeout(timer);
-    }, [chats]);
-
-    // Auto-scroll when new messages are added
-    useEffect(() => {
-        if (currentTab && chats[currentTab]) {
-            scrollToBottom();
+        if (!currentTab || !chats[currentTab]) return;
+        
+        const currentChat = chats[currentTab];
+        const messageCount = currentChat.messages?.length || 0;
+        
+        // Only scroll if user is at bottom or it's a new message
+        if (!autoScrollRef.current && messageCount > 0) {
+            // User has scrolled up, don't auto-scroll
+            return;
         }
-    }, [chats]);
-
-    // Auto-scroll when switching to a different tab
-    useEffect(() => {
-        if (currentTab && chats[currentTab]) {
-            // Small delay to ensure the new tab content is rendered
-            const timer = setTimeout(() => {
-                scrollToBottom();
-            }, 50);
-            return () => clearTimeout(timer);
-        }
-    }, [currentTab]);
+        
+        // Use requestAnimationFrame to ensure DOM is updated
+        requestAnimationFrame(() => {
+            const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+            if (viewport) {
+                viewport.scrollTo({ 
+                    top: viewport.scrollHeight, 
+                    behavior: 'auto' // Use 'auto' instead of 'smooth' to prevent visible scrolling
+                });
+            } else if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+            }
+        });
+    }, [currentTab, currentTab ? chats[currentTab]?.messages?.length : 0]); // Only depend on message count, not entire chats object
 
     // Pusher state is managed directly by the usePusherChat hook
 
@@ -932,27 +957,7 @@ export default function ChatPage() {
     // Get current chat
     const currentChat = currentTab ? chats[currentTab] : null;
 
-    // Auto-scroll to bottom when new messages arrive
-    useEffect(() => {
-        const scrollToBottom = () => {
-            if (scrollAreaRef.current) {
-                const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-                if (viewport) {
-                    // Use requestAnimationFrame to ensure DOM is updated
-                    requestAnimationFrame(() => {
-                        viewport.scrollTo({ 
-                            top: viewport.scrollHeight, 
-                            behavior: 'smooth' 
-                        });
-                    });
-                }
-            }
-        };
-        
-        // Small delay to ensure message is rendered
-        const timeoutId = setTimeout(scrollToBottom, 100);
-        return () => clearTimeout(timeoutId);
-    }, [currentChat?.messages, isLoading]);
+    // Removed duplicate auto-scroll - handled by consolidated effect above
 
     // Track unread counts per chat
     useEffect(() => {
@@ -1065,9 +1070,55 @@ export default function ChatPage() {
         return () => window.removeEventListener('keydown', handler);
     }, [chats, currentTab, setCurrentTab]);
 
+    // Process streaming queue word-by-word for smooth rendering
+    const processStreamingQueue = () => {
+        if (isProcessingQueueRef.current) return;
+        isProcessingQueueRef.current = true;
+        
+        const processNext = () => {
+            if (streamingQueueRef.current.length === 0) {
+                isProcessingQueueRef.current = false;
+                if (streamingAnimationFrameRef.current) {
+                    cancelAnimationFrame(streamingAnimationFrameRef.current);
+                    streamingAnimationFrameRef.current = null;
+                }
+                return;
+            }
+            
+            // Take one word from queue
+            const word = streamingQueueRef.current.shift();
+            if (word) {
+                streamingDisplayRef.current += word;
+                setStreamingResponse(streamingDisplayRef.current);
+            }
+            
+            // Schedule next word - use requestAnimationFrame for smooth rendering
+            // Delay between words to ensure visible word-by-word streaming
+            streamingAnimationFrameRef.current = requestAnimationFrame(() => {
+                setTimeout(() => {
+                    processNext();
+                }, 30); // ~33 words per second for clear word-by-word streaming
+            });
+        };
+        
+        processNext();
+    };
+
     const handleSendMessage = async (shouldCallAI: boolean = true, aiResponseType: 'concise' | 'detailed' | 'conversational' | 'analytical' = 'concise') => {
-        // Prevent sending multiple messages while AI is thinking/streaming
-        if (isLoading) return;
+        // CRITICAL: Prevent sending multiple messages while AI is thinking/streaming
+        if (isLoading || streamingResponse || isStreamingActiveRef.current) {
+            console.log('⚠️ Blocked: Already processing message', { isLoading, hasStreaming: !!streamingResponse, isActive: isStreamingActiveRef.current });
+            return;
+        }
+        
+        // Reset streaming queue when starting new message
+        streamingQueueRef.current = [];
+        streamingDisplayRef.current = "";
+        if (streamingAnimationFrameRef.current) {
+            cancelAnimationFrame(streamingAnimationFrameRef.current);
+            streamingAnimationFrameRef.current = null;
+        }
+        isProcessingQueueRef.current = false;
 
         // Remove any OCR-extracted text patterns that shouldn't be visible in the message bubble
         // Pattern: [Text from filename]: extracted text
@@ -1262,6 +1313,13 @@ export default function ChatPage() {
                     // Get userId from logged-in user (notifications only work for authenticated users)
                     const effectiveUserId = user?.uid;
                     
+                    // Proactive Rate Limiting: Cancel previous request if user sends new message
+                    // This prevents wasted API calls when user sends multiple messages quickly
+                    if (abortControllerRef.current) {
+                        abortControllerRef.current.abort();
+                        console.log('🛑 Cancelled previous request due to new message');
+                    }
+                    
                     // Check search mode before API call
                     if (typeof document !== 'undefined') {
                         const bodyAttr = document.body.getAttribute('data-search-mode');
@@ -1293,9 +1351,9 @@ export default function ChatPage() {
                             courseName: currentChat.courseData.courseName,
                             courseCode: currentChat.courseData.courseCode,
                             hasMetadata: !!currentChat.metadata,
-                            hasSyllabusText: !!currentChat.courseData.syllabusText,
-                            syllabusTextLength: currentChat.courseData.syllabusText?.length || 0,
-                            syllabusTextPreview: currentChat.courseData.syllabusText ? currentChat.courseData.syllabusText.substring(0, 100) : 'N/A'
+                            hasSyllabusText: !!(currentChat.courseData as any)?.syllabusText,
+                            syllabusTextLength: (currentChat.courseData as any)?.syllabusText?.length || 0,
+                            syllabusTextPreview: (currentChat.courseData as any)?.syllabusText ? (currentChat.courseData as any).syllabusText.substring(0, 100) : 'N/A'
                         });
                     }
                     
@@ -1318,8 +1376,21 @@ export default function ChatPage() {
                     // Create streaming message ID
                     const tempMessageId = generateMessageId();
                     setStreamingMessageId(tempMessageId);
+                    setStreamingStartTime(Date.now()); // Track when streaming started
+                    // Initialize streaming state - will be populated when first chunk arrives
                     setStreamingResponse("");
                     setIsStreamingComplete(false);
+                    // Reset streaming queue and display
+                    streamingQueueRef.current = [];
+                    streamingDisplayRef.current = "";
+                    if (streamingAnimationFrameRef.current) {
+                        cancelAnimationFrame(streamingAnimationFrameRef.current);
+                        streamingAnimationFrameRef.current = null;
+                    }
+                    isProcessingQueueRef.current = false;
+                    // Mark streaming as active (will be set to false when done)
+                    isStreamingActiveRef.current = true;
+                    // Keep loading true until first chunk arrives to show thinking animation
                     
                     // Create AbortController for manual stop (works for all chat types)
                     const abortController = new AbortController();
@@ -1363,14 +1434,46 @@ export default function ChatPage() {
 
                     try {
                         while (true) {
-                            // Check if aborted before reading
-                            if (abortController.signal.aborted) {
+                            // CRITICAL: Check if aborted before reading
+                            if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
                                 console.log('🛑 Stream aborted by user - closing reader');
                                 reader.cancel().catch(() => {}); // Cancel the reader
+                                // Clear all streaming state immediately
+                                setIsLoading(false);
+                                setStreamingResponse("");
+                                setStreamingMessageId(null);
+                                setStreamingStartTime(null);
+                                setIsStreamingComplete(false);
+                                isStreamingActiveRef.current = false;
+                                streamingQueueRef.current = [];
+                                isProcessingQueueRef.current = false;
+                                if (streamingAnimationFrameRef.current) {
+                                    cancelAnimationFrame(streamingAnimationFrameRef.current);
+                                    streamingAnimationFrameRef.current = null;
+                                }
                                 break;
                             }
                             
                             const { done, value } = await reader.read();
+
+                            // CRITICAL: Check again after read (user might have clicked stop during read)
+                            if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                console.log('🛑 Stream aborted after read - closing reader');
+                                reader.cancel().catch(() => {});
+                                setIsLoading(false);
+                                setStreamingResponse("");
+                                setStreamingMessageId(null);
+                                setStreamingStartTime(null);
+                                setIsStreamingComplete(false);
+                                isStreamingActiveRef.current = false;
+                                streamingQueueRef.current = [];
+                                isProcessingQueueRef.current = false;
+                                if (streamingAnimationFrameRef.current) {
+                                    cancelAnimationFrame(streamingAnimationFrameRef.current);
+                                    streamingAnimationFrameRef.current = null;
+                                }
+                                break;
+                            }
 
                             if (done) {
                                 break;
@@ -1382,6 +1485,25 @@ export default function ChatPage() {
                             buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
                             for (const line of lines) {
+                                // CRITICAL: Check abort inside the loop
+                                if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                    console.log('🛑 Stream aborted during line processing - breaking');
+                                    reader.cancel().catch(() => {});
+                                    setIsLoading(false);
+                                    setStreamingResponse("");
+                                    setStreamingMessageId(null);
+                                    setStreamingStartTime(null);
+                                    setIsStreamingComplete(false);
+                                    isStreamingActiveRef.current = false;
+                                    streamingQueueRef.current = [];
+                                    isProcessingQueueRef.current = false;
+                                    if (streamingAnimationFrameRef.current) {
+                                        cancelAnimationFrame(streamingAnimationFrameRef.current);
+                                        streamingAnimationFrameRef.current = null;
+                                    }
+                                    break;
+                                }
+                                
                                 if (!line.trim()) continue;
                                 
                                 try {
@@ -1398,28 +1520,139 @@ export default function ChatPage() {
                                     data = JSON.parse(line);
                                 }
 
+                                // CRITICAL: Check abort before processing content
+                                if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                    console.log('🛑 Stream aborted before processing content - breaking');
+                                    break;
+                                }
+
                                 // Handle different response formats - prioritize streaming format
                                 if (data.type === "content" && data.content) {
+                                    // CRITICAL: Check abort again before adding to queue
+                                    if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                        console.log('🛑 Stream aborted - not adding content to queue');
+                                        break;
+                                    }
+                                    
+                                    // Mark streaming as active
+                                    isStreamingActiveRef.current = true;
+                                    
                                     // Stream chunks directly as they arrive - natural streaming
                                     fullResponse += data.content;
                                     
-                                    // Update UI immediately with new chunk (natural streaming)
-                                    displayedText += data.content;
-                                    setStreamingResponse(displayedText);
+                                    // Split chunk into words for smooth word-by-word display
+                                    const chunk = data.content;
+                                    // Split on whitespace but preserve spaces
+                                    const words = chunk.split(/(\s+)/).filter((w: string) => w.length > 0);
+                                    
+                                    // Add words to queue for smooth rendering
+                                    streamingQueueRef.current.push(...words);
+                                    
+                                    // Start processing queue if not already processing
+                                    if (!isProcessingQueueRef.current) {
+                                        processStreamingQueue();
+                                    }
+                                    
+                                    // Mark streaming as started (turn off loading state once we have content)
+                                    if (isLoading && streamingDisplayRef.current.length > 0) {
+                                        setIsLoading(false);
+                                    }
                                 } else if (data.type === "done") {
-                                    // Stream complete - use final response
+                                    // Stream complete - get final response
                                     const finalResponse = data.fullResponse || fullResponse;
                                     fullResponse = finalResponse;
                                     
-                                    // Final update to ensure everything is displayed
-                                    // Only update if there's a meaningful difference to prevent unnecessary re-renders
-                                    if (finalResponse && displayedText.trim() !== finalResponse.trim()) {
-                                        // Use a small delay to batch the update and prevent flash
-                                        setTimeout(() => {
-                                            setStreamingResponse(finalResponse);
-                                        }, 0);
-                                        displayedText = finalResponse;
+                                    // Mark streaming as complete - let queue finish processing word-by-word
+                                    setIsStreamingComplete(true);
+                                    
+                                    // Wait for queue to finish processing all words naturally
+                                    // Don't set final response here - let queue process word-by-word
+                                    const waitForQueue = async () => {
+                                        let attempts = 0;
+                                    // Wait for queue to process all words word-by-word (up to 20 seconds)
+                                    // CRITICAL: Check abort during wait
+                                    while ((streamingQueueRef.current.length > 0 || isProcessingQueueRef.current) && attempts < 1000) {
+                                        // CRITICAL: Check if aborted - stop waiting immediately
+                                        if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                            console.log('🛑 Stream aborted during queue wait - stopping');
+                                            streamingQueueRef.current = [];
+                                            isProcessingQueueRef.current = false;
+                                            if (streamingAnimationFrameRef.current) {
+                                                cancelAnimationFrame(streamingAnimationFrameRef.current);
+                                                streamingAnimationFrameRef.current = null;
+                                            }
+                                            return; // Exit immediately
+                                        }
+                                        await new Promise(resolve => setTimeout(resolve, 20));
+                                        attempts++;
                                     }
+                                    
+                                    // CRITICAL: Final abort check before processing final content
+                                    if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                        console.log('🛑 Stream aborted before final content processing - stopping');
+                                        return; // Exit immediately
+                                    }
+                                    
+                                    // Ensure final content is displayed
+                                    const currentDisplay = streamingDisplayRef.current.trim();
+                                    const finalText = finalResponse.trim();
+                                    
+                                    // If we're missing content, add it to queue
+                                    if (finalText && currentDisplay.length < finalText.length * 0.95) {
+                                        // CRITICAL: Check abort before adding missing content
+                                        if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                            console.log('🛑 Stream aborted - not adding missing content');
+                                            return; // Exit immediately
+                                        }
+                                        
+                                        const missing = finalText.substring(currentDisplay.length);
+                                        if (missing) {
+                                            const missingWords = missing.split(/(\s+)/).filter((w: string) => w.length > 0);
+                                            streamingQueueRef.current.push(...missingWords);
+                                            // Restart processing
+                                            if (!isProcessingQueueRef.current) {
+                                                processStreamingQueue();
+                                            }
+                                            // Wait for missing content to process
+                                            let missingAttempts = 0;
+                                            while (streamingQueueRef.current.length > 0 && missingAttempts < 500) {
+                                                // CRITICAL: Check abort during missing content wait
+                                                if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                                                    console.log('🛑 Stream aborted during missing content wait - stopping');
+                                                    streamingQueueRef.current = [];
+                                                    isProcessingQueueRef.current = false;
+                                                    if (streamingAnimationFrameRef.current) {
+                                                        cancelAnimationFrame(streamingAnimationFrameRef.current);
+                                                        streamingAnimationFrameRef.current = null;
+                                                    }
+                                                    return; // Exit immediately
+                                                }
+                                                await new Promise(resolve => setTimeout(resolve, 20));
+                                                missingAttempts++;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Final check: ensure display matches final response
+                                    if (streamingDisplayRef.current.trim() !== finalText) {
+                                        streamingDisplayRef.current = finalText;
+                                        setStreamingResponse(finalText);
+                                    }
+                                    
+                                    // Mark as inactive after queue finishes
+                                    isStreamingActiveRef.current = false;
+                                    
+                                    // Clean up animation frame
+                                    if (streamingAnimationFrameRef.current) {
+                                        cancelAnimationFrame(streamingAnimationFrameRef.current);
+                                        streamingAnimationFrameRef.current = null;
+                                    }
+                                    isProcessingQueueRef.current = false;
+                                    
+                                    console.log('✅ Streaming queue finished, ready to save message');
+                                    };
+                                    
+                                    waitForQueue();
                                     
                                     // Collect metadata
                                     if (data.sources) sources = data.sources;
@@ -1427,6 +1660,12 @@ export default function ChatPage() {
                                 } else if (data.type === "status") {
                                     // Update status if needed
                                     console.log('Streaming status:', data.message);
+                                } else if (data.type === "retry") {
+                                    // Handle retry status - show user-friendly retry message
+                                    const retryMsg = data.message || `Retrying... (attempt ${data.attempt}/${data.maxAttempts})`;
+                                    console.log('🔄 Retry status:', retryMsg);
+                                    // Show retry message in UI temporarily
+                                    setStreamingResponse(`⏳ ${retryMsg}\n\nPlease wait while we retry your request...`);
                                 } else if (data.answer && !data.type) {
                                     // Handle legacy SSE format with answer field (only if no type)
                                     fullResponse = data.answer;
@@ -1434,17 +1673,33 @@ export default function ChatPage() {
                                     if (data.sources) sources = data.sources;
                                     if (data.metadata) metadata = data.metadata;
                                 } else if (data.type === "error") {
-                                    // Handle error responses from streaming API - set error message instead of throwing
-                                    const errorMsg = data.message || data.error || 'Failed to generate response';
+                                    // Handle error responses from streaming API - message is already sanitized
+                                    const errorMsg = data.message || data.error || 'An unexpected error occurred. Please try again.';
                                     console.error('Streaming API error:', errorMsg);
-                                    fullResponse = `Error: ${errorMsg}. Please check server logs for details.`;
+                                    
+                                    // In development, log full error details for debugging
+                                    if (process.env.NODE_ENV === 'development') {
+                                        console.error('🔍 Full error data (dev mode):', data);
+                                        if (data.debug) {
+                                            console.error('🔍 Debug info:', data.debug);
+                                            console.error('🔍 Original error message:', data.debug.originalMessage);
+                                            console.error('🔍 Error name:', data.debug.errorName);
+                                            console.error('🔍 Error code:', data.debug.errorCode);
+                                        }
+                                    }
+                                    
+                                    // Message is already user-friendly (sanitized in API route)
+                                    fullResponse = errorMsg;
                                     setStreamingResponse(fullResponse);
                                     // Don't throw - let it continue so the error message gets saved
                                 } else if (data.success === false && data.error) {
-                                    // Handle error responses (legacy format)
-                                    const errorMsg = data.error || 'Failed to generate response';
+                                    // Handle error responses (legacy format) - sanitize message
+                                    let errorMsg = data.error || 'An unexpected error occurred. Please try again.';
+                                    if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('rate limit')) {
+                                        errorMsg = 'The AI service is currently experiencing high demand. Please try again in a few moments.';
+                                    }
                                     console.error('Streaming API error:', errorMsg);
-                                    fullResponse = `Error: ${errorMsg}. Please check server logs for details.`;
+                                    fullResponse = errorMsg;
                                     setStreamingResponse(fullResponse);
                                     // Don't throw - let it continue so the error message gets saved
                                 }
@@ -1457,12 +1712,9 @@ export default function ChatPage() {
                             }
                         }
                         
-                        // Final update - ensure everything is displayed
-                        const finalText = fullResponse.trim();
-                        if (finalText && displayedText.trim() !== finalText) {
-                            setStreamingResponse(finalText);
-                            displayedText = finalText;
-                        }
+                        // DON'T set final response here - let the queue process it word-by-word
+                        // The queue will handle displaying everything naturally
+                        // Only update if we're missing content (queue should handle this)
                     } catch (readError: any) {
                         // Handle reader cancellation or errors
                         if (readError?.name === 'AbortError' || abortController.signal.aborted) {
@@ -1491,11 +1743,25 @@ export default function ChatPage() {
                         }
                     }
 
-                    // Check if aborted before continuing
-                    if (abortControllerRef.current?.signal.aborted) {
-                        console.log('🛑 Stream was aborted - skipping final processing');
+                    // CRITICAL: Check if aborted before continuing - if aborted, stop ALL processing
+                    if (abortControllerRef.current?.signal.aborted || abortController.signal.aborted) {
+                        console.log('🛑 Stream was aborted - skipping ALL final processing');
                         setIsLoading(false);
-                        return;
+                        setStreamingResponse("");
+                        setStreamingMessageId(null);
+                        setStreamingStartTime(null);
+                        setIsStreamingComplete(false);
+                        isStreamingActiveRef.current = false;
+                        // Stop queue processing
+                        streamingQueueRef.current = [];
+                        isProcessingQueueRef.current = false;
+                        if (streamingAnimationFrameRef.current) {
+                            cancelAnimationFrame(streamingAnimationFrameRef.current);
+                            streamingAnimationFrameRef.current = null;
+                        }
+                        // Clear abort controller
+                        abortControllerRef.current = null;
+                        return; // Exit immediately - don't save message, don't do anything
                     }
 
                     // Disable search mode after successful API call
@@ -1531,21 +1797,69 @@ export default function ChatPage() {
                         }
                     }
                     
-                    // Use exactly what was streamed word-by-word - fullResponse has been accumulating chunks
-                    // Ensure we have a valid response
+                    // CRITICAL: Check again if aborted before saving (user might have clicked stop)
+                    if (abortControllerRef.current?.signal.aborted || abortController.signal.aborted) {
+                        console.log('🛑 Stream was aborted before saving - skipping message save');
+                        setIsLoading(false);
+                        setStreamingResponse("");
+                        setStreamingMessageId(null);
+                        setStreamingStartTime(null);
+                        setIsStreamingComplete(false);
+                        isStreamingActiveRef.current = false;
+                        streamingQueueRef.current = [];
+                        isProcessingQueueRef.current = false;
+                        if (streamingAnimationFrameRef.current) {
+                            cancelAnimationFrame(streamingAnimationFrameRef.current);
+                            streamingAnimationFrameRef.current = null;
+                        }
+                        abortControllerRef.current = null;
+                        return; // Exit immediately - don't save anything
+                    }
+                    
+                    // Simple flow: Get final response and save to store
                     if (!fullResponse.trim()) {
-                        console.error('fullResponse is empty after streaming. This means no content chunks were received.');
-                        console.error('Check server logs to see if AI service failed.');
-                        // Instead of throwing, show a helpful error message
-                        fullResponse = 'Error: AI service returned empty response. Please check your API keys and server logs.';
+                        console.error('fullResponse is empty after streaming.');
+                        fullResponse = 'Error: AI service returned empty response.';
                     }
                     const finalResponse = fullResponse.trim();
                     
                     // Use the streaming message ID if we have one, otherwise generate new one
                     const messageId = streamingMessageId || generateMessageId();
                     
+                    // CRITICAL: Wait for queue to finish processing ALL words before saving
+                    // This ensures the streaming display is complete before we save
+                    // BUT check for abort during wait
+                    while ((streamingQueueRef.current.length > 0 || isProcessingQueueRef.current) && !abortController.signal.aborted) {
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    
+                    // CRITICAL: Final abort check before saving
+                    if (abortController.signal.aborted || abortControllerRef.current?.signal.aborted) {
+                        console.log('🛑 Stream was aborted during queue wait - skipping message save');
+                        setIsLoading(false);
+                        setStreamingResponse("");
+                        setStreamingMessageId(null);
+                        setStreamingStartTime(null);
+                        setIsStreamingComplete(false);
+                        isStreamingActiveRef.current = false;
+                        abortControllerRef.current = null;
+                        return; // Exit immediately - don't save anything
+                    }
+                    
+                    // Small delay to ensure final render
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
                     // Only write AI message once after streaming completes
                     if (!aiMessageWritten) {
+                        // Check if message already exists in store to prevent duplicates
+                        const storeState = useChatStore.getState();
+                        const currentChat = storeState.chats[currentTab || 'private-general-chat'];
+                        const existingMessage = currentChat?.messages?.find(
+                            (msg: any) => msg.id === messageId
+                        );
+                        
+                        // Only add if message doesn't already exist
+                        if (!existingMessage) {
                         const aiMessage = {
                             id: messageId,
                             text: finalResponse,
@@ -1556,21 +1870,28 @@ export default function ChatPage() {
                             isSearchRequest: searchModeEnabledBeforeAPI || false
                         };
 
-                        // Add message to chat store - this will queue it for Firestore write
+                            // Add message to chat store
                         await addMessage(currentTab || 'private-general-chat', aiMessage);
+                            console.log('✅ AI message saved to store with ID:', messageId);
+                        } else {
+                            console.log('⚠️ Message already exists in store, skipping duplicate');
+                        }
                         aiMessageWritten = true;
                         
-                        // Mark streaming as complete, but keep the response visible briefly
-                        // to allow smooth transition to stored message
-                        setIsStreamingComplete(true);
-                        
-                        // Clear streaming state after a brief delay to ensure smooth transition
-                        // This prevents the flash by letting the stored message render first
-                        setTimeout(() => {
+                        // CRITICAL: Clear streaming IMMEDIATELY after message is saved
+                        // This ensures ONLY the stored message shows, never both
                             setStreamingResponse("");
                             setStreamingMessageId(null);
+                        setStreamingStartTime(null);
                             setIsStreamingComplete(false);
-                        }, 100);
+                        isStreamingActiveRef.current = false;
+                        
+                        // Force React to process state updates immediately
+                        await new Promise(resolve => {
+                            requestAnimationFrame(() => {
+                                requestAnimationFrame(resolve);
+                            });
+                        });
                     }
                     
                     // Update metadata if provided
@@ -1619,6 +1940,7 @@ export default function ChatPage() {
                         setIsLoading(false);
                         setStreamingResponse("");
                         setStreamingMessageId(null);
+                        setStreamingStartTime(null);
                         return;
                     }
                     
@@ -1627,16 +1949,26 @@ export default function ChatPage() {
                     // Clear streaming state on error
                     setStreamingResponse("");
                     setStreamingMessageId(null);
+                    setStreamingStartTime(null);
                     
                     // Log the error for debugging
                     console.error('Streaming API error:', apiError);
                     // Show actual error to help debug
                     // Only write error message if AI message wasn't already written
                     if (!aiMessageWritten) {
-                        const errorText = apiError instanceof Error ? apiError.message : 'Streaming failed';
+                        // Sanitize error message - hide technical details
+                        let errorText = apiError instanceof Error ? apiError.message : 'An unexpected error occurred. Please try again.';
+                        if (errorText.includes('429') || errorText.includes('quota') || errorText.includes('rate limit')) {
+                            errorText = 'The AI service is currently experiencing high demand. Please try again in a few moments.';
+                        } else if (errorText.includes('API key') || errorText.includes('authentication')) {
+                            errorText = 'There was an issue connecting to the AI service. Please try again.';
+                        } else if (errorText.includes('Error:') && !errorText.includes('The AI service')) {
+                            errorText = 'An unexpected error occurred. Please try again.';
+                        }
+                        
                         const aiMessage = {
                             id: generateMessageId(),
-                            text: `Error: ${errorText}. Please check console for details.`,
+                            text: errorText,
                             sender: 'bot' as const,
                             name: 'CourseConnect AI',
                             timestamp: Date.now(),
@@ -1653,19 +1985,46 @@ export default function ChatPage() {
                 console.error('AI Error:', error);
                 // Only write error message if AI message wasn't already written
                 if (!aiMessageWritten) {
+                    // Sanitize error message - hide technical details
+                    let errorText = 'An unexpected error occurred. Please try again.';
+                    if (error instanceof Error) {
+                        const msg = error.message;
+                        if (msg.includes('429') || msg.includes('quota') || msg.includes('rate limit')) {
+                            errorText = 'The AI service is currently experiencing high demand. Please try again in a few moments.';
+                        } else if (msg.includes('API key') || msg.includes('authentication')) {
+                            errorText = 'There was an issue connecting to the AI service. Please try again.';
+                        } else if (!msg.includes('Error:') && !msg.includes('error')) {
+                            errorText = msg; // Use as-is if already user-friendly
+                        }
+                    }
+                    
                     const errorMessage = {
                         id: generateMessageId(),
-                        text: error instanceof Error ? `Error: ${error.message}` : 'Error: Unknown. Please check console.',
+                        text: errorText,
                         sender: 'bot' as const,
                         name: 'CourseConnect AI',
                         timestamp: Date.now()
                     };
                     await addMessage(currentTab || 'private-general-chat', errorMessage);
                     aiMessageWritten = true;
+                    
+                    // Clear streaming state when error message is added
+                    setStreamingResponse("");
+                    setStreamingMessageId(null);
+                    setStreamingStartTime(null);
+                    setIsStreamingComplete(false);
                 }
             } finally {
                 console.log('Setting isLoading to false');
                 setIsLoading(false);
+                
+                // Always clear streaming state in finally block to prevent lingering duplicates
+                if (aiMessageWritten) {
+                    setStreamingResponse("");
+                    setStreamingMessageId(null);
+                    setStreamingStartTime(null);
+                    setIsStreamingComplete(false);
+                }
             }
         }
     };
@@ -1790,12 +2149,12 @@ export default function ChatPage() {
                                 university: chat.courseData?.university,
                                 semester: chat.courseData?.semester,
                                 year: chat.courseData?.year,
-                                classTime: chat.courseData?.classTime,
+                                classTime: (chat.courseData as any)?.classTime,
                                 topics: chat.courseData?.topics,
                                 exams: chat.courseData?.exams,
                                 assignments: chat.courseData?.assignments,
-                                syllabusText: chat.courseData?.syllabusText || '', // Include full syllabus text
-                                content: chat.courseData?.syllabusText || '' // For backward compatibility
+                                syllabusText: (chat.courseData as any)?.syllabusText || '', // Include full syllabus text
+                                content: (chat.courseData as any)?.syllabusText || '' // For backward compatibility
                             }));
                             console.log('General Chat: Including ALL syllabi from', allClassChats.length, 'class chats');
                         }
@@ -2628,9 +2987,29 @@ export default function ChatPage() {
                                             <div className="flex flex-col">
                                                 <span className="font-semibold text-base">{currentTab ? getChatDisplayName(currentTab) : 'Loading...'}</span>
                                                 <span className="text-xs text-muted-foreground">
-                                                    {currentChat?.chatType === 'class' 
-                                                        ? 'AI-powered course assistance' 
-                                                        : 'Get help with any topic'}
+                                                    {currentChat?.chatType === 'class' && currentChat?.courseData ? (
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            {currentChat.courseData.professor && (
+                                                                <span>Professor: {currentChat.courseData.professor}</span>
+                                                            )}
+                                                            {currentChat.courseData.location && currentChat.courseData.location !== 'Not specified' && currentChat.courseData.location !== 'Not found' && (
+                                                                <>
+                                                                    {currentChat.courseData.professor && <span>•</span>}
+                                                                    <span>{currentChat.courseData.location}</span>
+                                                                </>
+                                                            )}
+                                                            {currentChat.courseData.classTime && currentChat.courseData.classTime !== 'Not specified' && (
+                                                                <>
+                                                                    {(currentChat.courseData.professor || (currentChat.courseData.location && currentChat.courseData.location !== 'Not specified' && currentChat.courseData.location !== 'Not found')) && <span>•</span>}
+                                                                    <span>{currentChat.courseData.classTime}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    ) : currentChat?.chatType === 'class' ? (
+                                                        'AI-powered course assistance'
+                                                    ) : (
+                                                        'Get help with any topic'
+                                                    )}
                                                 </span>
                                             </div>
                                         </div>
@@ -2742,9 +3121,19 @@ export default function ChatPage() {
                                                 if (isGeneralChat && generalChat?.messages?.length === 1 && 
                                                     generalChat.messages[0]?.sender === 'bot' && 
                                                     generalChat.messages[0]?.text?.includes('Welcome')) {
+                                                    // Get all class chats for curated questions
+                                                    const classChatsList = Object.values(chats)
+                                                        .filter(chat => chat.chatType === 'class' && chat.courseData)
+                                                        .map(chat => ({
+                                                            id: chat.id,
+                                                            title: chat.title,
+                                                            courseData: chat.courseData
+                                                        }));
+                                                    
                                                     return (
                                                         <WelcomeCard 
                                                             chatType={currentTab === 'public-general-chat' ? 'community' : 'general'}
+                                                            classChats={classChatsList}
                                                             onQuickAction={(action) => {
                                                                 setInputValue(action);
                                                                 setTimeout(() => {
@@ -2769,9 +3158,82 @@ export default function ChatPage() {
                                                 const isGeneralChat = currentTab === 'private-general-chat' || currentTab === 'private-general-chat-guest' || currentTab === 'public-general-chat';
                                                 
                                                 // Use currentChat for class chats, generalChat for general chats
-                                                const messagesToRender = isClassChat ? currentChat?.messages : generalChat?.messages;
+                                                const allMessages = isClassChat ? currentChat?.messages : generalChat?.messages;
                                                 
-                                                return messagesToRender?.map((message, index) => {
+                                                // Deduplicate messages by ID and content to prevent duplicates
+                                                // Also exclude the streaming message ID to prevent showing both streaming and stored version
+                                                const seenIds = new Set<string>();
+                                                const messagesToRender = allMessages?.filter((message, index) => {
+                                                    const messageId = message.id || `fallback-${index}-${message.timestamp}`;
+                                                    
+                                                    // Skip if this is a duplicate ID
+                                                    if (seenIds.has(messageId)) {
+                                                        return false;
+                                                    }
+                                                    
+                                                    // CRITICAL: Hide stored message if streaming is active
+                                                    // This ensures ONLY streaming shows, never both
+                                                    // Only hide if we have a streaming message ID match (most reliable)
+                                                    if (message.sender === 'bot' && streamingResponse && streamingResponse.trim().length > 0 && streamingMessageId) {
+                                                        // Primary check: ID match (most reliable)
+                                                        if (messageId === streamingMessageId) {
+                                                            return false; // Hide stored - streaming is showing
+                                                        }
+                                                        
+                                                        // Secondary check: content match only if streaming is nearly complete
+                                                        // This prevents hiding messages that are just similar but different
+                                                        if (isStreamingComplete && streamingResponse.trim().length > 50) {
+                                                        const msgText = typeof message.text === 'string' ? message.text.trim() : '';
+                                                        const streamingText = streamingResponse.trim();
+                                                            
+                                                            // Only hide if content is very similar (90%+ match) AND lengths are close
+                                                            if (msgText.length > 50 && streamingText.length > 50) {
+                                                                const msgStart = msgText.substring(0, 100);
+                                                                const streamStart = streamingText.substring(0, 100);
+                                                                const startsMatch = msgStart === streamStart;
+                                                                
+                                                                // Check if lengths are very similar (within 10%)
+                                                                const lengthDiff = Math.abs(msgText.length - streamingText.length);
+                                                                const maxLength = Math.max(msgText.length, streamingText.length);
+                                                                const verySimilarLength = lengthDiff <= maxLength * 0.1;
+                                                                
+                                                                // Only hide if both start match AND length is very similar
+                                                                if (startsMatch && verySimilarLength) {
+                                                                    return false; // Hide stored - streaming is showing
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // For bot messages, also check for duplicate content within a short time window
+                                                    if (message.sender === 'bot') {
+                                                        const msgText = typeof message.text === 'string' ? message.text : JSON.stringify(message.text);
+                                                        const msgTimestamp = message.timestamp || 0;
+                                                        
+                                                        // Check if there's another message with same content within 5 seconds
+                                                        const duplicate = allMessages?.find((other: any, otherIndex: number) => {
+                                                            if (otherIndex === index) return false;
+                                                            const otherId = other.id || `fallback-${otherIndex}-${other.timestamp}`;
+                                                            if (seenIds.has(otherId)) return false; // Already processed
+                                                            
+                                                            const otherText = typeof other.text === 'string' ? other.text : JSON.stringify(other.text);
+                                                            const otherTimestamp = other.timestamp || 0;
+                                                            const timeDiff = Math.abs(msgTimestamp - otherTimestamp);
+                                                            
+                                                            // Same content and within 5 seconds = duplicate
+                                                            return otherText === msgText && timeDiff < 5000 && other.sender === 'bot';
+                                                        });
+                                                        
+                                                        if (duplicate) {
+                                                            return false; // Skip this duplicate
+                                                        }
+                                                    }
+                                                    
+                                                    seenIds.add(messageId);
+                                                    return true;
+                                                }) || [];
+                                                
+                                                return messagesToRender.map((message, index) => {
                                                 const messageKey = message.id || `fallback-${index}-${message.timestamp}`;
                                                 // Ensure unique key by including index
                                                 const uniqueKey = `msg-${messageKey}-${index}`;
@@ -3013,14 +3475,9 @@ export default function ChatPage() {
                                                 </div>
                                             )}
 
-                                            {/* Streaming Response - Show with full UI when complete */}
-                                            {/* Only show if message doesn't exist in store yet (to avoid duplicates) */}
-                                            {streamingResponse && !(() => {
-                                                const currentChat = chats[currentTab || 'private-general-chat'];
-                                                const lastMessage = currentChat?.messages?.[currentChat.messages.length - 1];
-                                                // Hide streaming if we already have this message in the store
-                                                return lastMessage && lastMessage.sender === 'bot' && lastMessage.id === streamingMessageId;
-                                            })() && (
+                                            {/* Streaming Response - Show with full UI during streaming */}
+                                            {/* Only hide if streaming is explicitly cleared AND message is confirmed in store */}
+                                            {streamingResponse && streamingResponse.trim().length > 0 && (
                                                 <div className={`flex gap-3 justify-start w-full px-4 ${isStreamingComplete ? '' : 'animate-in slide-in-from-bottom-2 duration-300'}`}>
                                                     <div className="flex gap-4 max-w-[80%] min-w-0 flex-row">
                                                         {/* Avatar - show during streaming */}
@@ -3040,7 +3497,7 @@ export default function ChatPage() {
                                                                 <div className="text-sm text-gray-600 font-medium flex items-center gap-1">
                                                                     CourseConnect AI
                                                                 </div>
-                                                                {isStreamingComplete && <MessageTimestamp timestamp={Date.now()} />}
+                                                                {streamingStartTime && <MessageTimestamp timestamp={streamingStartTime} />}
                                                             </div>
                                                             {isStreamingComplete && (
                                                               <div className="mb-4">
@@ -3133,41 +3590,63 @@ export default function ChatPage() {
                                             onSearchSelect={handleSearchSelect}
                                             onFileUpload={handleFileUpload}
                                             isSending={isLoading}
-                                            onStop={() => {
+                                            onStop={async () => {
                                                 // Stop AI response for all chat types (General, Class, Public)
-                                                console.log('🛑 Stop button clicked - aborting AI response');
+                                                console.log('🛑 Stop button clicked - stopping generation but keeping current text');
                                                 
-                                                // Capture current streaming values before clearing
-                                                const currentStreamingResponse = streamingResponse;
-                                                const currentStreamingMessageId = streamingMessageId;
+                                                // CRITICAL: Get current streaming response BEFORE aborting
+                                                const currentStreamingText = streamingDisplayRef.current.trim() || streamingResponse.trim();
+                                                const currentMessageId = streamingMessageId;
                                                 
+                                                // CRITICAL: Abort the controller to stop future streaming
                                                 if (abortControllerRef.current) {
                                                     abortControllerRef.current.abort();
                                                     abortControllerRef.current = null;
                                                 }
                                                 
-                                                // Immediately stop loading and clear streaming state
-                                                setIsLoading(false);
-                                                setStreamingResponse("");
-                                                setStreamingMessageId(null);
+                                                // CRITICAL: Stop queue processing immediately
+                                                streamingQueueRef.current = [];
+                                                isProcessingQueueRef.current = false;
+                                                if (streamingAnimationFrameRef.current) {
+                                                    cancelAnimationFrame(streamingAnimationFrameRef.current);
+                                                    streamingAnimationFrameRef.current = null;
+                                                }
+                                                isStreamingActiveRef.current = false;
                                                 
-                                                // If there's a streaming message, finalize it with what we have
-                                                if (currentStreamingResponse && currentStreamingMessageId && currentStreamingResponse.trim()) {
+                                                // CRITICAL: Stop loading but KEEP the current text
+                                                setIsLoading(false);
+                                                setIsStreamingComplete(true);
+                                                
+                                                // CRITICAL: Save the partial message if we have content
+                                                if (currentStreamingText && currentMessageId && currentStreamingText.length > 0) {
                                                     const finalMessage = {
-                                                        id: currentStreamingMessageId,
-                                                        text: currentStreamingResponse,
+                                                        id: currentMessageId,
+                                                        text: currentStreamingText,
                                                         sender: 'bot' as const,
                                                         name: 'CourseConnect AI',
-                                                        timestamp: Date.now(),
+                                                        timestamp: streamingStartTime || Date.now(),
                                                         sources: undefined,
                                                         isSearchRequest: false
                                                     };
                                                     
-                                                    // Add the partial message to chat
-                                                    addMessage(currentTab || 'private-general-chat', finalMessage).catch(console.error);
+                                                    // Save the partial message to chat
+                                                    try {
+                                                        await addMessage(currentTab || 'private-general-chat', finalMessage);
+                                                        console.log('✅ Partial message saved (stopped at):', currentStreamingText.substring(0, 50) + '...');
+                                                        
+                                                        // Small delay to ensure message is in store before clearing streaming
+                                                        await new Promise(resolve => setTimeout(resolve, 100));
+                                                    } catch (error) {
+                                                        console.error('Failed to save partial message:', error);
+                                                    }
                                                 }
                                                 
-                                                console.log('✅ AI response stopped successfully');
+                                                // CRITICAL: Clear streaming state AFTER saving (so stored message shows)
+                                                setStreamingResponse("");
+                                                setStreamingMessageId(null);
+                                                setStreamingStartTime(null);
+                                                
+                                                console.log('✅ AI response stopped - partial message saved');
                                             }}
                                             onFileProcessed={async (payload: any) => {
                                                 // payload: { files: File[], text: string }
@@ -3207,20 +3686,165 @@ export default function ChatPage() {
                                                             try {
                                                                 const base64Image = e.target?.result as string;
                                                                 const base64Data = base64Image.split(',')[1];
-                                                                // If no specific question, use a prompt that just acknowledges and asks what they need
+                                                                
+                                                                // Get recent conversation history for context (last 6 messages)
+                                                                const currentChat = chats[currentTab || 'private-general-chat'];
+                                                                const recentMessages = currentChat?.messages?.slice(-6) || [];
+                                                                const conversationHistory = recentMessages
+                                                                    .filter(msg => msg.id !== uploadMessage.id) // Exclude the upload message itself
+                                                                    .map(msg => ({
+                                                                        role: msg.sender === 'user' ? 'user' : 'assistant',
+                                                                        content: typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text)
+                                                                    }));
+                                                                
+                                                                // Build contextual prompt
                                                                 const analysisPrompt = userText && userText.trim().length > 0 
                                                                     ? userText 
-                                                                    : 'I see you uploaded an image. What do you need help with - extracting text, solving a problem, understanding a concept, or something else?';
-                                                                await fetch('/api/chat/vision', {
+                                                                    : ''; // Empty string will trigger contextual response
+                                                                
+                                                                // Get course data if this is a class chat
+                                                                const isClassChat = currentChat?.chatType === 'class';
+                                                                const courseDataForVision = isClassChat && currentChat?.courseData 
+                                                                    ? currentChat.courseData 
+                                                                    : null;
+                                                                
+                                                                // Use streaming for vision API
+                                                                const response = await fetch('/api/chat/vision', {
                                                                     method: 'POST',
                                                                     headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ message: analysisPrompt, image: base64Data, mimeType: first.type })
-                                                                }).then(res => res.json()).then(async (data) => {
-                                                                    const aiText = data?.answer || data?.response || 'I analyzed the image and extracted relevant information.';
-                                                                    await addMessage(currentTab || 'private-general-chat', { id: generateMessageId(), text: aiText, sender: 'bot', name: 'CourseConnect AI', timestamp: Date.now() });
-                                                                }).catch(async () => {
-                                                                    await addMessage(currentTab || 'private-general-chat', { id: generateMessageId(), text: 'Failed to analyze the image. Please try again.', sender: 'bot', name: 'CourseConnect AI', timestamp: Date.now() });
-                                                                }).finally(() => setIsLoading(false));
+                                                                    body: JSON.stringify({ 
+                                                                        message: analysisPrompt, 
+                                                                        image: base64Data, 
+                                                                        mimeType: first.type,
+                                                                        conversationHistory: conversationHistory,
+                                                                        courseData: courseDataForVision
+                                                                    })
+                                                                });
+
+                                                                if (!response.ok) {
+                                                                    throw new Error('Vision API request failed');
+                                                                }
+
+                                                                // Handle streaming response
+                                                                const reader = response.body?.getReader();
+                                                                const decoder = new TextDecoder();
+                                                                if (!reader) {
+                                                                    throw new Error('No reader available for streaming');
+                                                                }
+
+                                                                // Initialize streaming state
+                                                                const messageId = generateMessageId();
+                                                                setStreamingMessageId(messageId);
+                                                                setStreamingStartTime(Date.now());
+                                                                setStreamingResponse("");
+                                                                streamingDisplayRef.current = "";
+                                                                streamingQueueRef.current = [];
+                                                                isStreamingActiveRef.current = true;
+                                                                setIsStreamingComplete(false);
+
+                                                                let fullResponse = "";
+                                                                let buffer = "";
+
+                                                                try {
+                                                                    while (true) {
+                                                                        const { done, value } = await reader.read();
+                                                                        if (done) break;
+
+                                                                        const chunk = decoder.decode(value, { stream: true });
+                                                                        buffer += chunk;
+                                                                        const lines = buffer.split("\n");
+                                                                        buffer = lines.pop() || "";
+
+                                                                        for (const line of lines) {
+                                                                            if (!line.trim()) continue;
+                                                                            
+                                                                            try {
+                                                                                let data;
+                                                                                if (line.startsWith("data: ")) {
+                                                                                    const jsonStr = line.slice(6).trim();
+                                                                                    if (jsonStr === "[DONE]") continue;
+                                                                                    data = JSON.parse(jsonStr);
+                                                                                } else {
+                                                                                    data = JSON.parse(line);
+                                                                                }
+
+                                                                                if (data.type === "content" && data.content) {
+                                                                                    fullResponse += data.content;
+                                                                                    
+                                                                                    // Split chunk into words for smooth word-by-word display
+                                                                                    const words = data.content.split(/(\s+)/).filter((w: string) => w.length > 0);
+                                                                                    
+                                                                                    // Add words to queue for smooth rendering
+                                                                                    streamingQueueRef.current.push(...words);
+                                                                                    
+                                                                                    // Start processing queue if not already processing
+                                                                                    if (!isProcessingQueueRef.current) {
+                                                                                        processStreamingQueue();
+                                                                                    }
+                                                                                    
+                                                                                    // Mark streaming as started
+                                                                                    if (isLoading && streamingDisplayRef.current.length > 0) {
+                                                                                        setIsLoading(false);
+                                                                                    }
+                                                                                } else if (data.type === "done") {
+                                                                                    const finalResponse = data.fullResponse || fullResponse;
+                                                                                    fullResponse = finalResponse;
+                                                                                    setIsStreamingComplete(true);
+                                                                                    
+                                                                                    // Wait for queue to finish
+                                                                                    const waitForQueue = async () => {
+                                                                                        let attempts = 0;
+                                                                                        while ((streamingQueueRef.current.length > 0 || isProcessingQueueRef.current) && attempts < 1000) {
+                                                                                            await new Promise(resolve => setTimeout(resolve, 20));
+                                                                                            attempts++;
+                                                                                        }
+                                                                                        
+                                                                                        // Save final message
+                                                                                        const finalMessage = {
+                                                                                            id: messageId,
+                                                                                            text: fullResponse.trim(),
+                                                                                            sender: 'bot' as const,
+                                                                                            name: 'CourseConnect AI',
+                                                                                            timestamp: streamingStartTime || Date.now(),
+                                                                                            sources: undefined,
+                                                                                            isSearchRequest: false
+                                                                                        };
+                                                                                        
+                                                                                        await addMessage(currentTab || 'private-general-chat', finalMessage);
+                                                                                        
+                                                                                        // Clear streaming state
+                                                                                        setStreamingResponse("");
+                                                                                        setStreamingMessageId(null);
+                                                                                        setStreamingStartTime(null);
+                                                                                        setIsStreamingComplete(false);
+                                                                                        isStreamingActiveRef.current = false;
+                                                                                        streamingQueueRef.current = [];
+                                                                                        isProcessingQueueRef.current = false;
+                                                                                    };
+                                                                                    
+                                                                                    waitForQueue();
+                                                                                } else if (data.type === "error") {
+                                                                                    throw new Error(data.message || 'Streaming error');
+                                                                                }
+                                                                            } catch (e) {
+                                                                                console.warn('Failed to parse SSE data:', line.substring(0, 100));
+                                                                                continue;
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                } catch (error) {
+                                                                    console.error('Streaming error:', error);
+                                                                    await addMessage(currentTab || 'private-general-chat', { 
+                                                                        id: generateMessageId(), 
+                                                                        text: 'Failed to analyze the image. Please try again.', 
+                                                                        sender: 'bot', 
+                                                                        name: 'CourseConnect AI', 
+                                                                        timestamp: Date.now() 
+                                                                    });
+                                                                } finally {
+                                                                    setIsLoading(false);
+                                                                    reader.releaseLock();
+                                                                }
                                                             } catch {
                                                                 setIsLoading(false);
                                                             }
@@ -3243,8 +3867,20 @@ export default function ChatPage() {
                                                                 formData.append('file', first);
                                                                 formData.append('prompt', analysisPrompt);
                                                                 
-                                                                // Add course data if this is a class chat
+                                                                // Get recent conversation history for context (last 6 messages)
                                                                 const currentChat = chats[currentTab || 'private-general-chat'];
+                                                                const recentMessages = currentChat?.messages?.slice(-6) || [];
+                                                                const conversationHistory = recentMessages
+                                                                    .filter(msg => msg.id !== uploadMessage.id) // Exclude the upload message itself
+                                                                    .map(msg => ({
+                                                                        role: msg.sender === 'user' ? 'user' : 'assistant',
+                                                                        content: typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text)
+                                                                    }));
+                                                                
+                                                                // Add conversation history for context
+                                                                formData.append('conversationHistory', JSON.stringify(conversationHistory));
+                                                                
+                                                                // Add course data if this is a class chat
                                                                 const isClassChat = currentChat?.chatType === 'class';
                                                                 if (isClassChat && currentChat?.courseData) {
                                                                     formData.append('courseData', JSON.stringify(currentChat.courseData));

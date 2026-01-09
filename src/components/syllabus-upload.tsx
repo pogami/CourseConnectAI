@@ -574,13 +574,27 @@ export default function SyllabusUpload() {
 
             console.log('Created class chat:', { chatName, chatId, syllabusData });
 
+            // CRITICAL: Wait for chat to be fully saved before navigation
+            // Verify chat is in store and persisted
+            const { chats: verifyChats, setCurrentTab } = useChatStore.getState();
+            if (!verifyChats[chatId]) {
+              console.warn('⚠️ Chat not in store after creation, waiting...');
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            // Set current tab to ensure it's selected
+            setCurrentTab(chatId);
+            
+            // Wait a moment for state to sync
+            await new Promise(resolve => setTimeout(resolve, 300));
+
             toast({
             title: "Class Chat Created! 🎓",
             description: `Created new study group: ${chatName}. Other students with the same syllabus will automatically join!`,
             });
 
-            // Redirect to the specific chat that was created
-            router.push(`/dashboard/chat?tab=${chatId}`);
+            // Use replace instead of push to avoid adding to history (prevents back button issues)
+            router.replace(`/dashboard/chat?tab=${chatId}`);
     };
             
     const createFallbackChat = async () => {

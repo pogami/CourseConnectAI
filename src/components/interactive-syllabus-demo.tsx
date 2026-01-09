@@ -792,16 +792,28 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
           setCreatedChatId(uniqueChatId);
           
           // CRITICAL: Verify chat is in store immediately after creation
-          const { chats: verifyChats } = useChatStore.getState();
-          if (!verifyChats[uniqueChatId]) {
+          let storeChats = useChatStore.getState().chats;
+          if (!storeChats[uniqueChatId]) {
             console.warn('⚠️ Chat not in store immediately after creation, re-adding...');
             await addChat(chatTitle, welcomeMessage, uniqueChatId, 'class', courseData);
             // Wait a moment for state to update
             await new Promise(resolve => setTimeout(resolve, 200));
+            storeChats = useChatStore.getState().chats;
           }
           
-          // Set current tab immediately to ensure it's selected
+          // CRITICAL: Wait for chat to be fully saved before any navigation
+          // Verify chat is in store
+          if (!storeChats[uniqueChatId]) {
+            console.warn('⚠️ Chat not in store after creation, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            storeChats = useChatStore.getState().chats;
+          }
+          
+          // Set current tab to ensure it's selected
           setCurrentTab(uniqueChatId);
+          
+          // Wait a moment for state to sync
+          await new Promise(resolve => setTimeout(resolve, 300));
 
           // Create course feed if checkbox was checked
           if (enableCourseFeed) {
@@ -966,14 +978,24 @@ export default function InteractiveSyllabusDemo({ className, redirectToSignup = 
             }
           }
           
-          // Navigate immediately - don't wait for Firestore verification
-          // The chat is already in local state and will be preserved during sync
-          console.log('✅ Navigating to chat immediately:', uniqueChatId);
+          // CRITICAL: Wait for chat to be fully saved before navigation
+          // Verify chat is in store and persisted
+          let finalChats = useChatStore.getState().chats;
+          if (!finalChats[uniqueChatId]) {
+            console.warn('⚠️ Chat not in store after creation, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            finalChats = useChatStore.getState().chats;
+          }
+          
+          // Wait a moment for Firestore sync to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          console.log('✅ Navigating to chat:', uniqueChatId);
           setIsCreatingChat(false);
           
-          // Use router.push - Next.js client-side navigation
+          // Use router.replace to avoid adding to history (prevents back button issues)
           // The chat is protected in localStorage/sessionStorage and will be restored if lost
-          router.push(`/dashboard/chat?tab=${encodeURIComponent(uniqueChatId)}`);
+          router.replace(`/dashboard/chat?tab=${encodeURIComponent(uniqueChatId)}`);
         } catch (error) {
           console.error('Failed to create course chat:', error);
           setIsCreatingChat(false);

@@ -238,6 +238,8 @@ export function LoginForm({ initialState = 'login' }: LoginFormProps) {
       if (successCount > 0) {
         clearGuestData();
         console.log(`✅ Guest data migration completed: ${successCount} chats migrated${errorCount > 0 ? `, ${errorCount} failed` : ''}`);
+        // Note: Chats will be automatically synced from Firestore when the user navigates to dashboard
+        // The store's Firestore subscription will pick up the migrated chats
       } else {
         console.warn('⚠️ No chats were migrated successfully. Guest data preserved.');
       }
